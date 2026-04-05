@@ -667,8 +667,8 @@ Deno.serve(async (req) => {
           console.log(`[execute-flow] Sending via WA Cloud node ${node.id} (${node.node_type}) to ${phone}`);
 
           waResponse = await sendWhatsAppCloudMessage({
-            accessToken,
-            phoneNumberId,
+            accessToken: accessToken || '',
+            phoneNumberId: phoneNumberId || '',
             conversationPhone: phone,
             nodeType: node.node_type,
             config,

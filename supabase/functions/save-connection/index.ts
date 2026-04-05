@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
 
     if (connectionId === "whatsapp") {
       const validation = await validateWhatsAppConfig(connectionConfig);
-      connectionConfig = validation.config;
+      connectionConfig = validation.config as Record<string, string>;
       status = validation.status;
       diagnostics = validation.diagnostics;
     }
