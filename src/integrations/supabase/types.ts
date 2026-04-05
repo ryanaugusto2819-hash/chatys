@@ -152,6 +152,7 @@ export type Database = {
           niche_id: string | null
           trigger_count: number
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -164,6 +165,7 @@ export type Database = {
           niche_id?: string | null
           trigger_count?: number
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -176,6 +178,7 @@ export type Database = {
           niche_id?: string | null
           trigger_count?: number
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -183,6 +186,13 @@ export type Database = {
             columns: ["niche_id"]
             isOneToOne: false
             referencedRelation: "niches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flows_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -245,6 +255,7 @@ export type Database = {
           last_checked_at: string | null
           status: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           config?: Json
@@ -256,6 +267,7 @@ export type Database = {
           last_checked_at?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           config?: Json
@@ -267,8 +279,17 @@ export type Database = {
           last_checked_at?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "connection_configs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contact_tags: {
         Row: {
@@ -321,6 +342,7 @@ export type Database = {
           status: string
           tags: string[] | null
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           ad_title?: string | null
@@ -343,6 +365,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           ad_title?: string | null
@@ -365,6 +388,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -386,6 +410,13 @@ export type Database = {
             columns: ["niche_id"]
             isOneToOne: false
             referencedRelation: "niches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1059,6 +1090,7 @@ export type Database = {
           system_prompt: string
           updated_at: string
           whatsapp_phone_number_id: string | null
+          workspace_id: string | null
           zapi_instance_id: string | null
         }
         Insert: {
@@ -1072,6 +1104,7 @@ export type Database = {
           system_prompt?: string
           updated_at?: string
           whatsapp_phone_number_id?: string | null
+          workspace_id?: string | null
           zapi_instance_id?: string | null
         }
         Update: {
@@ -1085,9 +1118,18 @@ export type Database = {
           system_prompt?: string
           updated_at?: string
           whatsapp_phone_number_id?: string | null
+          workspace_id?: string | null
           zapi_instance_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "niches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orders: {
         Row: {
@@ -1374,11 +1416,74 @@ export type Database = {
           },
         ]
       }
+      workspace_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          country: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          country?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      add_user_to_workspace: {
+        Args: { p_role?: string; p_user_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       get_conversations_with_last_message: {
         Args: never
         Returns: {
@@ -1396,33 +1501,74 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_inbox_page: {
-        Args: {
-          p_agent_id?: string
-          p_connection_ids?: string[]
-          p_last_customer?: boolean
-          p_limit?: number
-          p_offset?: number
-          p_only_unread?: boolean
-          p_search?: string
-          p_status?: string
-          p_tag_id?: string
-        }
+      get_inbox_page:
+        | {
+            Args: {
+              p_agent_id?: string
+              p_connection_ids?: string[]
+              p_last_customer?: boolean
+              p_limit?: number
+              p_offset?: number
+              p_only_unread?: boolean
+              p_search?: string
+              p_status?: string
+              p_tag_id?: string
+            }
+            Returns: {
+              assigned_agent_id: string
+              connection_config_id: string
+              contact_name: string
+              contact_phone: string
+              contact_tags: Json
+              id: string
+              last_message: string
+              last_message_sender: string
+              niche_id: string
+              status: string
+              tags: string[]
+              total_count: number
+              unread_count: number
+              updated_at: string
+            }[]
+          }
+        | {
+            Args: {
+              p_agent_id?: string
+              p_connection_ids?: string[]
+              p_last_customer?: boolean
+              p_limit?: number
+              p_offset?: number
+              p_only_unread?: boolean
+              p_search?: string
+              p_status?: string
+              p_tag_id?: string
+              p_workspace_id?: string
+            }
+            Returns: {
+              assigned_agent_id: string
+              connection_config_id: string
+              contact_name: string
+              contact_phone: string
+              contact_tags: Json
+              id: string
+              last_message: string
+              last_message_sender: string
+              niche_id: string
+              status: string
+              tags: string[]
+              total_count: number
+              unread_count: number
+              updated_at: string
+            }[]
+          }
+      get_user_workspaces: {
+        Args: never
         Returns: {
-          assigned_agent_id: string
-          connection_config_id: string
-          contact_name: string
-          contact_phone: string
-          contact_tags: Json
+          country: string
           id: string
-          last_message: string
-          last_message_sender: string
-          niche_id: string
-          status: string
-          tags: string[]
-          total_count: number
-          unread_count: number
-          updated_at: string
+          is_active: boolean
+          name: string
+          role: string
         }[]
       }
       has_role: {
