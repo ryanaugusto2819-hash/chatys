@@ -281,6 +281,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     valor: '', vendedor: '', telefone: '', pais: 'BR',
   });
   const [sendingOrder, setSendingOrder] = useState(false);
+  const [orderCount, setOrderCount] = useState(0);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
@@ -367,13 +368,15 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       setConversation(data);
       setSaleRegisteredAt((data as any).sale_registered_at || null);
 
-      const [agentResult, tagsResult, historyResult] = await Promise.all([
+      const [agentResult, tagsResult, historyResult, ordersResult] = await Promise.all([
         data.assigned_agent_id
           ? supabase.from('profiles').select('id, full_name, avatar_url').eq('id', data.assigned_agent_id).single()
           : Promise.resolve({ data: null }),
         supabase.from('contact_tags').select('id, tag_id, tags(id, name, color)').eq('contact_phone', data.contact_phone),
         supabase.from('agent_assignment_history').select('id, assigned_at, unassigned_at, agent_id, profiles(full_name)').eq('conversation_id', id).order('assigned_at', { ascending: false }),
+        supabase.from('sales_orders' as any).select('id', { count: 'exact', head: true }).eq('conversation_id', id),
       ]);
+      setOrderCount((ordersResult as any).count || 0);
 
       setAssignedAgent(agentResult.data || null);
 
@@ -638,6 +641,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         conversation_id: id || null,
       });
 
+      setOrderCount(prev => prev + 1);
       toast.success('Pedido adicionado com sucesso!');
       setShowOrderDialog(false);
       setOrderData({
@@ -977,6 +981,14 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                   Adicionar Pedido
                 </button>
+
+                {orderCount > 0 && (
+                  <div className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-semibold"
+                    style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.35)', color: '#93C5FD' }}>
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    PEDIDO FEITO {orderCount > 1 ? `(${orderCount}x)` : ''}
+                  </div>
+                )}
 
                 {showOrderDialog && (
                   <div className="mt-2 rounded-lg border border-border bg-background p-3 space-y-2.5">

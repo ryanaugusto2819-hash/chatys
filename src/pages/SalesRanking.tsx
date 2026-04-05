@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
-  TrendingUp, Package, Hash,
+  Package, CalendarDays, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,41 +13,54 @@ interface VendorStats {
   totalPedidos: number;
 }
 
-const PERIODS = [
-  { label: '7 dias', days: 7 },
-  { label: '30 dias', days: 30 },
-  { label: 'Todos', days: 0 },
+type PeriodKey = 'hoje' | 'ontem' | '7d' | '30d' | 'mes' | 'custom';
+
+interface Period {
+  key: PeriodKey;
+  label: string;
+}
+
+const PERIODS: Period[] = [
+  { key: 'hoje', label: 'Hoje' },
+  { key: 'ontem', label: 'Ontem' },
+  { key: '7d', label: '7 dias' },
+  { key: '30d', label: '30 dias' },
+  { key: 'mes', label: 'Este mês' },
+  { key: 'custom', label: 'Personalizado' },
 ];
 
-const RANK_STYLES = [
-  {
-    badge: '🥇',
-    bg: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(217,119,6,0.08) 100%)',
-    border: 'rgba(245,158,11,0.35)',
-    barColor: '#F59E0B',
-    nameColor: '#FDE68A',
-    label: '1º lugar',
-    glow: '0 0 24px rgba(245,158,11,0.25)',
-  },
-  {
-    badge: '🥈',
-    bg: 'linear-gradient(135deg, rgba(148,163,184,0.15) 0%, rgba(100,116,139,0.06) 100%)',
-    border: 'rgba(148,163,184,0.3)',
-    barColor: '#94A3B8',
-    nameColor: '#E2E8F0',
-    label: '2º lugar',
-    glow: '0 0 16px rgba(148,163,184,0.15)',
-  },
-  {
-    badge: '🥉',
-    bg: 'linear-gradient(135deg, rgba(205,127,50,0.15) 0%, rgba(146,64,14,0.06) 100%)',
-    border: 'rgba(205,127,50,0.3)',
-    barColor: '#CD7F32',
-    nameColor: '#FED7AA',
-    label: '3º lugar',
-    glow: '0 0 16px rgba(205,127,50,0.15)',
-  },
-];
+function getDateRange(period: PeriodKey, customFrom: string, customTo: string): { from: string | null; to: string | null } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (period === 'hoje') {
+    return { from: today.toISOString(), to: null };
+  }
+  if (period === 'ontem') {
+    const start = new Date(today); start.setDate(start.getDate() - 1);
+    const end = new Date(today);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  if (period === '7d') {
+    const from = new Date(today); from.setDate(from.getDate() - 7);
+    return { from: from.toISOString(), to: null };
+  }
+  if (period === '30d') {
+    const from = new Date(today); from.setDate(from.getDate() - 30);
+    return { from: from.toISOString(), to: null };
+  }
+  if (period === 'mes') {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: from.toISOString(), to: null };
+  }
+  if (period === 'custom') {
+    return {
+      from: customFrom ? new Date(customFrom).toISOString() : null,
+      to: customTo ? new Date(customTo + 'T23:59:59').toISOString() : null,
+    };
+  }
+  return { from: null, to: null };
+}
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -59,23 +72,27 @@ function formatCompact(v: number) {
   return formatCurrency(v);
 }
 
+const RANK_STYLES = [
+  { badge: '🥇', barColor: '#F59E0B', nameColor: '#FDE68A', border: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.07)', label: '1º' },
+  { badge: '🥈', barColor: '#94A3B8', nameColor: '#E2E8F0', border: 'rgba(148,163,184,0.25)', bg: 'rgba(148,163,184,0.06)', label: '2º' },
+  { badge: '🥉', barColor: '#CD7F32', nameColor: '#FED7AA', border: 'rgba(205,127,50,0.25)', bg: 'rgba(205,127,50,0.06)', label: '3º' },
+];
+
 export default function SalesRanking() {
   const [stats, setStats] = useState<VendorStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState(30);
+  const [period, setPeriod] = useState<PeriodKey>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('sales_orders' as any)
-        .select('vendedor, valor, quantidade');
-
-      if (period > 0) {
-        const since = new Date();
-        since.setDate(since.getDate() - period);
-        query = (query as any).gte('created_at', since.toISOString());
-      }
+      const { from, to } = getDateRange(period, customFrom, customTo);
+      let query = supabase.from('sales_orders' as any).select('vendedor, valor, quantidade');
+      if (from) query = (query as any).gte('created_at', from);
+      if (to)   query = (query as any).lte('created_at', to);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -84,147 +101,157 @@ export default function SalesRanking() {
       for (const row of (data as any[]) || []) {
         const v: string = row.vendedor || 'Desconhecido';
         if (!map[v]) map[v] = { vendedor: v, totalValor: 0, totalQuantidade: 0, totalPedidos: 0 };
-        map[v].totalValor += Number(row.valor) || 0;
+        map[v].totalValor     += Number(row.valor) || 0;
         map[v].totalQuantidade += Number(row.quantidade) || 0;
-        map[v].totalPedidos += 1;
+        map[v].totalPedidos   += 1;
       }
 
-      const sorted = Object.values(map).sort((a, b) => b.totalValor - a.totalValor);
-      setStats(sorted);
+      setStats(Object.values(map).sort((a, b) => b.totalValor - a.totalValor));
     } catch (err) {
       console.error('Error fetching ranking:', err);
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (period === 'custom' && (!customFrom || !customTo)) return;
+    fetchData();
+  }, [fetchData, period, customFrom, customTo]);
 
-  const totalValue = stats.reduce((s, v) => s + v.totalValor, 0);
+  const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
-  const totalQty = stats.reduce((s, v) => s + v.totalQuantidade, 0);
-  const maxValor = stats[0]?.totalValor || 1;
+  const totalQty    = stats.reduce((s, v) => s + v.totalQuantidade, 0);
+  const maxValor    = stats[0]?.totalValor || 1;
+  const top3        = stats.slice(0, 3);
 
-  const top3 = stats.slice(0, 3);
-  const rest = stats.slice(3);
+  const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
+
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.3) 0%, rgba(124,58,237,0.12) 100%)',
-              border: '1px solid rgba(124,58,237,0.35)',
-            }}
-          >
-            <Trophy className="h-5 w-5" style={{ color: '#A78BFA' }} />
+          <div className="icon-box icon-box-purple">
+            <Trophy className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F0EAFF' }}>
+            <h1 className="text-xl font-bold tracking-tight text-card-foreground">
               Ranking de Vendas
             </h1>
-            <p className="text-xs mt-0.5" style={{ color: 'hsl(260 15% 48%)' }}>
+            <p className="text-xs mt-0.5 text-muted-foreground">
               Desempenho gamificado dos vendedores
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {PERIODS.map((p) => (
+        {/* Period filters */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => {
+                  setPeriod(p.key);
+                  setShowCustom(p.key === 'custom');
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border"
+                style={
+                  period === p.key
+                    ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.28), rgba(124,58,237,0.12))', color: '#C4B5FD', borderColor: 'rgba(124,58,237,0.45)' }
+                    : { color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }
+                }
+              >
+                {p.key === 'custom' ? (
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="h-3 w-3" />
+                    {p.label}
+                  </span>
+                ) : p.label}
+              </button>
+            ))}
             <button
-              key={p.days}
-              onClick={() => setPeriod(p.days)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150"
-              style={
-                period === p.days
-                  ? {
-                      background: 'linear-gradient(135deg, rgba(124,58,237,0.28), rgba(124,58,237,0.12))',
-                      color: '#C4B5FD',
-                      border: '1px solid rgba(124,58,237,0.4)',
-                    }
-                  : {
-                      color: 'hsl(260 15% 52%)',
-                      border: '1px solid rgba(124,58,237,0.15)',
-                    }
-              }
+              onClick={fetchData}
+              className="flex items-center justify-center h-8 w-8 rounded-lg border transition-colors"
+              style={{ color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }}
+              title="Atualizar"
             >
-              {p.label}
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-          ))}
-          <button
-            onClick={fetchData}
-            className="flex items-center justify-center h-8 w-8 rounded-lg transition-all duration-150"
-            style={{ color: 'hsl(260 15% 52%)', border: '1px solid rgba(124,58,237,0.15)' }}
-            title="Atualizar"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          </div>
+
+          {/* Custom date inputs */}
+          <AnimatePresence>
+            {showCustom && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2"
+              >
+                <span className="text-xs text-muted-foreground">De</span>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => setCustomFrom(e.target.value)}
+                  className="rounded-lg border border-input bg-background px-2 py-1 text-xs text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <span className="text-xs text-muted-foreground">até</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => setCustomTo(e.target.value)}
+                  className="rounded-lg border border-input bg-background px-2 py-1 text-xs text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
       {/* ── Metric cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          {
-            title: 'Total em Vendas',
-            value: formatCompact(totalValue),
-            icon: DollarSign,
-            color: '#7C3AED',
-            colorBg: 'rgba(124,58,237,0.12)',
-            colorBorder: 'rgba(124,58,237,0.25)',
-          },
-          {
-            title: 'Total de Pedidos',
-            value: totalOrders.toString(),
-            icon: ShoppingBag,
-            color: '#059669',
-            colorBg: 'rgba(5,150,105,0.1)',
-            colorBorder: 'rgba(5,150,105,0.2)',
-          },
-          {
-            title: 'Vendedores Ativos',
-            value: stats.length.toString(),
-            icon: Users,
-            color: '#2563EB',
-            colorBg: 'rgba(37,99,235,0.1)',
-            colorBorder: 'rgba(37,99,235,0.2)',
-          },
+          { title: 'Total em Vendas', value: loading ? '—' : formatCompact(totalValue), icon: DollarSign, accent: 'accent-purple' as const, iconBox: 'icon-box-purple' as const },
+          { title: 'Total de Pedidos', value: loading ? '—' : String(totalOrders), icon: ShoppingBag, accent: 'accent-green' as const, iconBox: 'icon-box-green' as const },
+          { title: 'Vendedores Ativos', value: loading ? '—' : String(stats.length), icon: Users, accent: 'accent-blue' as const, iconBox: 'icon-box-blue' as const },
         ].map((card, i) => (
           <motion.div
             key={card.title}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.38, delay: i * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="cfo-card p-5"
+            className={`cfo-card ${card.accent} p-5`}
           >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex-1 min-w-0 space-y-1.5 pt-0.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
                   {card.title}
                 </p>
-                <p className="text-2xl font-bold mt-1 tabular-nums" style={{ color: '#F0EAFF' }}>
-                  {loading ? '—' : card.value}
-                </p>
+                <motion.p
+                  className="text-2xl font-bold text-card-foreground leading-none tabular-nums"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.42, delay: i * 0.07 + 0.12 }}
+                >
+                  {card.value}
+                </motion.p>
               </div>
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0"
-                style={{ background: card.colorBg, border: `1px solid ${card.colorBorder}` }}
-              >
-                <card.icon className="h-5 w-5" style={{ color: card.color }} />
+              <div className={`icon-box ${card.iconBox}`}>
+                <card.icon className="h-5 w-5" />
               </div>
             </div>
-            <div
-              className="h-1 w-full rounded-full overflow-hidden"
-              style={{ background: 'hsl(var(--muted))' }}
-            >
+            <div className="h-1 w-full rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted))' }}>
               <motion.div
                 className="h-full rounded-full"
-                style={{ background: `linear-gradient(90deg, ${card.color}, ${card.color}66)` }}
+                style={{
+                  background: card.accent === 'accent-purple' ? 'linear-gradient(90deg,#7c3aed,#a78bfa88)'
+                    : card.accent === 'accent-green' ? 'linear-gradient(90deg,#059669,#34d39988)'
+                    : 'linear-gradient(90deg,#2563eb,#60a5fa88)',
+                }}
                 initial={{ width: 0 }}
-                animate={{ width: loading ? 0 : '70%' }}
+                animate={{ width: loading ? '0%' : '70%' }}
                 transition={{ duration: 0.7, delay: i * 0.07 + 0.2, ease: 'easeOut' }}
               />
             </div>
@@ -232,53 +259,44 @@ export default function SalesRanking() {
         ))}
       </div>
 
-      {/* ── Loading state ── */}
+      {/* ── Loading ── */}
       {loading && (
         <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-3">
-            <div
-              className="h-10 w-10 rounded-full border-2 animate-spin"
-              style={{ borderColor: 'rgba(124,58,237,0.2)', borderTopColor: '#7C3AED' }}
-            />
-            <p className="text-xs" style={{ color: 'hsl(260 15% 48%)' }}>Carregando ranking...</p>
+            <div className="h-10 w-10 rounded-full border-2 border-border border-t-primary animate-spin" />
+            <p className="text-xs text-muted-foreground">Carregando ranking...</p>
           </div>
         </div>
       )}
 
-      {/* ── Empty state ── */}
+      {/* ── Empty ── */}
       {!loading && stats.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="cfo-card p-12 flex flex-col items-center gap-4 text-center"
+          className="cfo-card accent-purple p-12 flex flex-col items-center gap-4 text-center"
         >
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}
-          >
-            <Trophy className="h-8 w-8" style={{ color: '#7C3AED' }} />
+          <div className="icon-box icon-box-purple h-14 w-14 rounded-2xl">
+            <Trophy className="h-7 w-7" />
           </div>
           <div>
-            <p className="font-semibold" style={{ color: '#E9E0FF' }}>Nenhuma venda registrada</p>
-            <p className="text-sm mt-1" style={{ color: 'hsl(260 15% 48%)' }}>
+            <p className="font-semibold text-card-foreground">Nenhuma venda em "{activePeriodLabel}"</p>
+            <p className="text-sm mt-1 text-muted-foreground">
               As vendas adicionadas aparecerão aqui no ranking
             </p>
           </div>
         </motion.div>
       )}
 
-      {/* ── Top 3 podium ── */}
+      {/* ── Podium top 3 ── */}
       {!loading && top3.length > 0 && (
         <div>
-          <p
-            className="text-[11px] font-semibold uppercase tracking-wider mb-3"
-            style={{ color: 'hsl(260 15% 48%)' }}
-          >
-            Pódio
+          <p className="text-[11px] font-semibold uppercase tracking-wider mb-3 text-muted-foreground">
+            Pódio — {activePeriodLabel}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {top3.map((vendor, i) => {
-              const style = RANK_STYLES[i];
+              const rs = RANK_STYLES[i];
               const barPct = Math.round((vendor.totalValor / maxValor) * 100);
               return (
                 <motion.div
@@ -287,61 +305,42 @@ export default function SalesRanking() {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.42, delay: i * 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
                   className="rounded-2xl p-5 flex flex-col gap-3 relative overflow-hidden"
-                  style={{
-                    background: style.bg,
-                    border: `1px solid ${style.border}`,
-                    boxShadow: style.glow,
-                  }}
+                  style={{ background: rs.bg, border: `1px solid ${rs.border}` }}
                 >
-                  {/* Rank badge */}
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl">{style.badge}</span>
+                    <span className="text-2xl">{rs.badge}</span>
                     <span
                       className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                      style={{
-                        color: style.nameColor,
-                        background: `${style.border.replace(')', ', 0.15)').replace('rgba', 'rgba')}`,
-                        border: `1px solid ${style.border}`,
-                      }}
+                      style={{ color: rs.nameColor, background: rs.border.replace('0.3)', '0.12)').replace('0.25)', '0.12)'), border: `1px solid ${rs.border}` }}
                     >
-                      {style.label}
+                      {rs.label}
                     </span>
                   </div>
 
-                  {/* Vendor name */}
                   <div>
-                    <p className="text-base font-bold truncate" style={{ color: style.nameColor }}>
+                    <p className="text-base font-bold truncate" style={{ color: rs.nameColor }}>
                       {vendor.vendedor}
                     </p>
-                    <p className="text-xl font-bold tabular-nums mt-0.5" style={{ color: '#F0EAFF' }}>
+                    <p className="text-xl font-bold tabular-nums text-card-foreground mt-0.5">
                       {formatCurrency(vendor.totalValor)}
                     </p>
                   </div>
 
-                  {/* Stats row */}
-                  <div className="flex gap-3">
-                    <div className="flex items-center gap-1">
-                      <ShoppingBag className="h-3 w-3" style={{ color: style.barColor }} />
-                      <span className="text-xs tabular-nums" style={{ color: 'hsl(260 15% 65%)' }}>
-                        {vendor.totalPedidos} pedidos
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Package className="h-3 w-3" style={{ color: style.barColor }} />
-                      <span className="text-xs tabular-nums" style={{ color: 'hsl(260 15% 65%)' }}>
-                        {vendor.totalQuantidade} un.
-                      </span>
-                    </div>
+                  <div className="flex gap-3 flex-wrap">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ShoppingBag className="h-3 w-3" style={{ color: rs.barColor }} />
+                      {vendor.totalPedidos} pedidos
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" style={{ color: rs.barColor }} />
+                      {vendor.totalQuantidade} un.
+                    </span>
                   </div>
 
-                  {/* Progress bar */}
-                  <div
-                    className="h-1.5 w-full rounded-full overflow-hidden"
-                    style={{ background: 'rgba(255,255,255,0.07)' }}
-                  >
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
                     <motion.div
                       className="h-full rounded-full"
-                      style={{ background: `linear-gradient(90deg, ${style.barColor}, ${style.barColor}88)` }}
+                      style={{ background: `linear-gradient(90deg, ${rs.barColor}, ${rs.barColor}88)` }}
                       initial={{ width: 0 }}
                       animate={{ width: `${barPct}%` }}
                       transition={{ duration: 0.8, delay: i * 0.12 + 0.3, ease: 'easeOut' }}
@@ -354,20 +353,17 @@ export default function SalesRanking() {
         </div>
       )}
 
-      {/* ── Full ranking list ── */}
+      {/* ── Full ranking table ── */}
       {!loading && stats.length > 0 && (
         <div>
-          <p
-            className="text-[11px] font-semibold uppercase tracking-wider mb-3"
-            style={{ color: 'hsl(260 15% 48%)' }}
-          >
+          <p className="text-[11px] font-semibold uppercase tracking-wider mb-3 text-muted-foreground">
             Classificação Geral
           </p>
-          <div className="cfo-card overflow-hidden">
-            {/* Table header */}
+          <div className="cfo-card accent-purple overflow-hidden">
+            {/* Header */}
             <div
-              className="grid grid-cols-12 gap-2 px-4 py-2.5 border-b text-[10px] font-bold uppercase tracking-wider"
-              style={{ borderColor: 'rgba(124,58,237,0.12)', color: 'hsl(260 15% 42%)' }}
+              className="grid grid-cols-12 gap-2 px-4 py-2.5 border-b text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+              style={{ borderColor: 'hsl(var(--border))' }}
             >
               <div className="col-span-1 text-center">#</div>
               <div className="col-span-4">Vendedor</div>
@@ -379,109 +375,69 @@ export default function SalesRanking() {
             <AnimatePresence>
               {stats.map((vendor, i) => {
                 const barPct = Math.round((vendor.totalValor / maxValor) * 100);
-                const isTop3 = i < 3;
-                const rankStyle = isTop3 ? RANK_STYLES[i] : null;
+                const rs = i < 3 ? RANK_STYLES[i] : null;
 
                 return (
                   <motion.div
                     key={vendor.vendedor}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: i * 0.04 }}
-                    className="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b last:border-b-0 group transition-colors duration-100"
-                    style={{
-                      borderColor: 'rgba(124,58,237,0.08)',
-                      background: isTop3
-                        ? rankStyle!.bg.replace('0.18)', '0.06)').replace('0.08)', '0.03)')
-                        : undefined,
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = 'rgba(124,58,237,0.06)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = isTop3
-                        ? rankStyle!.bg.replace('0.18)', '0.06)').replace('0.08)', '0.03)')
-                        : '';
-                    }}
+                    transition={{ duration: 0.28, delay: i * 0.035 }}
+                    className="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b last:border-b-0 transition-colors duration-100 hover:bg-muted/40"
+                    style={{ borderColor: 'hsl(var(--border) / 0.5)' }}
                   >
-                    {/* Position */}
-                    <div className="col-span-1 flex items-center justify-center">
-                      {isTop3 ? (
-                        <span className="text-base">{rankStyle!.badge}</span>
+                    <div className="col-span-1 flex justify-center">
+                      {rs ? (
+                        <span className="text-base">{rs.badge}</span>
                       ) : (
-                        <span
-                          className="text-xs font-bold tabular-nums"
-                          style={{ color: 'hsl(260 15% 45%)' }}
-                        >
-                          {i + 1}
-                        </span>
+                        <span className="text-xs font-bold tabular-nums text-muted-foreground">{i + 1}</span>
                       )}
                     </div>
 
-                    {/* Vendor name + bar */}
                     <div className="col-span-4">
-                      <p
-                        className="text-sm font-semibold truncate"
-                        style={{ color: isTop3 ? rankStyle!.nameColor : '#D4C8F5' }}
-                      >
+                      <p className="text-sm font-semibold truncate text-card-foreground"
+                        style={rs ? { color: rs.nameColor } : {}}>
                         {vendor.vendedor}
                       </p>
-                      <div
-                        className="mt-1.5 h-1 w-full rounded-full overflow-hidden"
-                        style={{ background: 'rgba(255,255,255,0.06)' }}
-                      >
+                      <div className="mt-1.5 h-1 w-full rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted))' }}>
                         <motion.div
                           className="h-full rounded-full"
                           style={{
-                            background: isTop3
-                              ? `linear-gradient(90deg, ${rankStyle!.barColor}, ${rankStyle!.barColor}66)`
+                            background: rs
+                              ? `linear-gradient(90deg, ${rs.barColor}, ${rs.barColor}66)`
                               : 'linear-gradient(90deg, #7C3AED, #7C3AED55)',
                           }}
                           initial={{ width: 0 }}
                           animate={{ width: `${barPct}%` }}
-                          transition={{ duration: 0.7, delay: i * 0.04 + 0.15, ease: 'easeOut' }}
+                          transition={{ duration: 0.65, delay: i * 0.035 + 0.15, ease: 'easeOut' }}
                         />
                       </div>
                     </div>
 
-                    {/* Total value */}
                     <div className="col-span-3 text-right">
-                      <span
-                        className="text-sm font-bold tabular-nums"
-                        style={{ color: '#F0EAFF' }}
-                      >
+                      <span className="text-sm font-bold tabular-nums text-card-foreground">
                         {formatCurrency(vendor.totalValor)}
                       </span>
                     </div>
-
-                    {/* Orders count */}
                     <div className="col-span-2 text-right">
-                      <span className="text-xs tabular-nums" style={{ color: 'hsl(260 15% 60%)' }}>
-                        {vendor.totalPedidos}
-                      </span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{vendor.totalPedidos}</span>
                     </div>
-
-                    {/* Quantity */}
                     <div className="col-span-2 text-right">
-                      <span className="text-xs tabular-nums" style={{ color: 'hsl(260 15% 60%)' }}>
-                        {vendor.totalQuantidade}
-                      </span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{vendor.totalQuantidade}</span>
                     </div>
                   </motion.div>
                 );
               })}
             </AnimatePresence>
 
-            {/* Footer summary */}
+            {/* Footer total */}
             <div
               className="grid grid-cols-12 gap-2 px-4 py-3 border-t"
-              style={{ borderColor: 'rgba(124,58,237,0.15)', background: 'rgba(124,58,237,0.05)' }}
+              style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--muted) / 0.4)' }}
             >
               <div className="col-span-1" />
               <div className="col-span-4">
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'hsl(260 15% 48%)' }}>
-                  Total
-                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
               </div>
               <div className="col-span-3 text-right">
                 <span className="text-sm font-bold tabular-nums" style={{ color: '#A78BFA' }}>
@@ -489,14 +445,10 @@ export default function SalesRanking() {
                 </span>
               </div>
               <div className="col-span-2 text-right">
-                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>
-                  {totalOrders}
-                </span>
+                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>{totalOrders}</span>
               </div>
               <div className="col-span-2 text-right">
-                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>
-                  {totalQty}
-                </span>
+                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>{totalQty}</span>
               </div>
             </div>
           </div>
