@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import { ThemeProvider } from "./hooks/useTheme";
 import AppLayout from "./components/layout/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -65,6 +66,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <WorkspaceProvider>
             <ErrorBoundary>
             <Suspense fallback={<LazyFallback />}>
               <Routes>
@@ -98,6 +100,7 @@ const App = () => (
               </Routes>
             </Suspense>
             </ErrorBoundary>
+            </WorkspaceProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

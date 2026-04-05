@@ -42,9 +42,10 @@ const PROVIDERS = [
 
 interface AddConnectionDialogProps {
   onCreated: () => void;
+  workspaceId?: string;
 }
 
-export default function AddConnectionDialog({ onCreated }: AddConnectionDialogProps) {
+export default function AddConnectionDialog({ onCreated, workspaceId }: AddConnectionDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'select' | 'form' | 'embedded'>('select');
   const [selectedProvider, setSelectedProvider] = useState<typeof PROVIDERS[0] | null>(null);
@@ -87,6 +88,15 @@ export default function AddConnectionDialog({ onCreated }: AddConnectionDialogPr
         body: { connectionId: selectedProvider.id, config: values, label: label.trim() },
       });
       if (error) throw error;
+
+      // Assign workspace_id to the newly created connection(s) without workspace
+      if (workspaceId) {
+        await supabase
+          .from('connection_configs')
+          .update({ workspace_id: workspaceId })
+          .is('workspace_id', null);
+      }
+
       if ((data as { status?: string })?.status === 'pending_setup') {
         toast.warning('Conexão criada, mas ainda pendente de webhook/app na Meta.');
       } else {

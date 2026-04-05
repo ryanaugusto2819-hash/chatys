@@ -5,6 +5,7 @@ import AddConnectionDialog from '@/components/connections/AddConnectionDialog';
 import { Plug, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface ConnectionData {
   id: string;
@@ -14,19 +15,27 @@ interface ConnectionData {
   is_connected: boolean;
   status: string;
   last_checked_at: string | null;
+  workspace_id: string | null;
 }
 
 export default function Connections() {
   const [connections, setConnections] = useState<ConnectionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingAll, setCheckingAll] = useState(false);
+  const { currentWorkspace } = useWorkspace();
 
   const loadConnections = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('connection_configs')
         .select('*')
         .order('created_at', { ascending: true });
+
+      if (currentWorkspace) {
+        query = query.eq('workspace_id', currentWorkspace.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -39,6 +48,7 @@ export default function Connections() {
           is_connected: d.is_connected,
           status: d.status || 'unknown',
           last_checked_at: d.last_checked_at,
+          workspace_id: d.workspace_id,
         }))
       );
     } catch {
@@ -46,7 +56,7 @@ export default function Connections() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWorkspace]);
 
   useEffect(() => {
     loadConnections();
@@ -92,7 +102,7 @@ export default function Connections() {
                 Verificar Todos
               </button>
             )}
-            <AddConnectionDialog onCreated={loadConnections} />
+            <AddConnectionDialog onCreated={loadConnections} workspaceId={currentWorkspace?.id} />
           </div>
         </div>
 
@@ -125,7 +135,7 @@ export default function Connections() {
             <p className="text-xs text-muted-foreground mb-4">
               Adicione uma conexão WhatsApp para começar a receber mensagens.
             </p>
-            <AddConnectionDialog onCreated={loadConnections} />
+            <AddConnectionDialog onCreated={loadConnections} workspaceId={currentWorkspace?.id} />
           </div>
         )}
 

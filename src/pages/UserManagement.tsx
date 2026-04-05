@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Check, X, Shield, User, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface UserProfile {
   id: string;
@@ -18,31 +19,54 @@ export default function UserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('all');
+  const { currentWorkspace } = useWorkspace();
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
 
-    const { data: roles } = await supabase.from('user_roles').select('*');
+    // If workspace is loaded, only show members of this workspace
+    if (currentWorkspace) {
+      const { data: members } = await supabase
+        .from('workspace_members')
+        .select('user_id, role')
+        .eq('workspace_id', currentWorkspace.id);
 
-    const merged = (profiles ?? []).map((p) => {
-      const userRoles = (roles ?? []).filter((r) => r.user_id === p.user_id);
-      const topRole = userRoles.find((r) => r.role === 'admin')
-        ? 'admin'
-        : userRoles.find((r) => r.role === 'supervisor')
-          ? 'supervisor'
-          : 'agent';
-      return { ...p, role: topRole };
-    });
+      const memberUserIds = (members ?? []).map((m) => m.user_id);
+      const memberRoleMap: Record<string, string> = {};
+      (members ?? []).forEach((m) => { memberRoleMap[m.user_id] = m.role; });
 
-    setUsers(merged);
+      const { data: profiles } = memberUserIds.length > 0
+        ? await supabase.from('profiles').select('*').in('user_id', memberUserIds).order('created_at', { ascending: false })
+        : { data: [] };
+
+      setUsers((profiles ?? []).map((p) => ({
+        ...p,
+        role: memberRoleMap[p.user_id] ?? 'agent',
+      })));
+    } else {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const { data: roles } = await supabase.from('user_roles').select('*');
+
+      const merged = (profiles ?? []).map((p) => {
+        const userRoles = (roles ?? []).filter((r) => r.user_id === p.user_id);
+        const topRole = userRoles.find((r) => r.role === 'admin')
+          ? 'admin'
+          : userRoles.find((r) => r.role === 'supervisor')
+            ? 'supervisor'
+            : 'agent';
+        return { ...p, role: topRole };
+      });
+      setUsers(merged);
+    }
+
     setLoading(false);
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); }, [currentWorkspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const approveUser = async (userId: string) => {
     const { error } = await supabase
@@ -50,6 +74,17 @@ export default function UserManagement() {
       .update({ is_approved: true })
       .eq('user_id', userId);
     if (error) return toast.error('Erro ao aprovar usuário');
+
+    // Add user to current workspace if not already a member
+    if (currentWorkspace) {
+      await supabase
+        .from('workspace_members')
+        .upsert(
+          { workspace_id: currentWorkspace.id, user_id: userId, role: 'agent' },
+          { onConflict: 'workspace_id,user_id', ignoreDuplicates: true }
+        );
+    }
+
     toast.success('Usuário aprovado!');
     fetchUsers();
   };
@@ -65,11 +100,20 @@ export default function UserManagement() {
   };
 
   const changeRole = async (userId: string, newRole: 'admin' | 'supervisor' | 'agent') => {
-    // Delete existing roles
-    await supabase.from('user_roles').delete().eq('user_id', userId);
-    // Insert new role
-    const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: newRole });
-    if (error) return toast.error('Erro ao alterar role');
+    // Update role in workspace_members for current workspace
+    if (currentWorkspace) {
+      const { error } = await supabase
+        .from('workspace_members')
+        .update({ role: newRole })
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('user_id', userId);
+      if (error) return toast.error('Erro ao alterar role');
+    } else {
+      // Fallback: global user_roles
+      await supabase.from('user_roles').delete().eq('user_id', userId);
+      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: newRole });
+      if (error) return toast.error('Erro ao alterar role');
+    }
     toast.success(`Role alterada para ${newRole}`);
     fetchUsers();
   };

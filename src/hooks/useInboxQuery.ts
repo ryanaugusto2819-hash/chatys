@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useRef, useCallback } from 'react';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 const PAGE_SIZE = 30;
 
@@ -46,9 +47,10 @@ interface InboxPage {
 export function useInboxQuery(filters: InboxFilters) {
   const queryClient = useQueryClient();
   const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { currentWorkspace } = useWorkspace();
 
   const query = useInfiniteQuery<InboxPage>({
-    queryKey: ['inbox', filters],
+    queryKey: ['inbox', filters, currentWorkspace?.id],
     queryFn: async ({ pageParam }) => {
       const offset = (pageParam ?? 0) as number;
       const { data, error } = await (supabase.rpc as any)('get_inbox_page', {
@@ -61,6 +63,7 @@ export function useInboxQuery(filters: InboxFilters) {
         p_tag_id: filters.tagId || null,
         p_only_unread: filters.onlyUnread,
         p_last_customer: filters.lastCustomer,
+        p_workspace_id: currentWorkspace?.id ?? null,
       });
 
       if (error) throw error;
@@ -148,14 +151,14 @@ export function useInboxQuery(filters: InboxFilters) {
 
         if (!found) {
           // New conversation's message not in cache — invalidate to pick it up
-          queryClient.invalidateQueries({ queryKey: ['inbox', filters] });
+          queryClient.invalidateQueries({ queryKey: ['inbox', filters, currentWorkspace?.id] });
         } else {
           // Schedule ordering fix
           scheduleInvalidation();
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['inbox', filters] });
+        queryClient.invalidateQueries({ queryKey: ['inbox', filters, currentWorkspace?.id] });
       })
       .subscribe();
 
@@ -163,7 +166,7 @@ export function useInboxQuery(filters: InboxFilters) {
       if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
       supabase.removeChannel(channel);
     };
-  }, [filters, queryClient, scheduleInvalidation]);
+  }, [filters, queryClient, scheduleInvalidation, currentWorkspace?.id]);
 
   const allConversations = query.data?.pages.flatMap((p) => p.conversations) ?? [];
   const totalCount = query.data?.pages[0]?.totalCount ?? 0;

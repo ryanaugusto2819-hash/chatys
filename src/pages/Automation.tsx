@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '@/components/layout/TopBar';
 import { supabase } from '@/integrations/supabase/client';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { GitBranch, Plus, Play, Pause, Trash2, Loader2, BarChart3, Copy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -22,12 +23,19 @@ export default function Automation() {
   const navigate = useNavigate();
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentWorkspace } = useWorkspace();
 
   const fetchFlows = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('automation_flows')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (currentWorkspace) {
+      query = query.eq('workspace_id', currentWorkspace.id);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching flows:', error);
@@ -48,12 +56,16 @@ export default function Automation() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [currentWorkspace?.id]);
 
   const createFlow = async () => {
     const { data, error } = await supabase
       .from('automation_flows')
-      .insert({ name: 'Novo Fluxo', description: '' })
+      .insert({
+        name: 'Novo Fluxo',
+        description: '',
+        ...(currentWorkspace?.id ? { workspace_id: currentWorkspace.id } : {}),
+      })
       .select('id')
       .single();
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import TopBar from '@/components/layout/TopBar';
 import { supabase } from '@/integrations/supabase/client';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   Layers, Plus, Trash2, Save, Loader2, Bot, GitBranch, BookOpen,
   Pencil, Check, X, MessageSquare, Sparkles, Phone, Wifi, WifiOff, Clock,
@@ -65,6 +66,7 @@ export default function AiSettings() {
   const [newNicheName, setNewNicheName] = useState('');
   const [renamingNicheId, setRenamingNicheId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const { currentWorkspace } = useWorkspace();
 
   // Editing state
   const [editForm, setEditForm] = useState<Partial<Niche>>({});
@@ -73,7 +75,8 @@ export default function AiSettings() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspace?.id]);
 
   useEffect(() => {
     if (selectedNicheId && niches.length) {
@@ -83,10 +86,24 @@ export default function AiSettings() {
   }, [selectedNicheId, niches]);
 
   const fetchData = async () => {
+    const wsId = currentWorkspace?.id;
+
+    const nichesQuery = wsId
+      ? supabase.from('niches').select('*').eq('workspace_id', wsId).order('created_at', { ascending: true })
+      : supabase.from('niches').select('*').order('created_at', { ascending: true });
+
+    const flowsQuery = wsId
+      ? supabase.from('automation_flows').select('id, name, description, is_active, niche_id').eq('workspace_id', wsId).order('name')
+      : supabase.from('automation_flows').select('id, name, description, is_active, niche_id').order('name');
+
+    const connectionsQuery = wsId
+      ? supabase.from('connection_configs').select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi']).eq('workspace_id', wsId).order('created_at')
+      : supabase.from('connection_configs').select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi']).order('created_at');
+
     const [nichesRes, flowsRes, connectionsRes] = await Promise.all([
-      supabase.from('niches').select('*').order('created_at', { ascending: true }),
-      supabase.from('automation_flows').select('id, name, description, is_active, niche_id').order('name'),
-      supabase.from('connection_configs').select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi']).order('created_at'),
+      nichesQuery,
+      flowsQuery,
+      connectionsQuery,
     ]);
 
     const nicheList = (nichesRes.data || []) as unknown as Niche[];
@@ -143,7 +160,11 @@ export default function AiSettings() {
     setCreating(true);
     const { data, error } = await supabase
       .from('niches')
-      .insert({ name: newNicheName.trim(), system_prompt: defaultPrompt })
+      .insert({
+        name: newNicheName.trim(),
+        system_prompt: defaultPrompt,
+        ...(currentWorkspace?.id ? { workspace_id: currentWorkspace.id } : {}),
+      })
       .select()
       .single();
 

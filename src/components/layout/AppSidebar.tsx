@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher';
 import logoImg from '@/assets/logo-group-liberty.jpg';
 import {
   LayoutDashboard,
@@ -172,8 +173,13 @@ export default function AppSidebar() {
         </div>
       </div>
 
+      {/* ── Workspace Switcher ── */}
+      <div className="pt-3 pb-1">
+        <WorkspaceSwitcher />
+      </div>
+
       {/* ── Navigation ── */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3 scrollbar-thin space-y-0.5">
+      <nav className="flex-1 overflow-y-auto py-2 px-3 scrollbar-thin space-y-0.5">
         {/* Menu section */}
         <p className="nav-section-label">Menu</p>
         {menuItems.map((item) => (
