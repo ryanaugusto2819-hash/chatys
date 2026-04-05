@@ -1,392 +1,359 @@
-import TopBar from '@/components/layout/TopBar';
-import MetricCard from '@/components/dashboard/MetricCard';
-import { useReportMetrics } from '@/hooks/useReportMetrics';
-import { useFunnelMetrics } from '@/hooks/useFunnelMetrics';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  MessageSquare, CheckCircle2, Clock, Send, Inbox, Bot,
-  TrendingUp, BarChart3, Filter, ArrowDown, Zap, Target,
-  AlertTriangle, Users, Reply, UserCheck, ShieldCheck,
+  Users, Zap, CheckCircle2, Activity,
+  Wifi, UserCircle2, RefreshCw, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, PieChart, Pie, Cell, LineChart, Line,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
 } from 'recharts';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import TopBar from '@/components/layout/TopBar';
+import { useLeadMonitor, LeadPeriod } from '@/hooks/useLeadMonitor';
 
-const PERIOD_OPTIONS = [
-  { label: '7 dias', value: 7 },
-  { label: '14 dias', value: 14 },
-  { label: '30 dias', value: 30 },
+const PERIODS: { key: LeadPeriod; label: string }[] = [
+  { key: 'hoje',  label: 'Hoje' },
+  { key: 'ontem', label: 'Ontem' },
+  { key: '7d',    label: '7 dias' },
+  { key: '30d',   label: '30 dias' },
+  { key: 'mes',   label: 'Este mês' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  new: 'hsl(var(--info))',
-  pending: 'hsl(var(--warning))',
-  active: 'hsl(var(--primary))',
-  resolved: 'hsl(var(--success))',
+const BAR_COLORS = [
+  '#7C3AED', '#8B5CF6', '#A78BFA',
+  '#6D28D9', '#5B21B6', '#4C1D95',
+];
+
+const CONN_COLORS = [
+  '#059669', '#10B981', '#34D399',
+  '#047857', '#065F46', '#064E3B',
+];
+
+function ProgressBar({
+  value, max, color, delay = 0,
+}: { value: number; max: number; color: string; delay?: number }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted))' }}>
+      <motion.div
+        className="h-full rounded-full"
+        style={{ background: `linear-gradient(90deg, ${color}, ${color}88)` }}
+        initial={{ width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={{ duration: 0.7, delay, ease: 'easeOut' }}
+      />
+    </div>
+  );
+}
+
+function RankList({
+  items, colors, emptyMsg,
+}: {
+  items: { name: string; count: number }[];
+  colors: string[];
+  emptyMsg: string;
+}) {
+  const max = items[0]?.count ?? 1;
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+        <p className="text-sm text-muted-foreground">{emptyMsg}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((item, i) => {
+        const color = colors[i % colors.length];
+        const pct = max > 0 ? Math.round((item.count / max) * 100) : 0;
+        return (
+          <motion.div
+            key={item.name}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.28, delay: i * 0.04 }}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ background: color }}
+                >
+                  {i + 1}
+                </span>
+                <span className="text-sm font-medium text-card-foreground truncate">{item.name}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                <span className="text-xs text-muted-foreground">{pct}%</span>
+                <span
+                  className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
+                  style={{ background: `${color}18`, color }}
+                >
+                  {item.count}
+                </span>
+              </div>
+            </div>
+            <ProgressBar value={item.count} max={max} color={color} delay={i * 0.04 + 0.1} />
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-lg">
+      <p className="text-[11px] font-semibold text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-bold" style={{ color: '#A78BFA' }}>
+        {payload[0].value} lead{payload[0].value !== 1 ? 's' : ''}
+      </p>
+    </div>
+  );
 };
 
-const STAGE_COLORS = [
-  'hsl(var(--primary))',
-  'hsl(var(--info))',
-  'hsl(210 70% 55%)',
-  'hsl(var(--warning))',
-  'hsl(30 80% 55%)',
-  'hsl(var(--success))',
-];
-
-const STAGE_ICONS = [Users, Send, Reply, MessageSquare, UserCheck, ShieldCheck];
-
 export default function Reports() {
-  const [period, setPeriod] = useState(14);
-  const { metrics, daily, statusDistribution, isLoading } = useReportMetrics(period);
-  const { stages, responseMetrics, followUp, isLoading: funnelLoading } = useFunnelMetrics(period);
+  const [period, setPeriod] = useState<LeadPeriod>('hoje');
+  const { data, isLoading, refetch, isFetching } = useLeadMonitor(period);
 
-  const metricCards = metrics
-    ? [
-        { title: 'Total de Conversas', value: metrics.totalConversations, icon: MessageSquare },
-        { title: 'Resolvidas', value: metrics.resolvedConversations, icon: CheckCircle2, changeType: 'positive' as const, change: `${metrics.resolutionRate}% de resolução` },
-        { title: 'Pendentes', value: metrics.pendingConversations, icon: Clock, changeType: 'neutral' as const },
-        { title: 'Total de Mensagens', value: metrics.totalMessages, icon: Send },
-        { title: 'Msgs de Clientes', value: metrics.customerMessages, icon: Inbox },
-        { title: 'Msgs de Atendentes', value: metrics.agentMessages, icon: TrendingUp },
-        { title: 'Msgs do Bot', value: metrics.botMessages, icon: Bot },
-        { title: 'Média Msgs/Conversa', value: metrics.avgMessagesPerConversation, icon: BarChart3 },
-      ]
-    : [];
+  const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
+  const peakHour = data?.chart.reduce((best, p) => p.leads > best.leads ? p : best, { label: '—', leads: 0 });
+  const chartHasData = data?.chart.some(p => p.leads > 0);
 
   return (
     <div>
-      <TopBar title="Relatórios" subtitle="Análises e métricas detalhadas" />
-      <div className="p-6 space-y-6">
-        <div className="flex items-center gap-2">
-          {PERIOD_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setPeriod(opt.value)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                period === opt.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-accent'
-              }`}
+      <TopBar title="Relatórios" subtitle="Monitoramento de Leads" />
+
+      <div className="p-6 space-y-6 max-w-6xl mx-auto">
+
+        {/* ── Filter bar ── */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border"
+                style={
+                  period === p.key
+                    ? { background: 'linear-gradient(135deg,rgba(124,58,237,0.28),rgba(124,58,237,0.12))', color: '#C4B5FD', borderColor: 'rgba(124,58,237,0.45)' }
+                    : { color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }
+                }
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+            style={{ color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
+
+        {/* ── Metric cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              title: 'Total no Período', value: isLoading ? '—' : String(data?.total ?? 0),
+              icon: Users, accent: 'accent-purple', iconBox: 'icon-box-purple',
+              sub: activePeriodLabel,
+            },
+            {
+              title: 'Leads Hoje', value: isLoading ? '—' : String(data?.hoje ?? 0),
+              icon: Activity, accent: 'accent-blue', iconBox: 'icon-box-blue',
+              sub: 'Recebidos hoje',
+            },
+            {
+              title: 'Em Atendimento', value: isLoading ? '—' : String(data?.ativos ?? 0),
+              icon: Zap, accent: 'accent-amber', iconBox: 'icon-box-amber',
+              sub: 'Status ativo',
+            },
+            {
+              title: 'Resolvidos', value: isLoading ? '—' : String(data?.resolvidos ?? 0),
+              icon: CheckCircle2, accent: 'accent-green', iconBox: 'icon-box-green',
+              sub: 'No período',
+            },
+          ].map((card, i) => (
+            <motion.div
+              key={card.title}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.38, delay: i * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className={`cfo-card ${card.accent} p-5`}
             >
-              {opt.label}
-            </button>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex-1 min-w-0 space-y-1.5 pt-0.5">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                    {card.title}
+                  </p>
+                  <motion.p
+                    className="text-2xl font-bold text-card-foreground leading-none tabular-nums"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.42, delay: i * 0.07 + 0.12 }}
+                  >
+                    {card.value}
+                  </motion.p>
+                  <p className="text-[11px] text-muted-foreground">{card.sub}</p>
+                </div>
+                <div className={`icon-box ${card.iconBox}`}>
+                  <card.icon className="h-5 w-5" />
+                </div>
+              </div>
+            </motion.div>
           ))}
         </div>
 
-        <Tabs defaultValue="funnel" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="funnel">🔄 Funil do Lead</TabsTrigger>
-            <TabsTrigger value="general">📊 Geral</TabsTrigger>
-          </TabsList>
+        {/* ── Area chart ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          className="cfo-card accent-purple p-5"
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-sm font-semibold text-card-foreground">
+                Volume de Leads — {activePeriodLabel}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {period === 'hoje' || period === 'ontem' ? 'Agrupado a cada 2 horas' : 'Agrupado por dia'}
+              </p>
+            </div>
+            {peakHour && peakHour.leads > 0 && (
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', color: '#C4B5FD' }}
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                Pico: {peakHour.label} ({peakHour.leads})
+              </div>
+            )}
+          </div>
 
-          {/* ===== FUNNEL TAB ===== */}
-          <TabsContent value="funnel">
-            {funnelLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          {isLoading ? (
+            <div className="flex items-center justify-center h-52">
+              <div className="h-8 w-8 rounded-full border-2 border-border border-t-primary animate-spin" />
+            </div>
+          ) : !chartHasData ? (
+            <div className="flex items-center justify-center h-52 text-sm text-muted-foreground">
+              Nenhum lead no período selecionado
+            </div>
+          ) : (
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data?.chart} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#7C3AED" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false} tickLine={false}
+                    interval={data && data.chart.length > 12 ? Math.floor(data.chart.length / 8) : 0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false} tickLine={false} allowDecimals={false}
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(124,58,237,0.3)', strokeWidth: 1 }} />
+                  <Area
+                    type="monotone" dataKey="leads" stroke="#7C3AED" strokeWidth={2}
+                    fill="url(#leadGradient)" dot={false} activeDot={{ r: 5, fill: '#A78BFA' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── By agent + By connection ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* By agent */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.35 }}
+            className="cfo-card accent-purple p-5"
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-box icon-box-purple h-9 w-9 rounded-xl">
+                <UserCircle2 className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-card-foreground">Leads por Vendedor</h3>
+                <p className="text-xs text-muted-foreground">Atendimentos no período</p>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="h-6 w-6 rounded-full border-2 border-border border-t-primary animate-spin" />
               </div>
             ) : (
-              <div className="space-y-6">
-                {stages.length > 0 && stages[0].count > 0 ? (
-                  <>
-                    {/* Summary cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <MetricCard title="Leads Recebidos" value={stages[0]?.count ?? 0} icon={Users} index={0} />
-                      <MetricCard
-                        title="Taxa de Resposta"
-                        value={`${responseMetrics?.replyRate ?? 0}%`}
-                        icon={Reply}
-                        index={1}
-                        changeType={responseMetrics && responseMetrics.replyRate >= 50 ? 'positive' : 'negative'}
-                        change={`${responseMetrics?.conversationsWithCustomerReply ?? 0} de ${stages[0]?.count ?? 0} responderam`}
-                      />
-                      <MetricCard
-                        title="Taxa de Conversão"
-                        value={`${stages[stages.length - 1]?.rate ?? 0}%`}
-                        icon={Target}
-                        index={2}
-                        changeType={stages[stages.length - 1]?.rate >= 10 ? 'positive' : 'negative'}
-                        change={`${stages[stages.length - 1]?.count ?? 0} vendas/resoluções`}
-                      />
-                      <MetricCard
-                        title="Follow-ups Respondidos"
-                        value={followUp ? `${followUp.responseRate}%` : '—'}
-                        icon={Zap}
-                        index={3}
-                        change={followUp ? `${followUp.responded} de ${followUp.sent} enviados` : undefined}
-                      />
+              <RankList
+                items={data?.byAgent ?? []}
+                colors={BAR_COLORS}
+                emptyMsg="Nenhum lead atribuído no período"
+              />
+            )}
+          </motion.div>
+
+          {/* By connection */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.42 }}
+            className="cfo-card accent-green p-5"
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-box icon-box-green h-9 w-9 rounded-xl">
+                <Wifi className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-card-foreground">Leads por Conexão</h3>
+                <p className="text-xs text-muted-foreground">Qual canal recebe mais leads</p>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="h-6 w-6 rounded-full border-2 border-border border-t-primary animate-spin" />
+              </div>
+            ) : (
+              <>
+                <RankList
+                  items={data?.byConnection ?? []}
+                  colors={CONN_COLORS}
+                  emptyMsg="Nenhuma conexão identificada no período"
+                />
+                {(data?.byConnection ?? []).length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 text-green-400">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      <span className="font-semibold">Maior: {data!.byConnection[0].name}</span>
                     </div>
-
-                    {/* Main funnel visualization */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.15 }}
-                      className="rounded-xl border border-border bg-card p-6"
-                    >
-                      <h3 className="text-sm font-semibold text-card-foreground mb-6 flex items-center gap-2">
-                        <Filter className="h-4 w-4" /> Jornada do Lead no Funil
-                      </h3>
-
-                      <div className="space-y-1">
-                        {stages.map((stage, idx) => {
-                          const Icon = STAGE_ICONS[idx] ?? Users;
-                          const barWidth = Math.max(8, stage.rate);
-
-                          return (
-                            <div key={stage.key}>
-                              <div className="flex items-center gap-4">
-                                {/* Icon */}
-                                <div
-                                  className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                                  style={{ backgroundColor: `${STAGE_COLORS[idx]}20` }}
-                                >
-                                  <Icon className="h-4 w-4" style={{ color: STAGE_COLORS[idx] }} />
-                                </div>
-
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-xs font-semibold text-card-foreground">{stage.label}</span>
-                                    <div className="flex items-center gap-3 text-xs flex-shrink-0 ml-3">
-                                      <span className="font-bold text-card-foreground">{stage.count}</span>
-                                      <span className="text-muted-foreground">({stage.rate}%)</span>
-                                      {stage.dropOff > 0 && (
-                                        <span className="text-destructive flex items-center gap-0.5 font-medium">
-                                          <ArrowDown className="h-3 w-3" />
-                                          {stage.dropOff}%
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Funnel bar */}
-                                  <div className="h-8 rounded-lg bg-muted/40 overflow-hidden relative flex items-center justify-center mx-auto"
-                                    style={{ width: '100%' }}
-                                  >
-                                    <motion.div
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${barWidth}%` }}
-                                      transition={{ duration: 0.7, delay: idx * 0.1, ease: 'easeOut' }}
-                                      className="absolute left-0 top-0 h-full rounded-lg"
-                                      style={{ backgroundColor: STAGE_COLORS[idx], opacity: 0.85 }}
-                                    />
-                                    <span className="relative z-10 text-[11px] font-bold text-card-foreground">
-                                      {stage.rate}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Connector */}
-                              {idx < stages.length - 1 && (
-                                <div className="flex items-center ml-[18px] h-4">
-                                  <div className="w-px h-full bg-border" />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-
-                    {/* Bottom row: response details + follow-up */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Response breakdown */}
-                      {responseMetrics && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: 0.3 }}
-                          className="rounded-xl border border-border bg-card p-5"
-                        >
-                          <h3 className="text-sm font-semibold text-card-foreground mb-4">Engajamento dos Leads</h3>
-                          <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-muted-foreground">Responderam</span>
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 w-24 rounded-full bg-muted overflow-hidden">
-                                  <div className="h-full rounded-full bg-success" style={{ width: `${responseMetrics.replyRate}%` }} />
-                                </div>
-                                <span className="text-xs font-bold text-card-foreground">{responseMetrics.conversationsWithCustomerReply}</span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-muted-foreground">Sem resposta</span>
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 w-24 rounded-full bg-muted overflow-hidden">
-                                  <div className="h-full rounded-full bg-destructive" style={{ width: `${100 - responseMetrics.replyRate}%` }} />
-                                </div>
-                                <span className="text-xs font-bold text-card-foreground">{responseMetrics.conversationsWithoutReply}</span>
-                              </div>
-                            </div>
-                            <div className="border-t border-border pt-3 grid grid-cols-3 gap-3 text-center">
-                              <div>
-                                <p className="text-lg font-bold text-card-foreground">{responseMetrics.avgCustomerMessages}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Média msgs cliente</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-bold text-card-foreground">{responseMetrics.avgAgentMessages}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Média msgs atendente</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-bold text-card-foreground">{responseMetrics.avgBotMessages}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Média msgs bot</p>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* Follow-up engagement */}
-                      {followUp && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: 0.35 }}
-                          className="rounded-xl border border-border bg-card p-5"
-                        >
-                          <h3 className="text-sm font-semibold text-card-foreground mb-4">Follow-ups</h3>
-                          <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-muted-foreground">Enviados</span>
-                              <span className="text-sm font-bold text-card-foreground">{followUp.sent}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-muted-foreground">Respondidos</span>
-                              <span className="text-sm font-bold text-success">{followUp.responded}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-muted-foreground">Aguardando</span>
-                              <span className="text-sm font-bold text-warning">{followUp.pending}</span>
-                            </div>
-                            <div className="border-t border-border pt-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground">Taxa de resposta</span>
-                                <div className="flex items-center gap-2">
-                                  <div className="h-3 w-20 rounded-full bg-muted overflow-hidden">
-                                    <div className="h-full rounded-full bg-primary" style={{ width: `${followUp.responseRate}%` }} />
-                                  </div>
-                                  <span className="text-sm font-bold text-card-foreground">{followUp.responseRate}%</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <TrendingDown className="h-3.5 w-3.5" />
+                      <span>Menor: {data!.byConnection[data!.byConnection.length - 1].name}</span>
                     </div>
-
-                    {/* Funnel chart */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.4 }}
-                      className="rounded-xl border border-border bg-card p-5"
-                    >
-                      <h3 className="text-sm font-semibold text-card-foreground mb-4">Conversão por Etapa</h3>
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={stages} layout="vertical" barSize={20}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                            <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} unit="%" />
-                            <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={150} />
-                            <Tooltip
-                              contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                              formatter={(value: number) => [`${value}%`, 'Taxa']}
-                            />
-                            <Bar dataKey="rate" radius={[0, 6, 6, 0]}>
-                              {stages.map((_, idx) => (
-                                <Cell key={idx} fill={STAGE_COLORS[idx]} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </motion.div>
-                  </>
-                ) : (
-                  <div className="rounded-xl border border-border bg-card p-16 text-center">
-                    <Filter className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-sm font-medium text-card-foreground">Nenhum lead no período</p>
-                    <p className="text-xs text-muted-foreground mt-1">Receba conversas para acompanhar a jornada dos leads no funil.</p>
                   </div>
                 )}
-              </div>
+              </>
             )}
-          </TabsContent>
+          </motion.div>
+        </div>
 
-          {/* ===== GENERAL TAB ===== */}
-          <TabsContent value="general">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {metricCards.map((m, i) => (<MetricCard key={m.title} {...m} index={i} />))}
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }} className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
-                    <h3 className="text-sm font-semibold text-card-foreground mb-4">Atividade Diária</h3>
-                    <div className="h-72">
-                      {daily && daily.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={daily} barGap={4}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                            <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                            <Bar dataKey="received" name="Recebidas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="sent" name="Enviadas" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Nenhuma atividade no período</div>
-                      )}
-                    </div>
-                  </motion.div>
-                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.3 }} className="rounded-xl border border-border bg-card p-5">
-                    <h3 className="text-sm font-semibold text-card-foreground mb-4">Distribuição por Status</h3>
-                    <div className="h-72">
-                      {statusDistribution && statusDistribution.some(s => s.count > 0) ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={statusDistribution} dataKey="count" nameKey="label" cx="50%" cy="50%" outerRadius={80} label={({ label, count }) => `${label}: ${count}`} labelLine={false}>
-                              {statusDistribution.map(entry => (<Cell key={entry.status} fill={STATUS_COLORS[entry.status]} />))}
-                            </Pie>
-                            <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Nenhuma conversa registrada</div>
-                      )}
-                    </div>
-                  </motion.div>
-                </div>
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.4 }} className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="text-sm font-semibold text-card-foreground mb-4">Resoluções por Dia</h3>
-                  <div className="h-64">
-                    {daily && daily.some(d => d.resolved > 0) ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={daily}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                          <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                          <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                          <Line type="monotone" dataKey="resolved" name="Resolvidas" stroke="hsl(var(--success))" strokeWidth={2} dot={{ fill: 'hsl(var(--success))', r: 4 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Nenhuma resolução no período</div>
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
       </div>
     </div>
   );
