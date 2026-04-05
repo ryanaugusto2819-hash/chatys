@@ -1,7 +1,6 @@
-import { Bell, Moon, Sun, Sparkles, Search, Building2, ChevronDown, Check } from 'lucide-react';
+import { Bell, Moon, Sun, Sparkles, Search } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
-import { useWorkspace, COUNTRY_FLAGS, WorkspaceCountry } from '@/contexts/WorkspaceContext';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 
 interface TopBarProps {
   title: string;
@@ -10,21 +9,7 @@ interface TopBarProps {
 
 export default function TopBar({ title, subtitle }: TopBarProps) {
   const { theme, toggleTheme } = useTheme();
-  const { workspace, workspaces, switchWorkspace } = useWorkspace();
   const [notifications] = useState(3);
-  const [wsOpen, setWsOpen] = useState(false);
-  const wsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!wsOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (wsRef.current && !wsRef.current.contains(e.target as Node)) {
-        setWsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [wsOpen]);
 
   return (
     <header
@@ -37,71 +22,8 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
         boxShadow: '0 1px 0 hsl(var(--border)), 0 4px 16px hsl(var(--background) / 0.8)',
       }}
     >
-      {/* Left — workspace selector + title */}
+      {/* Left — title */}
       <div className="flex items-center gap-3 min-w-0">
-        {workspaces.length > 0 && (
-          <div className="relative shrink-0" ref={wsRef}>
-            <button
-              onClick={() => setWsOpen((v) => !v)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-150 hover:bg-secondary"
-              style={{
-                border: '1px solid hsl(var(--border))',
-                color: 'hsl(var(--foreground))',
-                maxWidth: 180,
-              }}
-            >
-              {workspace?.country
-                ? <span className="text-base leading-none shrink-0">{COUNTRY_FLAGS[workspace.country as WorkspaceCountry]}</span>
-                : <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              }
-              <span className="truncate">{workspace?.name ?? 'Workspace'}</span>
-              <ChevronDown
-                className="h-3 w-3 shrink-0 text-muted-foreground transition-transform"
-                style={{ transform: wsOpen ? 'rotate(180deg)' : 'none' }}
-              />
-            </button>
-
-            {wsOpen && (
-              <div
-                className="absolute left-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl"
-                style={{
-                  minWidth: 200,
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                }}
-              >
-                <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Espaços de trabalho
-                </p>
-                {workspaces.map((ws) => (
-                  <button
-                    key={ws.id}
-                    onClick={() => { switchWorkspace(ws.id); setWsOpen(false); }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors hover:bg-secondary"
-                  >
-                    {ws.country && (
-                      <span className="text-base leading-none shrink-0">{COUNTRY_FLAGS[ws.country as WorkspaceCountry]}</span>
-                    )}
-                    <span className="flex-1 truncate font-medium text-foreground">{ws.name}</span>
-                    {ws.id === workspace?.id && (
-                      <Check className="h-3.5 w-3.5 shrink-0" style={{ color: '#7c3aed' }} />
-                    )}
-                  </button>
-                ))}
-                <div className="border-t mt-1" style={{ borderColor: 'hsl(var(--border))' }} />
-                <a
-                  href="/workspace/new"
-                  className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold transition-colors hover:bg-secondary"
-                  style={{ color: '#7c3aed' }}
-                  onClick={() => setWsOpen(false)}
-                >
-                  + Criar novo espaço
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="min-w-0">
           <h2 className="text-base font-bold text-foreground tracking-tight leading-tight">
             {title}

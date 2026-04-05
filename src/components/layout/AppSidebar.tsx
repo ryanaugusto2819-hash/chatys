@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import logoImg from '@/assets/logo-group-liberty.jpg';
-import CountrySwitcher from '@/components/layout/CountrySwitcher';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -171,12 +170,6 @@ export default function AppSidebar() {
             Atendimento
           </p>
         </div>
-      </div>
-
-      {/* ── Country Switcher ── */}
-      <div className="px-3 py-2.5 border-b shrink-0" style={{ borderColor: 'rgba(124,58,237,0.12)' }}>
-        <p className="nav-section-label mb-1.5">País</p>
-        <CountrySwitcher />
       </div>
 
       {/* ── Navigation ── */}
