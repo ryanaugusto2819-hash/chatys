@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { executeFlow } from '@/lib/automation';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { GitBranch, Loader2, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
