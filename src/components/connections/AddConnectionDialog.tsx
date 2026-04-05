@@ -91,8 +91,8 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
 
       // Assign workspace_id to the newly created connection(s) without workspace
       if (workspaceId) {
-        await supabase
-          .from('connection_configs')
+        await (supabase
+          .from('connection_configs') as any)
           .update({ workspace_id: workspaceId })
           .is('workspace_id', null);
       }

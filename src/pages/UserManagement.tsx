@@ -26,14 +26,14 @@ export default function UserManagement() {
 
     // If workspace is loaded, only show members of this workspace
     if (currentWorkspace) {
-      const { data: members } = await supabase
-        .from('workspace_members')
+      const { data: members } = await (supabase
+        .from('workspace_members') as any)
         .select('user_id, role')
         .eq('workspace_id', currentWorkspace.id);
 
-      const memberUserIds = (members ?? []).map((m) => m.user_id);
+      const memberUserIds = (members ?? []).map((m: any) => m.user_id);
       const memberRoleMap: Record<string, string> = {};
-      (members ?? []).forEach((m) => { memberRoleMap[m.user_id] = m.role; });
+      (members ?? []).forEach((m: any) => { memberRoleMap[m.user_id] = m.role; });
 
       const { data: profiles } = memberUserIds.length > 0
         ? await supabase.from('profiles').select('*').in('user_id', memberUserIds).order('created_at', { ascending: false })
