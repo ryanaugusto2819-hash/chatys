@@ -28,6 +28,7 @@ const ManagerAI = lazy(() => import("./pages/ManagerAI"));
 const Connections = lazy(() => import("./pages/Connections"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const PlaceholderPage = lazy(() => import("./pages/PlaceholderPage"));
+const SalesRanking = lazy(() => import("./pages/SalesRanking"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
@@ -81,6 +82,7 @@ const App = () => (
                 {/* Protected routes */}
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<Index />} />
+                  <Route path="/ranking" element={<SalesRanking />} />
                   <Route path="/conversations" element={<ConversationsLayout />} />
                   <Route path="/conversations/:id" element={<ConversationsLayout />} />
                   <Route path="/agents" element={<AdminRoute><Agents /></AdminRoute>} />

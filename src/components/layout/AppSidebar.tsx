@@ -17,11 +17,13 @@ import {
   ShieldCheck,
   Webhook,
   ChevronRight,
+  Trophy,
 } from 'lucide-react';
 
 const menuItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/conversations', icon: MessageSquare, label: 'Conversas' },
+  { to: '/ranking', icon: Trophy, label: 'Ranking' },
 ];
 
 const adminItems = [
