@@ -77,8 +77,8 @@ export default function UserManagement() {
 
     // Add user to current workspace if not already a member
     if (currentWorkspace) {
-      await supabase
-        .from('workspace_members')
+      await (supabase
+        .from('workspace_members') as any)
         .upsert(
           { workspace_id: currentWorkspace.id, user_id: userId, role: 'agent' },
           { onConflict: 'workspace_id,user_id', ignoreDuplicates: true }
@@ -102,8 +102,8 @@ export default function UserManagement() {
   const changeRole = async (userId: string, newRole: 'admin' | 'supervisor' | 'agent') => {
     // Update role in workspace_members for current workspace
     if (currentWorkspace) {
-      const { error } = await supabase
-        .from('workspace_members')
+      const { error } = await (supabase
+        .from('workspace_members') as any)
         .update({ role: newRole })
         .eq('workspace_id', currentWorkspace.id)
         .eq('user_id', userId);
