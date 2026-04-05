@@ -37,7 +37,7 @@ export default function UserManagement() {
 
       const { data: profiles } = memberUserIds.length > 0
         ? await supabase.from('profiles').select('*').in('user_id', memberUserIds).order('created_at', { ascending: false })
-        : { data: [] };
+        : await supabase.from('profiles').select('*').order('created_at', { ascending: false });
 
       setUsers((profiles ?? []).map((p) => ({
         ...p,
