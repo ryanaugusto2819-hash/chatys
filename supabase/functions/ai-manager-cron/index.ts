@@ -62,8 +62,8 @@ serve(async (req) => {
         });
         const data = await res.json();
         results.push({ conversation_id: conv.id, status: "ok", data });
-      } catch (err) {
-        results.push({ conversation_id: conv.id, status: "error", error: err.message });
+      } catch (err: unknown) {
+        results.push({ conversation_id: conv.id, status: "error", error: (err as Error).message });
       }
       // Small delay between analyses to avoid rate limits
       await new Promise(r => setTimeout(r, 2000));
@@ -72,9 +72,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({ analyzed: results.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("ai-manager-cron error:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

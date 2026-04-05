@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
     const nodesByFlow: Record<string, typeof allNodes> = {};
     for (const node of allNodes || []) {
       if (!nodesByFlow[node.flow_id]) nodesByFlow[node.flow_id] = [];
-      nodesByFlow[node.flow_id].push(node);
+      nodesByFlow[node.flow_id]!.push(node);
     }
 
     // Fetch past executions

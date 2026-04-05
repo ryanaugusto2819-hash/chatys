@@ -32,7 +32,7 @@ export default function Connections() {
         .order('created_at', { ascending: true });
 
       if (currentWorkspace) {
-        query = query.eq('workspace_id', currentWorkspace.id);
+        query = (query as any).eq('workspace_id', currentWorkspace.id);
       }
 
       const { data, error } = await query;
