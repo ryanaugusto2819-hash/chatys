@@ -21,6 +21,7 @@ export default function FlowTrigger({ conversationId, nicheId }: FlowTriggerProp
   const [flows, setFlows] = useState<FlowOption[]>([]);
   const [executing, setExecuting] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const { currentWorkspace } = useWorkspace();
 
   const filtered = useMemo(() => {
     if (!search.trim()) return flows;
@@ -30,14 +31,19 @@ export default function FlowTrigger({ conversationId, nicheId }: FlowTriggerProp
 
   useEffect(() => {
     if (open) {
-      supabase
+      let query = supabase
         .from('automation_flows')
         .select('id, name, is_active')
         .order('is_active', { ascending: false })
-        .order('created_at', { ascending: false })
-        .then(({ data }) => setFlows(data || []));
+        .order('created_at', { ascending: false });
+
+      if (currentWorkspace) {
+        query = (query as any).eq('workspace_id', currentWorkspace.id);
+      }
+
+      query.then(({ data }) => setFlows(data || []));
     }
-  }, [open]);
+  }, [open, currentWorkspace]);
 
   const trigger = async (flowId: string) => {
     setExecuting(flowId);
