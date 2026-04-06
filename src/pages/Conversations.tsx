@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TopBar from '@/components/layout/TopBar';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Loader2, X, Smartphone, Globe, MessageCircle, SlidersHorizontal, UserPlus } from 'lucide-react';
+import { Search, Loader2, X, Smartphone, Globe, MessageCircle, SlidersHorizontal, UserPlus, FileText } from 'lucide-react';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -163,6 +164,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const storedFilters = getStoredConversationFilters();
   const [searchInput, setSearchInput] = useState(storedFilters.search);
   const [debouncedSearch, setDebouncedSearch] = useState(storedFilters.search);
+  const [searchByMessage, setSearchByMessage] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>(storedFilters.activeFilter);
   const [selectedTag, setSelectedTag] = useState<string>(storedFilters.selectedTag);
   const [selectedAgent, setSelectedAgent] = useState<string>(storedFilters.selectedAgent);
@@ -227,16 +229,64 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
 
   // Compute filters for the query
   const inboxFilters = useMemo<InboxFilters>(() => ({
-    search: debouncedSearch,
+    search: searchByMessage ? '' : debouncedSearch,
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
     connectionIds: effectiveConnectionIds,
     tagId: selectedTag !== 'all' ? selectedTag : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
-  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread]);
+  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread, searchByMessage]);
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
+
+  const { currentWorkspace } = useWorkspace();
+
+  // Message content search
+  interface MessageSearchResult {
+    conversation_id: string;
+    content: string;
+    created_at: string;
+    contact_name: string;
+    contact_phone: string;
+  }
+
+  const { data: messageSearchResults = [], isLoading: isSearchingMessages } = useQuery<MessageSearchResult[]>({
+    queryKey: ['message-search', debouncedSearch, currentWorkspace?.id],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.length < 3) return [];
+      
+      let query = supabase
+        .from('messages')
+        .select('conversation_id, content, created_at, conversations!inner(contact_name, contact_phone, workspace_id)')
+        .ilike('content', `%${debouncedSearch}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Dedupe by conversation_id, keep first (most recent) match
+      const seen = new Set<string>();
+      const results: MessageSearchResult[] = [];
+      for (const row of (data || []) as any[]) {
+        const conv = row.conversations;
+        if (currentWorkspace?.id && conv.workspace_id !== currentWorkspace.id) continue;
+        if (seen.has(row.conversation_id)) continue;
+        seen.add(row.conversation_id);
+        results.push({
+          conversation_id: row.conversation_id,
+          content: row.content,
+          created_at: row.created_at,
+          contact_name: conv.contact_name,
+          contact_phone: conv.contact_phone,
+        });
+      }
+      return results;
+    },
+    enabled: searchByMessage && !!debouncedSearch && debouncedSearch.length >= 3,
+    staleTime: 30_000,
+  });
 
   const connectionMap = useMemo(() => {
     const map: Record<string, ConnectionInfo> = {};
@@ -456,10 +506,29 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Buscar por nome ou número..."
+                placeholder={searchByMessage ? "Buscar por conteúdo da mensagem..." : "Buscar por nome ou número..."}
                 className="w-full rounded-lg border border-input bg-card pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setSearchByMessage(!searchByMessage)}
+                    className={`shrink-0 flex items-center justify-center h-[42px] w-[42px] rounded-lg border transition-colors ${
+                      searchByMessage
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-card text-muted-foreground border-input hover:text-foreground hover:bg-secondary/60'
+                    }`}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {searchByMessage ? 'Voltar para busca por contato' : 'Buscar por conteúdo da mensagem'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -610,7 +679,47 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
         </div>
 
         <div className={`rounded-xl border border-border bg-card shadow-elevated overflow-hidden ${embedded ? 'flex-1 overflow-y-auto' : ''}`}>
-          {isLoading ? (
+          {searchByMessage && debouncedSearch.length >= 3 ? (
+            // Message content search results
+            isSearchingMessages ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {messageSearchResults.map((r) => (
+                  <button
+                    key={`${r.conversation_id}-${r.created_at}`}
+                    onClick={() => handleConversationClick(r.conversation_id)}
+                    className={`flex flex-col gap-1 w-full px-5 py-4 text-left hover:bg-secondary/40 transition-colors ${
+                      selectedId === r.conversation_id ? 'bg-primary/5 border-l-2 border-primary' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-card-foreground truncate">{r.contact_name}</p>
+                      <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{r.contact_phone}</p>
+                    <p className="text-xs text-foreground/80 line-clamp-2 mt-0.5 bg-muted/50 rounded px-2 py-1">
+                      <FileText className="inline h-3 w-3 mr-1 text-muted-foreground" />
+                      {r.content}
+                    </p>
+                  </button>
+                ))}
+                {messageSearchResults.length === 0 && (
+                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                    {debouncedSearch.length < 3 ? 'Digite pelo menos 3 caracteres' : 'Nenhuma mensagem encontrada'}
+                  </div>
+                )}
+              </div>
+            )
+          ) : searchByMessage ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Digite pelo menos 3 caracteres para buscar
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -625,7 +734,6 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   onClick={handleConversationClick}
                 />
               ))}
-              {/* Infinite scroll sentinel */}
               {hasNextPage && (
                 <div ref={sentinelRef} className="flex items-center justify-center py-4">
                   {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
