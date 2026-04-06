@@ -1,0 +1,2 @@
+UPDATE connection_configs SET workspace_id = '10000000-0000-0000-0000-000000000001' WHERE id = '7e3f2965-a103-4305-a244-9f9a464914c1';
+UPDATE connection_configs SET workspace_id = '10000000-0000-0000-0000-000000000002' WHERE id = 'f25cee90-d831-4ca6-97c4-5fa2e8a9c5a3';

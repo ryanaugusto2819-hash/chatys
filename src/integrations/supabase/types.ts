@@ -1279,6 +1279,57 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_orders: {
+        Row: {
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          nome: string | null
+          produto: string | null
+          quantidade: number | null
+          valor: number | null
+          vendedor: string
+          workspace_id: string | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          produto?: string | null
+          quantidade?: number | null
+          valor?: number | null
+          vendedor?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          produto?: string | null
+          quantidade?: number | null
+          valor?: number | null
+          vendedor?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_orders_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_orders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           color: string
