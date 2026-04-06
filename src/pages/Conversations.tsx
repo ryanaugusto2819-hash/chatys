@@ -506,10 +506,29 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Buscar por nome ou número..."
+                placeholder={searchByMessage ? "Buscar por conteúdo da mensagem..." : "Buscar por nome ou número..."}
                 className="w-full rounded-lg border border-input bg-card pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setSearchByMessage(!searchByMessage)}
+                    className={`shrink-0 flex items-center justify-center h-[42px] w-[42px] rounded-lg border transition-colors ${
+                      searchByMessage
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-card text-muted-foreground border-input hover:text-foreground hover:bg-secondary/60'
+                    }`}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {searchByMessage ? 'Voltar para busca por contato' : 'Buscar por conteúdo da mensagem'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
