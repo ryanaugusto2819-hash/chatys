@@ -229,16 +229,64 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
 
   // Compute filters for the query
   const inboxFilters = useMemo<InboxFilters>(() => ({
-    search: debouncedSearch,
+    search: searchByMessage ? '' : debouncedSearch,
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
     connectionIds: effectiveConnectionIds,
     tagId: selectedTag !== 'all' ? selectedTag : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
-  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread]);
+  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread, searchByMessage]);
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
+
+  const { currentWorkspace } = useWorkspace();
+
+  // Message content search
+  interface MessageSearchResult {
+    conversation_id: string;
+    content: string;
+    created_at: string;
+    contact_name: string;
+    contact_phone: string;
+  }
+
+  const { data: messageSearchResults = [], isLoading: isSearchingMessages } = useQuery<MessageSearchResult[]>({
+    queryKey: ['message-search', debouncedSearch, currentWorkspace?.id],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.length < 3) return [];
+      
+      let query = supabase
+        .from('messages')
+        .select('conversation_id, content, created_at, conversations!inner(contact_name, contact_phone, workspace_id)')
+        .ilike('content', `%${debouncedSearch}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Dedupe by conversation_id, keep first (most recent) match
+      const seen = new Set<string>();
+      const results: MessageSearchResult[] = [];
+      for (const row of (data || []) as any[]) {
+        const conv = row.conversations;
+        if (currentWorkspace?.id && conv.workspace_id !== currentWorkspace.id) continue;
+        if (seen.has(row.conversation_id)) continue;
+        seen.add(row.conversation_id);
+        results.push({
+          conversation_id: row.conversation_id,
+          content: row.content,
+          created_at: row.created_at,
+          contact_name: conv.contact_name,
+          contact_phone: conv.contact_phone,
+        });
+      }
+      return results;
+    },
+    enabled: searchByMessage && !!debouncedSearch && debouncedSearch.length >= 3,
+    staleTime: 30_000,
+  });
 
   const connectionMap = useMemo(() => {
     const map: Record<string, ConnectionInfo> = {};
