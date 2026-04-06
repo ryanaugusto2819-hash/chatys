@@ -679,7 +679,47 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
         </div>
 
         <div className={`rounded-xl border border-border bg-card shadow-elevated overflow-hidden ${embedded ? 'flex-1 overflow-y-auto' : ''}`}>
-          {isLoading ? (
+          {searchByMessage && debouncedSearch.length >= 3 ? (
+            // Message content search results
+            isSearchingMessages ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {messageSearchResults.map((r) => (
+                  <button
+                    key={`${r.conversation_id}-${r.created_at}`}
+                    onClick={() => handleConversationClick(r.conversation_id)}
+                    className={`flex flex-col gap-1 w-full px-5 py-4 text-left hover:bg-secondary/40 transition-colors ${
+                      selectedId === r.conversation_id ? 'bg-primary/5 border-l-2 border-primary' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-card-foreground truncate">{r.contact_name}</p>
+                      <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{r.contact_phone}</p>
+                    <p className="text-xs text-foreground/80 line-clamp-2 mt-0.5 bg-muted/50 rounded px-2 py-1">
+                      <FileText className="inline h-3 w-3 mr-1 text-muted-foreground" />
+                      {r.content}
+                    </p>
+                  </button>
+                ))}
+                {messageSearchResults.length === 0 && (
+                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                    {debouncedSearch.length < 3 ? 'Digite pelo menos 3 caracteres' : 'Nenhuma mensagem encontrada'}
+                  </div>
+                )}
+              </div>
+            )
+          ) : searchByMessage ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Digite pelo menos 3 caracteres para buscar
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -694,7 +734,6 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   onClick={handleConversationClick}
                 />
               ))}
-              {/* Infinite scroll sentinel */}
               {hasNextPage && (
                 <div ref={sentinelRef} className="flex items-center justify-center py-4">
                   {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
