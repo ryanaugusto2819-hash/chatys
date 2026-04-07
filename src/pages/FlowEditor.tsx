@@ -21,8 +21,9 @@ import NodeEditor from '@/components/automation/NodeEditor';
 import {
   ArrowLeft, Save, MessageSquare, Clock, Image, Music, Video,
   Loader2, FileText, GitFork, Bot, ListOrdered, Play, Pause,
-  Zap, Cog, Upload
+  Zap, Cog, Upload, Tag
 } from 'lucide-react';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseDcFile } from '@/lib/dcParser';
 import { toast } from 'sonner';
 
@@ -95,7 +96,9 @@ export default function FlowEditor() {
   const [flowActive, setFlowActive] = useState(false);
   const [manualOnly, setManualOnly] = useState(false);
   const [flowNicheId, setFlowNicheId] = useState<string | null>(null);
+  const [niches, setNiches] = useState<{ id: string; name: string }[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const { currentWorkspace } = useWorkspace();
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,6 +113,13 @@ export default function FlowEditor() {
   useEffect(() => {
     if (id) loadFlow();
   }, [id]);
+
+  useEffect(() => {
+    const wsId = currentWorkspace?.id;
+    if (!wsId) return;
+    supabase.from('niches').select('id, name').eq('workspace_id', wsId as any)
+      .then(({ data }) => { if (data) setNiches(data); });
+  }, [currentWorkspace?.id]);
 
   const loadFlow = async () => {
     if (!id) return;
@@ -330,7 +340,7 @@ export default function FlowEditor() {
 
     await supabase
       .from('automation_flows')
-      .update({ name: flowName, description: flowDescription, manual_only: manualOnly } as any)
+      .update({ name: flowName, description: flowDescription, manual_only: manualOnly, niche_id: flowNicheId } as any)
       .eq('id', id);
 
     // Nodes are saved as-is (connection_ids are already in each trigger node's config)
@@ -416,6 +426,16 @@ export default function FlowEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <select
+            value={flowNicheId || ''}
+            onChange={(e) => setFlowNicheId(e.target.value || null)}
+            className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs text-foreground focus:outline-none"
+          >
+            <option value="">Sem nicho</option>
+            {niches.map(n => (
+              <option key={n.id} value={n.id}>{n.name}</option>
+            ))}
+          </select>
           <button
             onClick={() => setManualOnly(!manualOnly)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
