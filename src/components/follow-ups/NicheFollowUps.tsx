@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Clock, Plus, Trash2, Save, Loader2, Play,
   MessageSquare, CheckCircle, XCircle, AlertTriangle,
-  TrendingUp, Timer, Target, Zap, ArrowUpRight, BarChart3, Filter, ExternalLink, ImagePlus, X,
+  TrendingUp, Timer, Target, Zap, ArrowUpRight, BarChart3, Filter, ExternalLink, ImagePlus, X, GitBranch,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -39,6 +39,12 @@ interface FunnelStage {
   niche_id: string;
 }
 
+interface AutomationFlow {
+  id: string;
+  name: string;
+  description: string;
+}
+
 interface FollowUpTemplate {
   id: string;
   name: string;
@@ -55,6 +61,7 @@ interface FollowUpTemplate {
   funnel_stage: string;
   trigger_condition: string;
   image_url: string | null;
+  flow_id: string | null;
 }
 
 interface FollowUpExecution {
@@ -79,6 +86,7 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
   const [templates, setTemplates] = useState<FollowUpTemplate[]>([]);
   const [executions, setExecutions] = useState<FollowUpExecution[]>([]);
   const [stages, setStages] = useState<FunnelStage[]>([]);
+  const [flows, setFlows] = useState<AutomationFlow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -92,14 +100,16 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [tRes, eRes, sRes] = await Promise.all([
+    const [tRes, eRes, sRes, fRes] = await Promise.all([
       supabase.from('follow_up_templates').select('*').eq('niche_id', nicheId).order('escalation_level'),
       supabase.from('follow_up_executions').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('niche_funnel_stages').select('*').eq('niche_id', nicheId).order('sort_order'),
+      supabase.from('automation_flows').select('id, name, description').order('name'),
     ]);
     const tplList = (tRes.data || []) as FollowUpTemplate[];
     setTemplates(tplList);
     setStages((sRes.data || []) as FunnelStage[]);
+    setFlows((fRes.data || []) as AutomationFlow[]);
     const tplIds = new Set(tplList.map(t => t.id));
     setExecutions(((eRes.data || []) as FollowUpExecution[]).filter(e => tplIds.has(e.template_id)));
     setLoading(false);
@@ -149,6 +159,7 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
       funnel_stage: stage,
       trigger_condition: '',
       image_url: null,
+      flow_id: null,
     };
     setTemplates(prev => [...prev, newTemplate]);
     const { id, ...data } = newTemplate;
@@ -404,21 +415,42 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium flex items-center gap-2 mb-1">
-                      <Filter className="h-4 w-4 text-primary" /> Etapa do Funil
-                    </label>
-                    <Select value={t.funnel_stage} onValueChange={v => updateTemplate(t.id, 'funnel_stage', v)}>
-                      <SelectTrigger className="w-full md:w-64">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas as etapas</SelectItem>
-                        {stages.map(s => (
-                          <SelectItem key={s.stage_key} value={s.stage_key}>{s.label} — {s.description}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium flex items-center gap-2 mb-1">
+                        <Filter className="h-4 w-4 text-primary" /> Etapa do Funil
+                      </label>
+                      <Select value={t.funnel_stage} onValueChange={v => updateTemplate(t.id, 'funnel_stage', v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas as etapas</SelectItem>
+                          {stages.map(s => (
+                            <SelectItem key={s.stage_key} value={s.stage_key}>{s.label} — {s.description}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium flex items-center gap-2 mb-1">
+                        <GitBranch className="h-4 w-4 text-primary" /> Fluxo de Automação (contexto para IA)
+                      </label>
+                      <p className="text-[11px] text-muted-foreground mb-1.5">
+                        A IA receberá o fluxo como contexto para entender a jornada do cliente.
+                      </p>
+                      <Select value={t.flow_id || 'none'} onValueChange={v => updateTemplate(t.id, 'flow_id', v === 'none' ? null : v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Nenhum fluxo (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum fluxo</SelectItem>
+                          {flows.map(f => (
+                            <SelectItem key={f.id} value={f.id}>{f.name}{f.description ? ` — ${f.description.substring(0, 40)}` : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium flex items-center gap-2 mb-1">

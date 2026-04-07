@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Clock, Plus, Trash2, Save, Loader2, Play, Pause, BarChart3,
   ArrowUpRight, MessageSquare, CheckCircle, XCircle, AlertTriangle,
-  TrendingUp, Timer, Target, Zap,
+  TrendingUp, Timer, Target, Zap, GitBranch,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -20,6 +20,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+interface AutomationFlow {
+  id: string;
+  name: string;
+  description: string;
+}
+
 interface FollowUpTemplate {
   id: string;
   name: string;
@@ -33,6 +39,7 @@ interface FollowUpTemplate {
   is_active: boolean;
   niche_id: string | null;
   sort_order: number;
+  flow_id: string | null;
 }
 
 interface FollowUpExecution {
@@ -57,6 +64,7 @@ export default function FollowUps() {
   const [templates, setTemplates] = useState<FollowUpTemplate[]>([]);
   const [executions, setExecutions] = useState<FollowUpExecution[]>([]);
   const [niches, setNiches] = useState<Niche[]>([]);
+  const [flows, setFlows] = useState<AutomationFlow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -67,14 +75,16 @@ export default function FollowUps() {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [tRes, eRes, nRes] = await Promise.all([
+    const [tRes, eRes, nRes, fRes] = await Promise.all([
       supabase.from('follow_up_templates').select('*').order('escalation_level'),
       supabase.from('follow_up_executions').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('niches').select('id, name'),
+      supabase.from('automation_flows').select('id, name, description').order('name'),
     ]);
     setTemplates((tRes.data || []) as FollowUpTemplate[]);
     setExecutions((eRes.data || []) as FollowUpExecution[]);
     setNiches((nRes.data || []) as Niche[]);
+    setFlows((fRes.data || []) as AutomationFlow[]);
     setLoading(false);
   };
 
@@ -93,6 +103,7 @@ export default function FollowUps() {
       is_active: true,
       niche_id: null,
       sort_order: newLevel,
+      flow_id: null,
     }]);
   };
 
@@ -360,6 +371,26 @@ export default function FollowUps() {
                           onChange={e => updateTemplate(t.id, 'escalation_level', parseInt(e.target.value) || 1)}
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium flex items-center gap-2 mb-1">
+                        <GitBranch className="h-4 w-4 text-primary" /> Fluxo de Automação (contexto para IA)
+                      </label>
+                      <p className="text-xs text-muted-foreground mb-1.5">
+                        Selecione um fluxo para que a IA entenda a jornada do cliente ao gerar o follow-up.
+                      </p>
+                      <Select value={t.flow_id || 'none'} onValueChange={v => updateTemplate(t.id, 'flow_id', v === 'none' ? null : v)}>
+                        <SelectTrigger className="w-full md:w-80">
+                          <SelectValue placeholder="Nenhum fluxo (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum fluxo</SelectItem>
+                          {flows.map(f => (
+                            <SelectItem key={f.id} value={f.id}>{f.name}{f.description ? ` — ${f.description.substring(0, 50)}` : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </CardContent>
                 </Card>

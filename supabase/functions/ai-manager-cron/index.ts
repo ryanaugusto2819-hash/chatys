@@ -15,36 +15,26 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const mode: string = body.mode || "human";
+
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
 
-    // Find conversations where last message was 3+ hours ago and not yet analyzed
-    // Also must have at least some messages (not empty)
-    const { data: candidates, error: queryError } = await supabase
+    // Find conversations not yet analyzed for this specific mode
+    const { data: allConvos } = await supabase
       .from("conversations")
       .select("id, updated_at")
       .lt("updated_at", threeHoursAgo)
-      .not("id", "in", `(SELECT conversation_id FROM manager_analyses)`)
-      .limit(10);
+      .order("updated_at", { ascending: false })
+      .limit(50);
 
-    // Fallback: if the NOT IN subquery doesn't work via PostgREST, do it manually
-    let toAnalyze = candidates || [];
+    const { data: analyzed } = await supabase
+      .from("manager_analyses")
+      .select("conversation_id")
+      .eq("mode", mode);
 
-    if (!candidates || queryError) {
-      // Manual approach
-      const { data: allConvos } = await supabase
-        .from("conversations")
-        .select("id, updated_at")
-        .lt("updated_at", threeHoursAgo)
-        .order("updated_at", { ascending: false })
-        .limit(50);
-
-      const { data: analyzed } = await supabase
-        .from("manager_analyses")
-        .select("conversation_id");
-
-      const analyzedIds = new Set((analyzed || []).map((a: any) => a.conversation_id));
-      toAnalyze = (allConvos || []).filter((c: any) => !analyzedIds.has(c.id)).slice(0, 10);
-    }
+    const analyzedIds = new Set((analyzed || []).map((a: any) => a.conversation_id));
+    const toAnalyze = (allConvos || []).filter((c: any) => !analyzedIds.has(c.id)).slice(0, 10);
 
     const results = [];
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -58,7 +48,7 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({ conversation_id: conv.id }),
+          body: JSON.stringify({ conversation_id: conv.id, mode }),
         });
         const data = await res.json();
         results.push({ conversation_id: conv.id, status: "ok", data });

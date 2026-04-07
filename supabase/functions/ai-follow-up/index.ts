@@ -26,6 +26,45 @@ function getFunnelStageInfo(
   };
 }
 
+// Detect when the salesperson (agent) has given up on the sale.
+// Checks recent agent messages for phrases that indicate abandonment.
+function detectAgentGaveUp(messages: any[]): { gaveUp: boolean; reason?: string } {
+  const GIVEUP_PATTERNS: RegExp[] = [
+    /me\s+chama?\s+(depois|mais\s+tarde|quando\s+puder)/i,
+    /me\s+chame\s+(depois|mais\s+tarde|quando\s+puder)/i,
+    /quando\s+(quiser|precisar|tiver\s+interesse|quiser\s+comprar)/i,
+    /se\s+mudar\s+de\s+ideia/i,
+    /se\s+quiser\s+(voltar|retomar|comprar)/i,
+    /pode\s+fechar\s*(a\s+conversa)?/i,
+    /fica\s+(à\s+)?vontade/i,
+    /qualquer\s+coisa\s+me\s+(chama?|fala?|avisa?|manda\s+mensagem)/i,
+    /se\s+precisar\s+(de\s+mim|de\s+algo)/i,
+    /quando\s+quiser\s+comprar\s+me\s+(avisa?|fala?|chama?)/i,
+    /t[aá]\s+(bom|ok|certo)[,.]?\s*(qualquer\s+coisa|fala|me\s+chama)/i,
+    /n[aã]o\s+vou\s+(insistir|empurrar|forçar)/i,
+    /sem\s+press[aã]o/i,
+  ];
+
+  // Only check agent messages (not customer)
+  const agentMessages = messages.filter(
+    (m: any) => m.sender_type !== "customer"
+  );
+
+  // Check the last 8 agent messages
+  const recentAgentMsgs = agentMessages.slice(0, 8);
+
+  for (const msg of recentAgentMsgs) {
+    const content = (msg.content || "").toLowerCase();
+    for (const pattern of GIVEUP_PATTERNS) {
+      if (pattern.test(content)) {
+        return { gaveUp: true, reason: content.substring(0, 100) };
+      }
+    }
+  }
+
+  return { gaveUp: false };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -60,7 +99,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ processed: 0, reason: "No active templates" });
     }
 
-    console.log(`[ai-follow-up] 📋 Templates ativos: ${templates.length} → ${templates.map((t: any) => `${t.name} (nicho: ${t.niche_id?.slice(0,8)}, etapa: ${t.funnel_stage}, horário: ${t.active_hours_start}-${t.active_hours_end}h)`).join(" | ")}`);
+    console.log(`[ai-follow-up] 📋 Templates ativos: ${templates.length}`);
 
     // Filter templates by active hours
     const activeTemplates = templates.filter((t: any) => {
@@ -68,11 +107,11 @@ Deno.serve(async (req) => {
     });
 
     if (!activeTemplates.length) {
-      console.log(`[ai-follow-up] ❌ Nenhum template ativo na hora ${normalizedHour}. Templates: ${templates.map((t: any) => `${t.name}(${t.active_hours_start}-${t.active_hours_end}h)`).join(", ")}`);
+      console.log(`[ai-follow-up] ❌ Nenhum template ativo na hora ${normalizedHour}.`);
       return jsonResponse({ processed: 0, reason: `No templates active at hour ${normalizedHour}` });
     }
 
-    console.log(`[ai-follow-up] ✅ ${activeTemplates.length} templates ativos na hora ${normalizedHour}: ${activeTemplates.map((t: any) => t.name).join(", ")}`);
+    console.log(`[ai-follow-up] ✅ ${activeTemplates.length} templates ativos na hora ${normalizedHour}`);
 
     // Find minimum delay to filter conversations efficiently
     const minDelay = Math.min(...activeTemplates.map((t: any) => t.delay_hours));
@@ -90,27 +129,57 @@ Deno.serve(async (req) => {
     const templateStages = [...new Set(activeTemplates.map((t: any) => t.funnel_stage || 'all'))];
     const hasAllStage = templateStages.includes('all');
 
-    console.log(`[ai-follow-up] 🎯 Nichos: ${nicheIds.map((id: string) => id.slice(0,8)).join(", ")} | Etapas dos templates: ${templateStages.join(", ")} | Cutoff: ${cutoffTime}`);
+    // Load automation flows referenced by active templates
+    const flowIds = [...new Set(activeTemplates.map((t: any) => t.flow_id).filter(Boolean))];
+    let flowsMap = new Map<string, { name: string; description: string; nodesText: string }>();
 
-    // Build query - filter by funnel stages that templates actually target
+    if (flowIds.length > 0) {
+      const [flowsRes, nodesRes] = await Promise.all([
+        supabase.from("automation_flows").select("id, name, description").in("id", flowIds),
+        supabase.from("automation_nodes").select("flow_id, node_type, label, config, sort_order")
+          .in("flow_id", flowIds)
+          .order("sort_order"),
+      ]);
+
+      const nodesByFlow = new Map<string, any[]>();
+      for (const node of (nodesRes.data || [])) {
+        if (!nodesByFlow.has(node.flow_id)) nodesByFlow.set(node.flow_id, []);
+        nodesByFlow.get(node.flow_id)!.push(node);
+      }
+
+      for (const flow of (flowsRes.data || [])) {
+        const nodes = nodesByFlow.get(flow.id) || [];
+        const nodesText = nodes.map((n: any, idx: number) => {
+          const cfg = n.config || {};
+          const msgPreview = cfg.message ? ` → "${String(cfg.message).substring(0, 80)}"` : '';
+          return `  ${idx + 1}. [${n.node_type}] ${n.label}${msgPreview}`;
+        }).join("\n");
+        flowsMap.set(flow.id, { name: flow.name, description: flow.description || '', nodesText });
+      }
+
+      console.log(`[ai-follow-up] 🔀 ${flowIds.length} fluxos carregados como contexto`);
+    }
+
+    // Build query
     let query = supabase
       .from("conversations")
-      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at")
+      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at, follow_up_blocked")
       .neq("status", "resolved")
       .is("sale_registered_at", null)
       .in("niche_id", nicheIds)
       .lt("updated_at", cutoffTime)
       .order("updated_at", { ascending: true })
-      .limit(50);
+      .limit(60); // fetch a few extra since we filter blocked below
 
-    // If no template targets 'all', filter conversations to only matching funnel stages
     if (!hasAllStage) {
       const specificStages = templateStages.filter((s: string) => s !== 'all');
       query = query.in("funnel_stage", specificStages);
-      console.log(`[ai-follow-up] 🔍 Filtrando conversas pelas etapas: ${specificStages.join(", ")}`);
     }
 
-    const { data: conversations, error: convError } = await query;
+    const { data: rawConversations, error: convError } = await query;
+
+    // Filter out conversations where follow_up_blocked is true (safe: field may not exist yet)
+    const conversations = (rawConversations || []).filter((c: any) => !c.follow_up_blocked).slice(0, 50);
 
     if (convError) {
       console.error(`[ai-follow-up] ❌ Erro ao buscar conversas: ${convError.message}`);
@@ -118,11 +187,11 @@ Deno.serve(async (req) => {
     }
 
     if (!conversations?.length) {
-      console.log(`[ai-follow-up] ❌ Nenhuma conversa elegível (cutoff: ${cutoffTime}, nichos: ${nicheIds.length}, etapas: ${templateStages.join(",")})`);
+      console.log(`[ai-follow-up] ❌ Nenhuma conversa elegível`);
       return jsonResponse({ processed: 0, reason: "No eligible conversations" });
     }
 
-    console.log(`[ai-follow-up] 📊 ${conversations.length} conversas elegíveis encontradas. Distribuição por etapa: ${Object.entries(conversations.reduce((acc: any, c: any) => { acc[c.funnel_stage] = (acc[c.funnel_stage] || 0) + 1; return acc; }, {})).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+    console.log(`[ai-follow-up] 📊 ${conversations.length} conversas elegíveis`);
 
     // Load niche data in parallel
     const [nichesRes, kbRes, stagesRes] = await Promise.all([
@@ -140,6 +209,7 @@ Deno.serve(async (req) => {
     }
 
     let totalSent = 0;
+    let totalGaveUp = 0;
     const skippedReasons: Record<string, number> = {};
 
     function trackSkip(reason: string) {
@@ -165,6 +235,29 @@ Deno.serve(async (req) => {
         trackSkip("ultima_msg_do_cliente");
         continue;
       }
+
+      // ── GIVE-UP DETECTION ────────────────────────────────────────────────────
+      // Check if the salesperson has abandoned this sale in recent messages
+      const giveUpResult = detectAgentGaveUp(lastMessages);
+      if (giveUpResult.gaveUp) {
+        console.log(`[ai-follow-up] 🚫 Vendedor desistiu em "${conv.contact_name}": "${giveUpResult.reason}"`);
+        // Block follow-ups for this conversation permanently
+        try {
+          await supabase
+            .from("conversations")
+            .update({
+              follow_up_blocked: true,
+              follow_up_blocked_reason: `vendedor_desistiu: ${giveUpResult.reason}`,
+            })
+            .eq("id", conv.id);
+        } catch (_) {
+          // Column may not exist yet if migration hasn't run — just skip
+        }
+        totalGaveUp++;
+        trackSkip("vendedor_desistiu");
+        continue;
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
       const lastMsgTime = new Date(lastMsg.created_at);
       const hoursSinceLastMsg = (now.getTime() - lastMsgTime.getTime()) / (1000 * 60 * 60);
@@ -234,7 +327,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        console.log(`[ai-follow-up] 🚀 Gerando follow-up para ${conv.contact_name} (etapa: ${funnelStage.label}, template: ${template.name}, tentativa: ${attemptsDone + 1}/${template.max_attempts}, horas sem resposta: ${Math.round(hoursSinceLastMsg)}h)`);
+        console.log(`[ai-follow-up] 🚀 Gerando follow-up para ${conv.contact_name} (etapa: ${funnelStage.label}, template: ${template.name}, tentativa: ${attemptsDone + 1}/${template.max_attempts})`);
 
         // Build context
         const allMsgsChronological = [...lastMessages].reverse();
@@ -261,15 +354,27 @@ Deno.serve(async (req) => {
         const nicheInfo = conv.niche_id ? nichesMap.get(conv.niche_id) : null;
 
         const nicheLanguage = nicheInfo?.language || "pt-BR";
-        const langLabel = nicheLanguage === "es" ? "español" : "português brasileiro";
         const langInstruction = nicheLanguage === "es"
           ? "IDIOMA: Escreva TODA a mensagem em ESPANHOL (español). O cliente fala espanhol."
           : "IDIOMA: Escreva TODA a mensagem em PORTUGUÊS BRASILEIRO.";
+
+        // Build automation flow context if template has a flow_id
+        let flowContext = "";
+        if (template.flow_id && flowsMap.has(template.flow_id)) {
+          const flow = flowsMap.get(template.flow_id)!;
+          flowContext = `\n\nFLUXO DE AUTOMAÇÃO DESTE TEMPLATE: "${flow.name}"
+${flow.description ? `Descrição: ${flow.description}` : ""}
+Etapas do fluxo (jornada do cliente):
+${flow.nodesText || "(sem etapas definidas)"}
+
+Use este fluxo para entender a jornada completa do cliente e adapte o follow-up ao estágio atual da conversa dentro deste fluxo.`;
+        }
 
         const systemPrompt = `Você é um especialista em follow-up de vendas via WhatsApp. Gere uma mensagem de follow-up altamente personalizada com base no CONTEXTO COMPLETO da conversa e na ETAPA DO FUNIL em que o lead se encontra.
 
 ${nicheInfo ? `NICHO: ${nicheInfo.name}\nCONTEXTO DO NEGÓCIO: ${nicheInfo.system_prompt}` : ""}
 ${kbContext}
+${flowContext}
 
 ETAPA DO FUNIL DO LEAD: ${funnelStage.label}
 ${funnelStage.description}
@@ -375,7 +480,6 @@ Gere a mensagem de follow-up:`,
           senderLabel: "ia-follow-up",
         };
 
-        // If template has an image, send as image type with caption
         if (template.image_url) {
           sendBody.type = "image";
           sendBody.mediaUrl = template.image_url;
@@ -427,7 +531,7 @@ Gere a mensagem de follow-up:`,
 
           totalSent++;
           sentForConv = true;
-          console.log(`[ai-follow-up] ✅ Enviado para ${conv.contact_name} (template: ${template.name}, tentativa: ${attemptsDone + 1}, funil: ${funnelStage.label})`);
+          console.log(`[ai-follow-up] ✅ Enviado para ${conv.contact_name} (template: ${template.name}, tentativa: ${attemptsDone + 1})`);
         } else {
           const errText = await sendResp.text();
           console.error(`[ai-follow-up] ❌ Falha ao enviar para ${conv.contact_name}: ${errText}`);
@@ -436,11 +540,10 @@ Gere a mensagem de follow-up:`,
       }
     }
 
-    // Log summary of skipped reasons
     const skipSummary = Object.entries(skippedReasons).map(([reason, count]) => `${reason}: ${count}`).join(" | ");
-    console.log(`[ai-follow-up] 📊 Resumo: ${totalSent} enviados, ${conversations.length} processadas. Motivos de skip: ${skipSummary || "nenhum"}`);
+    console.log(`[ai-follow-up] 📊 Resumo: ${totalSent} enviados, ${totalGaveUp} bloqueados (desistência), ${conversations.length} processadas. Motivos de skip: ${skipSummary || "nenhum"}`);
 
-    return jsonResponse({ processed: totalSent, skippedReasons });
+    return jsonResponse({ processed: totalSent, gaveUpBlocked: totalGaveUp, skippedReasons });
   } catch (error) {
     console.error("[ai-follow-up] ❌ Erro fatal:", error);
     return jsonResponse({ error: "Internal server error" }, 500);

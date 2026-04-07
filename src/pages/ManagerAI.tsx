@@ -8,7 +8,7 @@ import {
   ShieldCheck, AlertTriangle, CheckCircle2, Info, Lightbulb,
   TrendingUp, ArrowRight, Clock, RefreshCw, Filter, X,
   BookOpen, Save, Brain, FileText, MessageSquare, Upload, Loader2,
-  ChevronDown, ChevronUp, Repeat, MessageCircle, Send,
+  ChevronDown, ChevronUp, Repeat, MessageCircle, Send, User, GitBranch, Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import KnowledgeBase from '@/components/ai/KnowledgeBase';
@@ -90,6 +90,62 @@ function PriorityBadge({ priority }: { priority: string }) {
 }
 
 type TabView = 'analyses' | 'training';
+type ManagerMode = 'human' | 'follow_up' | 'flow_selector';
+
+const MANAGER_MODES: Array<{
+  id: ManagerMode;
+  label: string;
+  icon: typeof User;
+  color: string;
+  description: string;
+  configId: string;
+}> = [
+  {
+    id: 'human',
+    label: 'Humano',
+    icon: User,
+    color: 'text-blue-500',
+    description: 'Avalia o desempenho dos vendedores humanos: profissionalismo, técnica de vendas, empatia e resultados.',
+    configId: '00000000-0000-0000-0000-000000000001',
+  },
+  {
+    id: 'follow_up',
+    label: 'IA de Follow-UP',
+    icon: Bell,
+    color: 'text-orange-500',
+    description: 'Avalia a qualidade das mensagens de follow-up geradas pela IA: personalização, timing, tom e efetividade.',
+    configId: '00000000-0000-0000-0000-000000000002',
+  },
+  {
+    id: 'flow_selector',
+    label: 'Seletor de Fluxo',
+    icon: GitBranch,
+    color: 'text-purple-500',
+    description: 'Avalia a precisão da IA ao selecionar fluxos de automação: trigger correto, relevância dos nós e oportunidades perdidas.',
+    configId: '00000000-0000-0000-0000-000000000003',
+  },
+];
+
+const DEFAULT_CRITERIA: Record<ManagerMode, EvalCriteria[]> = {
+  human: [
+    { name: 'Profissionalismo e Empatia', weight: 25, description: 'O atendente foi profissional, empático e educado com o cliente?' },
+    { name: 'Tempo de Resposta', weight: 15, description: 'O atendente respondeu com agilidade e manteve o cliente engajado?' },
+    { name: 'Conhecimento do Produto', weight: 25, description: 'O atendente demonstrou domínio correto do produto/serviço?' },
+    { name: 'Técnica de Vendas', weight: 35, description: 'O atendente identificou necessidades, contornou objeções e avançou no funil?' },
+  ],
+  follow_up: [
+    { name: 'Personalização', weight: 30, description: 'A mensagem fez referência ao contexto real da conversa? Evitou ser genérica?' },
+    { name: 'Timing e Adequação ao Funil', weight: 25, description: 'O follow-up foi enviado no momento e etapa certos do funil?' },
+    { name: 'Tom Natural e Não Invasivo', weight: 20, description: 'A mensagem soou humana, natural e respeitosa com o cliente?' },
+    { name: 'Efetividade e Persuasão', weight: 25, description: 'O follow-up reengajou o cliente? A abordagem foi persuasiva sem ser agressiva?' },
+  ],
+  flow_selector: [
+    { name: 'Precisão da Seleção', weight: 35, description: 'O fluxo selecionado foi o mais adequado para a situação do cliente?' },
+    { name: 'Relevância do Trigger', weight: 25, description: 'A condição de disparo fez sentido para o contexto da conversa?' },
+    { name: 'Qualidade dos Nós Executados', weight: 25, description: 'As mensagens e ações dentro do fluxo foram relevantes e bem sequenciadas?' },
+    { name: 'Oportunidades Perdidas', weight: 15, description: 'Houve fluxos mais adequados que não foram acionados?' },
+  ],
+};
 
 function IssueCard({ issue, index, analysisId, allIssues, onUpdated }: {
   issue: Issue; index: number; analysisId: string; allIssues: Issue[]; onUpdated: () => void;
@@ -173,6 +229,7 @@ export default function ManagerAI() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [activeView, setActiveView] = useState<TabView>('analyses');
+  const [managerMode, setManagerMode] = useState<ManagerMode>('human');
 
   // Filters
   const [showFilters, setShowFilters] = useState(false);
@@ -180,10 +237,18 @@ export default function ManagerAI() {
   const [issueTypeFilter, setIssueTypeFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
 
-  // Training
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [criteria, setCriteria] = useState<EvalCriteria[]>([]);
+  // Training — per mode
+  const [customPrompts, setCustomPrompts] = useState<Record<ManagerMode, string>>({ human: '', follow_up: '', flow_selector: '' });
+  const [criteriaMap, setCriteriaMap] = useState<Record<ManagerMode, EvalCriteria[]>>({ human: [], follow_up: [], flow_selector: [] });
   const [configLoaded, setConfigLoaded] = useState(false);
+
+  const customPrompt = customPrompts[managerMode];
+  const criteria = criteriaMap[managerMode];
+
+  const setCustomPrompt = (v: string) => setCustomPrompts(p => ({ ...p, [managerMode]: v }));
+  const setCriteria = (v: EvalCriteria[] | ((prev: EvalCriteria[]) => EvalCriteria[])) => {
+    setCriteriaMap(p => ({ ...p, [managerMode]: typeof v === 'function' ? v(p[managerMode]) : v }));
+  };
 
   const { data: analyses, isLoading, refetch } = useQuery({
     queryKey: ['manager-analyses'],
@@ -192,24 +257,32 @@ export default function ManagerAI() {
         .from('manager_analyses')
         .select('*, conversations(contact_name, contact_phone, status)')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(200);
       if (error) throw error;
       return (data || []) as unknown as Analysis[];
     },
   });
 
-  // Load manager config
+  // Load all mode configs
   useQuery({
     queryKey: ['manager-config'],
     queryFn: async () => {
       const { data } = await supabase
         .from('manager_config')
         .select('*')
-        .limit(1)
-        .maybeSingle();
+        .in('mode', ['human', 'follow_up', 'flow_selector']);
       if (data) {
-        setCustomPrompt((data as any).custom_prompt || '');
-        setCriteria(((data as any).evaluation_criteria || []) as EvalCriteria[]);
+        const prompts: Record<ManagerMode, string> = { human: '', follow_up: '', flow_selector: '' };
+        const crit: Record<ManagerMode, EvalCriteria[]> = { human: [], follow_up: [], flow_selector: [] };
+        for (const row of data as any[]) {
+          const m = row.mode as ManagerMode;
+          if (m in prompts) {
+            prompts[m] = row.custom_prompt || '';
+            crit[m] = (row.evaluation_criteria || []) as EvalCriteria[];
+          }
+        }
+        setCustomPrompts(prompts);
+        setCriteriaMap(crit);
         setConfigLoaded(true);
       }
       return data;
@@ -218,27 +291,29 @@ export default function ManagerAI() {
 
   const saveConfig = useMutation({
     mutationFn: async () => {
+      const modeInfo = MANAGER_MODES.find(m => m.id === managerMode)!;
       const { error } = await supabase
         .from('manager_config')
         .update({
-          custom_prompt: customPrompt,
-          evaluation_criteria: criteria as any,
+          custom_prompt: customPrompts[managerMode],
+          evaluation_criteria: criteriaMap[managerMode] as any,
           updated_at: new Date().toISOString(),
         } as any)
-        .eq('id', '00000000-0000-0000-0000-000000000001');
+        .eq('id', modeInfo.configId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Configuração salva com sucesso');
+      toast.success(`Configuração do modo "${MANAGER_MODES.find(m => m.id === managerMode)?.label}" salva`);
       queryClient.invalidateQueries({ queryKey: ['manager-config'] });
     },
     onError: () => toast.error('Erro ao salvar configuração'),
   });
 
-  // Filter logic
+  // Filter logic — always scoped to current mode
   const filtered = useMemo(() => {
     if (!analyses) return [];
-    let result = [...analyses];
+    // Filter by current mode first
+    let result = analyses.filter(a => (a as any).mode === managerMode || !(a as any).mode);
 
     if (scoreFilter === 'high') result = result.filter(a => a.overall_score >= 80);
     else if (scoreFilter === 'medium') result = result.filter(a => a.overall_score >= 50 && a.overall_score < 80);
@@ -258,15 +333,15 @@ export default function ManagerAI() {
     }
 
     return result;
-  }, [analyses, scoreFilter, issueTypeFilter, dateFilter]);
+  }, [analyses, scoreFilter, issueTypeFilter, dateFilter, managerMode]);
 
   const selected = analyses?.find(a => a.id === selectedId);
 
-  // Recurring problems
+  // Recurring problems — scoped to current mode
   const recurringProblems = useMemo(() => {
-    if (!analyses?.length) return [];
+    if (!filtered?.length) return [];
     const countMap: Record<string, { title: string; type: string; count: number; descriptions: string[] }> = {};
-    analyses.forEach(a => {
+    filtered.forEach(a => {
       (a.issues || []).forEach(issue => {
         const key = issue.title.toLowerCase().trim();
         if (!countMap[key]) {
@@ -293,10 +368,11 @@ export default function ManagerAI() {
 
   const handleManualAnalyze = async () => {
     setAnalyzing(true);
+    const modeLabel = MANAGER_MODES.find(m => m.id === managerMode)?.label || managerMode;
     try {
-      const res = await supabase.functions.invoke('ai-manager-cron', { body: {} });
+      const res = await supabase.functions.invoke('ai-manager-cron', { body: { mode: managerMode } });
       if (res.error) throw res.error;
-      toast.success(`Análise concluída: ${res.data?.analyzed || 0} conversas analisadas`);
+      toast.success(`[${modeLabel}] ${res.data?.analyzed || 0} conversas analisadas`);
       refetch();
     } catch (e: any) {
       toast.error('Erro ao analisar: ' + (e.message || 'Erro desconhecido'));
@@ -310,8 +386,35 @@ export default function ManagerAI() {
 
   return (
     <div>
-      <TopBar title="IA Gerente" subtitle="Análise automática de qualidade do atendimento" />
+      <TopBar title="IA Gerente" subtitle="3 modos: Humano · IA de Follow-UP · Seletor de Fluxo" />
       <div className="p-6 space-y-6">
+        {/* Mode selector */}
+        <div className="grid grid-cols-3 gap-3">
+          {MANAGER_MODES.map(mode => {
+            const Icon = mode.icon;
+            const isActive = managerMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => { setManagerMode(mode.id); setSelectedId(null); }}
+                className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
+                  isActive
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-border bg-card hover:border-primary/40'
+                }`}
+              >
+                <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${isActive ? 'text-primary' : 'text-card-foreground'}`}>{mode.label}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{mode.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
         {/* View tabs */}
         <div className="flex items-center gap-2">
           <div className="flex gap-1 rounded-lg bg-muted p-1">
@@ -357,7 +460,7 @@ export default function ManagerAI() {
                 className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 <RefreshCw className={`h-4 w-4 ${analyzing ? 'animate-spin' : ''}`} />
-                {analyzing ? 'Analisando...' : 'Analisar Agora'}
+                {analyzing ? 'Analisando...' : `Analisar — ${MANAGER_MODES.find(m => m.id === managerMode)?.label}`}
               </button>
             </>
           )}
@@ -614,6 +717,23 @@ export default function ManagerAI() {
         {/* Training tab */}
         {activeView === 'training' && (
           <div className="space-y-6">
+            {/* Mode context banner */}
+            {(() => {
+              const modeInfo = MANAGER_MODES.find(m => m.id === managerMode)!;
+              const Icon = modeInfo.icon;
+              return (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-card-foreground">Configurando: {modeInfo.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{modeInfo.description}</p>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
             {/* Custom Prompt */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-border bg-card p-6 shadow-elevated">
               <div className="flex items-center gap-3 mb-4">
@@ -621,36 +741,60 @@ export default function ManagerAI() {
                   <Brain className="h-5 w-5 text-accent-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-card-foreground">Prompt Personalizado</p>
-                  <p className="text-xs text-muted-foreground">Defina como a IA Gerente deve se comportar ao analisar conversas</p>
+                  <p className="text-sm font-semibold text-card-foreground">Instrução da IA — {MANAGER_MODES.find(m => m.id === managerMode)?.label}</p>
+                  <p className="text-xs text-muted-foreground">Deixe em branco para usar o prompt padrão deste modo. Ou personalize.</p>
                 </div>
               </div>
               <textarea
                 value={customPrompt}
                 onChange={e => setCustomPrompt(e.target.value)}
                 rows={6}
-                placeholder="Ex: Você é um gerente de qualidade rigoroso. Priorize a verificação de..."
+                placeholder={`Deixe em branco para usar o padrão, ou customize. Ex: "Seja mais rigoroso com ${managerMode === 'human' ? 'respostas genéricas do vendedor' : managerMode === 'follow_up' ? 'follow-ups que não citam o contexto' : 'fluxos selecionados sem relevância'}..."`}
                 className="w-full resize-none rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 mt-3">
-                <p className="text-xs text-muted-foreground">
-                  <strong className="text-foreground">Dica:</strong> Descreva o tom, as prioridades e os critérios
-                  que a IA deve seguir. Ex: "Seja mais rigoroso com respostas genéricas" ou "Priorize a verificação de preços corretos".
-                </p>
-              </div>
             </motion.div>
 
             {/* Evaluation Criteria */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-6 shadow-elevated">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent">
-                  <CheckCircle2 className="h-5 w-5 text-accent-foreground" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent">
+                    <CheckCircle2 className="h-5 w-5 text-accent-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-card-foreground">Critérios de Avaliação</p>
+                    <p className="text-xs text-muted-foreground">Pesos e descrições usados pela IA para pontuar ({criteria.length === 0 ? 'usando padrões' : `${criteria.length} customizados`})</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-card-foreground">Critérios de Avaliação</p>
-                  <p className="text-xs text-muted-foreground">Personalize os critérios e seus pesos na avaliação</p>
-                </div>
+                {criteria.length === 0 && (
+                  <button
+                    onClick={() => setCriteria(DEFAULT_CRITERIA[managerMode])}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Carregar padrões
+                  </button>
+                )}
+                {criteria.length > 0 && (
+                  <button
+                    onClick={() => setCriteria([])}
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    Resetar para padrões
+                  </button>
+                )}
               </div>
+              {criteria.length === 0 && (
+                <div className="space-y-2 mb-4">
+                  <p className="text-xs text-muted-foreground mb-2">Critérios padrão (ativos):</p>
+                  {DEFAULT_CRITERIA[managerMode].map((c, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 text-xs">
+                      <span className="font-medium text-card-foreground min-w-0 flex-1">{c.name}</span>
+                      <span className="shrink-0 text-muted-foreground">{c.weight}%</span>
+                      <span className="shrink-0 text-muted-foreground max-w-xs truncate">{c.description}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="space-y-3">
                 {criteria.map((c, i) => (
                   <div key={i} className="rounded-lg border border-border bg-background p-3">
