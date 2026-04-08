@@ -148,13 +148,6 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
                   </div>
                   <span className="text-sm truncate">{tag.name}</span>
                 </button>
-                <button
-                  onClick={() => deleteTag(tag)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
-                  title="Excluir etiqueta"
-                >
-                  <X className="h-3 w-3" />
-                </button>
               </div>
             ))}
           </div>
