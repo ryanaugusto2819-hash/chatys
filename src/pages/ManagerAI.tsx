@@ -269,13 +269,13 @@ export default function ManagerAI() {
     queryFn: async () => {
       const { data } = await supabase
         .from('manager_config')
-        .select('*') as any;
+        .select('*');
       if (data) {
         const prompts: Record<ManagerMode, string> = { human: '', follow_up: '', flow_selector: '' };
         const crit: Record<ManagerMode, EvalCriteria[]> = { human: [], follow_up: [], flow_selector: [] };
         for (const row of data as any[]) {
-          const m = row.mode as ManagerMode;
-          if (m in prompts) {
+          const m = (row as any).mode as ManagerMode;
+          if (m && m in prompts) {
             prompts[m] = row.custom_prompt || '';
             crit[m] = (row.evaluation_criteria || []) as EvalCriteria[];
           }
