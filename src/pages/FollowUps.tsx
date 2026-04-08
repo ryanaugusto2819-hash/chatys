@@ -81,7 +81,7 @@ export default function FollowUps() {
       supabase.from('niches').select('id, name'),
       supabase.from('automation_flows').select('id, name, description').order('name'),
     ]);
-    setTemplates((tRes.data || []) as FollowUpTemplate[]);
+    setTemplates((tRes.data || []) as unknown as FollowUpTemplate[]);
     setExecutions((eRes.data || []) as FollowUpExecution[]);
     setNiches((nRes.data || []) as Niche[]);
     setFlows((fRes.data || []) as AutomationFlow[]);

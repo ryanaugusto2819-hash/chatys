@@ -106,7 +106,7 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
       supabase.from('niche_funnel_stages').select('*').eq('niche_id', nicheId).order('sort_order'),
       supabase.from('automation_flows').select('id, name, description').order('name'),
     ]);
-    const tplList = (tRes.data || []) as FollowUpTemplate[];
+    const tplList = (tRes.data || []) as unknown as FollowUpTemplate[];
     setTemplates(tplList);
     setStages((sRes.data || []) as FunnelStage[]);
     setFlows((fRes.data || []) as AutomationFlow[]);

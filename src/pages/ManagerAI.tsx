@@ -269,8 +269,7 @@ export default function ManagerAI() {
     queryFn: async () => {
       const { data } = await supabase
         .from('manager_config')
-        .select('*')
-        .in('mode', ['human', 'follow_up', 'flow_selector']);
+        .select('*') as any;
       if (data) {
         const prompts: Record<ManagerMode, string> = { human: '', follow_up: '', flow_selector: '' };
         const crit: Record<ManagerMode, EvalCriteria[]> = { human: [], follow_up: [], flow_selector: [] };
