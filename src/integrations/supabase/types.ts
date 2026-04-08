@@ -887,6 +887,7 @@ export type Database = {
           custom_prompt: string
           evaluation_criteria: Json
           id: string
+          mode: string
           updated_at: string
         }
         Insert: {
@@ -894,6 +895,7 @@ export type Database = {
           custom_prompt?: string
           evaluation_criteria?: Json
           id?: string
+          mode?: string
           updated_at?: string
         }
         Update: {
@@ -901,6 +903,7 @@ export type Database = {
           custom_prompt?: string
           evaluation_criteria?: Json
           id?: string
+          mode?: string
           updated_at?: string
         }
         Relationships: []
