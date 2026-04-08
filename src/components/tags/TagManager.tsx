@@ -107,18 +107,6 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
     }
   };
 
-  const deleteTag = async (tag: TagOption) => {
-    try {
-      // Remove all contact_tags references first, then the tag
-      await supabase.from('contact_tags').delete().eq('tag_id', tag.id);
-      await supabase.from('tags').delete().eq('id', tag.id);
-      setAllTags(prev => prev.filter(t => t.id !== tag.id));
-      onTagsChanged();
-      toast.success(`Etiqueta "${tag.name}" excluída`);
-    } catch {
-      toast.error('Erro ao excluir etiqueta');
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -159,13 +147,6 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
                     {isTagAssigned(tag.id) && <Check className="h-2.5 w-2.5 text-white" />}
                   </div>
                   <span className="text-sm truncate">{tag.name}</span>
-                </button>
-                <button
-                  onClick={() => deleteTag(tag)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
-                  title="Excluir etiqueta"
-                >
-                  <X className="h-3 w-3" />
                 </button>
               </div>
             ))}
