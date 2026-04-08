@@ -34,9 +34,11 @@ Deno.serve(async (req) => {
     const t1 = Deno.env.get("META_ADS_ACCESS_TOKEN");
     const t2 = Deno.env.get("META_ADS_ACCESS_TOKEN_2");
     const t3 = Deno.env.get("META_ADS_ACCESS_TOKEN_3");
+    const t4 = Deno.env.get("META_ADS_ACCESS_TOKEN_4");
     if (t1) tokens.push(t1);
     if (t2) tokens.push(t2);
     if (t3) tokens.push(t3);
+    if (t4) tokens.push(t4);
 
     if (tokens.length === 0) {
       return new Response(
