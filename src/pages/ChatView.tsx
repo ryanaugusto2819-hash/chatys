@@ -289,6 +289,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [sendingTermo, setSendingTermo] = useState(false);
   const [termoPdfUrl, setTermoPdfUrl] = useState<string | null>(null);
   const [sendingTermoWhatsApp, setSendingTermoWhatsApp] = useState(false);
+  const [showMotoboyDialog, setShowMotoboyDialog] = useState(false);
+  const [motoboyCity, setMotoboyCity] = useState('');
+  const [motoboyResult, setMotoboyResult] = useState<string | null>(null);
   const [blockedConnections, setBlockedConnections] = useState<{ id: string; label: string; status: string }[]>([]);
 
   // Reset termo state when conversation changes
@@ -1196,6 +1199,63 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 </div>
               )}
 
+
+              {/* Verificar Motoboy */}
+              <div>
+                <button
+                  onClick={() => { setShowMotoboyDialog(true); setMotoboyCity(''); setMotoboyResult(null); }}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white py-1.5 px-3 text-xs font-medium transition-colors"
+                >
+                  🏍️ Verificar Motoboy
+                </button>
+              </div>
+
+              {showMotoboyDialog && (
+                <div className="rounded-lg border border-border bg-background p-3 space-y-2.5">
+                  <p className="text-xs font-semibold text-card-foreground">Verificar Entrega Motoboy</p>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground">Cidade *</label>
+                    <input
+                      type="text"
+                      value={motoboyCity}
+                      onChange={(e) => { setMotoboyCity(e.target.value); setMotoboyResult(null); }}
+                      placeholder="Digite o nome da cidade"
+                      className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  {motoboyResult && (
+                    <div className={`rounded-lg p-2.5 text-center text-xs font-bold ${
+                      motoboyResult === 'ENTREGA MOTOBOY'
+                        ? 'bg-green-600/15 text-green-400 border border-green-600/30'
+                        : 'bg-blue-600/15 text-blue-400 border border-blue-600/30'
+                    }`}>
+                      {motoboyResult}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowMotoboyDialog(false)}
+                      className="flex-1 rounded-lg border border-border py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!motoboyCity.trim()) return;
+                        const MOTOBOY_CITIES = ["Abadia de Goiás","Aparecida de Goiânia","Arniqueira","Brasília","Ceilândia","Gama","Goianápolis","Guapó","Hidrolândia","Luziânia","Novo Gama","Samambaia","Senador Canedo","Taguatinga","Trindade","Vicente Pires","Anápolis","Aragoiânia","Bonfinópolis","Caturaí","Cidade Ocidental","Goianira","Goiânia","Guará","Inhumas","Nerópolis","Recanto das Emas","Santa Maria","Sol Nascente/Pôr do Sol","Terezópolis de Goiás","Valparaíso de Goiás","Águas Lindas de Goiás","Belo Horizonte","Carmo do Cajuru","Contagem","Ibirité","Igaratinga","Nova Contagem","Pará de Minas","Sabará","Betim","Citrolândia","Divinópolis","Icaivera","Itaúna","Nova Serrana","Ribeirão das Neves","Santa Luzia","Ananindeua","Marituba","Ribeirão Preto","Campo Grande","Belém","Almirante Tamandaré","Campina Grande do Sul","Colombo","Fazenda Rio Grande","Pinhais","Quatro Barras","São José dos Pinhais","Araucária","Campo Largo","Conde","Manaus","Curitiba","Itaperuçu","Piraquara","Rio Branco do Sul","Caucaia","Fortaleza","Itaitinga","Maranguape","Pacatuba","Eusébio","Horizonte","Ceará-Mirim","Macaíba","Natal","São Gonçalo do Amarante","Extremoz","Mossoró","Parnamirim","São José de Mipibu","Balneário Camboriú","Barra Velha","Camboriú","Itapema","Joinville","Penha","Balneário Piçarras","Blumenau","Itajaí","Jaraguá do Sul","Navegantes","Maracanaú","Pacajus","Alvorada","Bom Princípio","Campo Bom","Carlos Barbosa","Eldorado do Sul","Estância Velha","Garibaldi","Guaíba","Porto Alegre","Sapiranga","São Leopoldo","São Vendelino","Bento Gonçalves","Cachoeirinha","Canoas","Caxias do Sul","Esteio","Farroupilha","Gravataí","Novo Hamburgo","Portão","Sapucaia do Sul","São Sebastião do Caí","Viamão","Abreu e Lima","Cabedelo","Camaragibe","Jaboatão dos Guararapes","Olinda","Recife","São Lourenço da Mata","Bayeux","Cabo de Santo Agostinho","Igarassu","João Pessoa","Paulista","Santa Rita","Belford Roxo","Mesquita","Niterói","Queimados","São João de Meriti","Lauro de Freitas","Salvador","Duque de Caxias","Nilópolis","Nova Iguaçu","Rio de Janeiro","Americana","Barueri","Cajamar","Campo Limpo Paulista","Caçapava","Cubatão","Embu das Artes","Francisco Morato","Guarulhos","Itapevi","Jacareí","Jundiaí","Mogi das Cruzes","Nova Odessa","Paulínia","Praia Grande","Rio Grande da Serra","Santo André","Sumaré","São Bernardo do Campo","São José dos Campos","São Vicente","Taubaté","Vinhedo","Arujá","Caieiras","Campinas","Carapicuíba","Cotia","Diadema","Ferraz de Vasconcelos","Franco da Rocha","Hortolândia","Itaquaquecetuba","Jandira","Mauá","Monte Mor","Osasco","Poá","Ribeirão Pires","Teresina","Timon","Cariacica","Vila Velha","Guarapari","Viana","Vitória","Serra","Santa Bárbara d'Oeste","Santos","Suzano","São Caetano do Sul","São Paulo","Taboão da Serra","Valinhos"];
+                        const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
+                        const inputNorm = normalize(motoboyCity);
+                        const found = MOTOBOY_CITIES.some(c => normalize(c) === inputNorm);
+                        setMotoboyResult(found ? 'ENTREGA MOTOBOY' : 'ENTREGA CORREIOS');
+                      }}
+                      disabled={!motoboyCity.trim()}
+                      className="flex-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      Verificar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
