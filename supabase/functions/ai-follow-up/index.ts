@@ -163,13 +163,13 @@ Deno.serve(async (req) => {
     // Build query
     let query = supabase
       .from("conversations")
-      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at, follow_up_blocked")
+      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at")
       .neq("status", "resolved")
       .is("sale_registered_at", null)
       .in("niche_id", nicheIds)
       .lt("updated_at", cutoffTime)
       .order("updated_at", { ascending: true })
-      .limit(60); // fetch a few extra since we filter blocked below
+      .limit(50);
 
     if (!hasAllStage) {
       const specificStages = templateStages.filter((s: string) => s !== 'all');
@@ -178,8 +178,7 @@ Deno.serve(async (req) => {
 
     const { data: rawConversations, error: convError } = await query;
 
-    // Filter out conversations where follow_up_blocked is true (safe: field may not exist yet)
-    const conversations = (rawConversations || []).filter((c: any) => !c.follow_up_blocked).slice(0, 50);
+    const conversations = (rawConversations || []).slice(0, 50);
 
     if (convError) {
       console.error(`[ai-follow-up] ❌ Erro ao buscar conversas: ${convError.message}`);
@@ -257,17 +256,7 @@ Deno.serve(async (req) => {
       if (giveUpResult.gaveUp) {
         console.log(`[ai-follow-up] 🚫 Vendedor desistiu em "${conv.contact_name}": "${giveUpResult.reason}"`);
         // Block follow-ups for this conversation permanently
-        try {
-          await supabase
-            .from("conversations")
-            .update({
-              follow_up_blocked: true,
-              follow_up_blocked_reason: `vendedor_desistiu: ${giveUpResult.reason}`,
-            })
-            .eq("id", conv.id);
-        } catch (_) {
-          // Column may not exist yet if migration hasn't run — just skip
-        }
+        // Skip this conversation — agent gave up
         totalGaveUp++;
         trackSkip("vendedor_desistiu");
         continue;
