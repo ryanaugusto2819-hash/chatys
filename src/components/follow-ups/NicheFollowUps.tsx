@@ -479,20 +479,6 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
                   </div>
                   <div>
                     <label className="text-sm font-medium flex items-center gap-2 mb-1">
-                      <Zap className="h-4 w-4 text-primary" /> Quando ativar este Follow-up?
-                    </label>
-                    <p className="text-[11px] text-muted-foreground mb-1.5">
-                      Descreva a condição ou situação em que a IA deve disparar este follow-up.
-                    </p>
-                    <Textarea
-                      value={t.trigger_condition || ''}
-                      onChange={e => updateTemplate(t.id, 'trigger_condition', e.target.value)}
-                      placeholder="Ex: Quando o cliente não responder após receber o valor do produto. Ou: Quando o cliente disse que iria pagar mas ainda não enviou o comprovante."
-                      rows={2}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium flex items-center gap-2 mb-1">
                       <ImagePlus className="h-4 w-4 text-primary" /> Imagem do Follow-up (opcional)
                     </label>
                     <p className="text-[11px] text-muted-foreground mb-1.5">

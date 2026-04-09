@@ -230,6 +230,21 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // ── WHATSAPP 24H WINDOW CHECK ────────────────────────────────────────────
+      // WhatsApp API only allows sending messages within 24h of last customer message
+      const lastCustomerMsg = lastMessages.find((m: any) => m.sender_type === "customer");
+      if (!lastCustomerMsg) {
+        trackSkip("sem_msg_do_cliente");
+        continue;
+      }
+      const lastCustomerMsgTime = new Date(lastCustomerMsg.created_at);
+      const hoursSinceCustomerMsg = (now.getTime() - lastCustomerMsgTime.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceCustomerMsg > 24) {
+        trackSkip(`janela_24h_expirada(${Math.round(hoursSinceCustomerMsg)}h)`);
+        continue;
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       const lastMsg = lastMessages[0];
       if (lastMsg.sender_type === "customer") {
         trackSkip("ultima_msg_do_cliente");
