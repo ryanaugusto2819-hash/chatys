@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
       .is("sale_registered_at", null)
       .in("niche_id", nicheIds)
       .lt("updated_at", cutoffTime)
-      .order("updated_at", { ascending: true })
+      .order("updated_at", { ascending: false })
       .limit(50);
 
     if (!hasAllStage) {
