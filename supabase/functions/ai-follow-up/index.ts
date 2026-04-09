@@ -178,7 +178,30 @@ Deno.serve(async (req) => {
 
     const { data: rawConversations, error: convError } = await query;
 
-    const conversations = (rawConversations || []).slice(0, 50);
+    // Filter out contacts with blocked tags ("fazer agendamento", "pedido agendado")
+    const BLOCKED_TAG_NAMES = ["fazer agendamento", "pedido agendado"];
+    const { data: blockedTags } = await supabase
+      .from("tags")
+      .select("id, name")
+      .in("name", BLOCKED_TAG_NAMES);
+    const blockedTagIds = (blockedTags || []).map((t: any) => t.id);
+
+    let conversations = (rawConversations || []).slice(0, 50);
+
+    if (blockedTagIds.length > 0 && conversations.length > 0) {
+      const phones = conversations.map((c: any) => c.contact_phone);
+      const { data: blockedContacts } = await supabase
+        .from("contact_tags")
+        .select("contact_phone")
+        .in("tag_id", blockedTagIds)
+        .in("contact_phone", phones);
+      const blockedPhones = new Set((blockedContacts || []).map((ct: any) => ct.contact_phone));
+      const before = conversations.length;
+      conversations = conversations.filter((c: any) => !blockedPhones.has(c.contact_phone));
+      if (before !== conversations.length) {
+        console.log(`[ai-follow-up] 🏷️ ${before - conversations.length} conversas bloqueadas por etiqueta (${BLOCKED_TAG_NAMES.join(", ")})`);
+      }
+    }
 
     if (convError) {
       console.error(`[ai-follow-up] ❌ Erro ao buscar conversas: ${convError.message}`);
