@@ -289,6 +289,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [sendingTermo, setSendingTermo] = useState(false);
   const [termoPdfUrl, setTermoPdfUrl] = useState<string | null>(null);
   const [sendingTermoWhatsApp, setSendingTermoWhatsApp] = useState(false);
+  const [showMotoboyDialog, setShowMotoboyDialog] = useState(false);
+  const [motoboyCity, setMotoboyCity] = useState('');
+  const [motoboyResult, setMotoboyResult] = useState<string | null>(null);
   const [blockedConnections, setBlockedConnections] = useState<{ id: string; label: string; status: string }[]>([]);
 
   // Reset termo state when conversation changes
