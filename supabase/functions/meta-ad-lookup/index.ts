@@ -31,14 +31,17 @@ Deno.serve(async (req) => {
 
     // Collect all available tokens
     const tokens: string[] = [];
-    const t1 = Deno.env.get("META_ADS_ACCESS_TOKEN");
-    const t2 = Deno.env.get("META_ADS_ACCESS_TOKEN_2");
-    const t3 = Deno.env.get("META_ADS_ACCESS_TOKEN_3");
-    const t4 = Deno.env.get("META_ADS_ACCESS_TOKEN_4");
-    if (t1) tokens.push(t1);
-    if (t2) tokens.push(t2);
-    if (t3) tokens.push(t3);
-    if (t4) tokens.push(t4);
+    const tokenKeys = [
+      "META_ADS_ACCESS_TOKEN",
+      "META_ADS_ACCESS_TOKEN_2",
+      "META_ADS_ACCESS_TOKEN_3",
+      "META_ADS_ACCESS_TOKEN_4",
+      "META_ADS_ACCESS_TOKEN_5",
+    ];
+    for (const key of tokenKeys) {
+      const val = Deno.env.get(key);
+      if (val) tokens.push(val);
+    }
 
     if (tokens.length === 0) {
       return new Response(
