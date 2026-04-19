@@ -58,6 +58,8 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [cadastros, setCadastros] = useState<Cadastro[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [movingStage, setMovingStage] = useState(false);
   const [showDepositForm, setShowDepositForm] = useState(false);
@@ -108,12 +110,12 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
   }, [contactPhone, fetchLead]);
 
   const handleCreateLead = async () => {
-    if (!betwise) return;
+    if (!betwise || !createName.trim()) return;
     setCreating(true);
     const { data, error } = await betwise
       .from('leads')
       .insert({
-        nome: contactName,
+        nome: createName.trim(),
         telefone: contactPhone,
         pipeline_stage: 'cadastro_pendente',
         status: 'ativo',
@@ -126,6 +128,8 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
       toast.error('Erro ao criar card no Kanban');
     } else {
       setLead(data as Lead);
+      setShowCreateForm(false);
+      setCreateName('');
       toast.success('Card criado no Kanban!');
     }
     setCreating(false);
@@ -182,14 +186,53 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : !lead ? (
-          <button
-            onClick={handleCreateLead}
-            disabled={creating}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground py-1.5 px-3 text-xs font-medium transition-colors disabled:opacity-50"
-          >
-            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            Criar Card no Kanban
-          </button>
+          !showCreateForm ? (
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground py-1.5 px-3 text-xs font-medium transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Criar Card no Kanban
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Nome do Lead *</label>
+                <input
+                  type="text"
+                  value={createName}
+                  onChange={e => setCreateName(e.target.value)}
+                  placeholder="Digite o nome..."
+                  autoFocus
+                  className="w-full mt-0.5 rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Telefone</label>
+                <input
+                  type="text"
+                  value={contactPhone}
+                  readOnly
+                  className="w-full mt-0.5 rounded-md border border-input bg-muted px-2 py-1.5 text-xs text-muted-foreground"
+                />
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => { setShowCreateForm(false); setCreateName(''); }}
+                  className="flex-1 rounded-md border border-border py-1.5 text-[10px] text-muted-foreground hover:bg-secondary transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateLead}
+                  disabled={!createName.trim() || creating}
+                  className="flex-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground py-1.5 text-[10px] font-medium transition-colors disabled:opacity-50"
+                >
+                  {creating ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : 'Criar Card'}
+                </button>
+              </div>
+            </div>
+          )
         ) : (
           <>
             {/* Stage navigation */}
