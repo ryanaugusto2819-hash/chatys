@@ -6,6 +6,7 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText } from 'lucide-react';
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
+import BetLeadPanel from '@/components/chat/BetLeadPanel';
 import TagManager from '@/components/tags/TagManager';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1256,6 +1257,11 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   </div>
                 </div>
               )}
+
+              <BetLeadPanel
+                contactPhone={conversation.contact_phone}
+                contactName={conversation.contact_name}
+              />
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
