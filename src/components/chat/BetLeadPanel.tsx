@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, TrendingUp, Plus, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Loader2, TrendingUp, Plus, ChevronRight, ChevronLeft, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { betwise, betwiseEnabled } from '@/integrations/betwise/client';
 
@@ -61,6 +61,8 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [movingStage, setMovingStage] = useState(false);
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [depositData, setDepositData] = useState({
@@ -148,6 +150,22 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
     setMovingStage(false);
   };
 
+  const handleDeleteLead = async () => {
+    if (!lead || !betwise) return;
+    setDeleting(true);
+    const { error } = await betwise.from('leads').delete().eq('id', lead.id);
+    if (error) {
+      toast.error('Erro ao excluir card');
+    } else {
+      setLead(null);
+      setDepositos([]);
+      setCadastros([]);
+      setConfirmDelete(false);
+      toast.success('Card excluído do Kanban');
+    }
+    setDeleting(false);
+  };
+
   const handleSaveDeposit = async () => {
     if (!lead || !betwise || !depositData.casa_id || !depositData.valor) return;
     setSavingDeposit(true);
@@ -177,9 +195,39 @@ export default function BetLeadPanel({ contactPhone, contactName }: BetLeadPanel
 
   return (
     <div>
-      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-        <TrendingUp className="h-3 w-3" /> Betwise — Kanban
-      </p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <TrendingUp className="h-3 w-3" /> Betwise — Kanban
+        </p>
+        {lead && (
+          confirmDelete ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">Excluir?</span>
+              <button
+                onClick={handleDeleteLead}
+                disabled={deleting}
+                className="text-[10px] font-semibold text-destructive hover:underline"
+              >
+                {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Sim'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-[10px] text-muted-foreground hover:underline"
+              >
+                Não
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+              title="Excluir card"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )
+        )}
+      </div>
       <div className="rounded-lg border border-border bg-background/50 p-3 space-y-3">
         {loading ? (
           <div className="flex justify-center py-2">
