@@ -1,15 +1,11 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 async function tryFetchAd(sourceId: string, accessToken: string) {
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/${sourceId}?fields=name,campaign{name},adset{name},status,creative{title,body}&access_token=${accessToken}`
-  );
+  const url = `https://graph.facebook.com/v21.0/${sourceId}?fields=name,campaign{name},adset{name},status,creative{title,body}&access_token=${accessToken}`;
+  const res = await fetch(url);
   if (!res.ok) return null;
   return await res.json();
 }
@@ -29,8 +25,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Collect all available tokens
-    const tokens: string[] = [];
     const tokenKeys = [
       "META_ADS_ACCESS_TOKEN",
       "META_ADS_ACCESS_TOKEN_2",
@@ -39,6 +33,7 @@ Deno.serve(async (req) => {
       "META_ADS_ACCESS_TOKEN_5",
       "META_ADS_ACCESS_TOKEN_6",
     ];
+    const tokens: string[] = [];
     for (const key of tokenKeys) {
       const val = Deno.env.get(key);
       if (val) tokens.push(val);
@@ -51,8 +46,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Try each token until one returns data
-    let adData = null;
+    let adData: any = null;
     for (let i = 0; i < tokens.length; i++) {
       console.log(`Trying token ${i + 1} of ${tokens.length}...`);
       adData = await tryFetchAd(sourceId, tokens[i]);
@@ -74,20 +68,30 @@ Deno.serve(async (req) => {
     const adName = adData.name || null;
     const campaignName = adData.campaign?.name || null;
     const adsetName = adData.adset?.name || null;
-
     const parts = [campaignName, adsetName, adName].filter(Boolean);
     const adTitle = parts.length > 0 ? parts.join(" › ") : null;
 
     if (conversationId && adTitle) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const updateRes = await fetch(
+        `${supabaseUrl}/rest/v1/conversations?id=eq.${conversationId}`,
+        {
+          method: "PATCH",
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify({ ad_title: adTitle }),
+        }
       );
-      await supabase
-        .from("conversations")
-        .update({ ad_title: adTitle })
-        .eq("id", conversationId);
-      console.log(`Updated conversation ${conversationId} with ad_title: ${adTitle}`);
+      if (!updateRes.ok) {
+        console.error(`Failed to update conversation: ${await updateRes.text()}`);
+      } else {
+        console.log(`Updated conversation ${conversationId} with ad_title: ${adTitle}`);
+      }
     }
 
     return new Response(
