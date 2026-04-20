@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
       "META_ADS_ACCESS_TOKEN_3",
       "META_ADS_ACCESS_TOKEN_4",
       "META_ADS_ACCESS_TOKEN_5",
+      "META_ADS_ACCESS_TOKEN_6",
     ];
     for (const key of tokenKeys) {
       const val = Deno.env.get(key);
