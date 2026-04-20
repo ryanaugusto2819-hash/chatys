@@ -136,14 +136,17 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const { error } = await supabase.functions.invoke('save-connection', {
+      const { data, error } = await supabase.functions.invoke('save-connection', {
         body: { action: 'delete', id: connection.id },
       });
       if (error) throw error;
-      toast.success('Conexão excluída!');
+      const resp = data as { error?: string; success?: boolean; deletedConversations?: number };
+      if (resp?.error) throw new Error(resp.error);
+      toast.success(`Conexão excluída! (${resp?.deletedConversations ?? 0} conversas removidas)`);
       onDeleted();
-    } catch {
-      toast.error('Erro ao excluir.');
+    } catch (err: any) {
+      console.error('[delete connection]', err);
+      toast.error(err?.message || 'Erro ao excluir.');
     } finally {
       setDeleting(false);
     }
