@@ -54,7 +54,7 @@ export default function AcceptInvite() {
 
       if (error || !data) { setPageState('invalid'); return; }
 
-      const inv = data as InviteInfo;
+      const inv = data as unknown as InviteInfo;
 
       if (new Date(inv.expires_at) < new Date()) { setPageState('expired'); return; }
 

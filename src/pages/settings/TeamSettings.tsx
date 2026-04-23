@@ -83,7 +83,7 @@ export default function TeamSettings() {
         setMembers(enriched);
       }
 
-      if (invitesRes.data) setInvites(invitesRes.data as Invite[]);
+      if (invitesRes.data) setInvites(invitesRes.data as unknown as Invite[]);
     } finally {
       setLoading(false);
     }
