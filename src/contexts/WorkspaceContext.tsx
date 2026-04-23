@@ -8,6 +8,11 @@ export interface Workspace {
   country: string;
   role: string;
   is_active: boolean;
+  slug: string;
+  logo_url: string | null;
+  plan_name: string;
+  plan_slug: string;
+  status: string;
 }
 
 interface WorkspaceContextType {

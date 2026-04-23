@@ -29,6 +29,14 @@ const Connections = lazy(() => import("./pages/Connections"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const PlaceholderPage = lazy(() => import("./pages/PlaceholderPage"));
 const SalesRanking = lazy(() => import("./pages/SalesRanking"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const PlatformAdmin = lazy(() => import("./pages/PlatformAdmin"));
+const SettingsLayout = lazy(() => import("./pages/settings/SettingsLayout"));
+const WorkspaceSettings = lazy(() => import("./pages/settings/WorkspaceSettings"));
+const AISettings = lazy(() => import("./pages/settings/AISettings"));
+const TeamSettings = lazy(() => import("./pages/settings/TeamSettings"));
+const BillingSettings = lazy(() => import("./pages/settings/BillingSettings"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
@@ -78,6 +86,8 @@ const App = () => (
                 <Route path="/pending-approval" element={<PendingApproval />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/invite/:token" element={<AcceptInvite />} />
 
                 {/* Protected routes */}
                 <Route element={<AppLayout />}>
@@ -96,7 +106,18 @@ const App = () => (
                   
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
                   <Route path="/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
-                  <Route path="/settings" element={<AdminRoute><PlaceholderPage title="Configurações" subtitle="Configurar conta e integrações" /></AdminRoute>} />
+
+                  {/* Settings multi-tenant */}
+                  <Route path="/settings" element={<AdminRoute><SettingsLayout /></AdminRoute>}>
+                    <Route index element={<WorkspaceSettings />} />
+                    <Route path="workspace" element={<WorkspaceSettings />} />
+                    <Route path="ai" element={<AISettings />} />
+                    <Route path="team" element={<TeamSettings />} />
+                    <Route path="billing" element={<BillingSettings />} />
+                  </Route>
+
+                  {/* Platform admin */}
+                  <Route path="/platform-admin" element={<PlatformAdmin />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -41,7 +41,8 @@ export default function Login() {
           },
         });
         if (error) throw error;
-        toast.success('Conta criada com sucesso! Se necessário, confirme seu email para entrar.');
+        toast.success('Conta criada! Configure seu workspace.');
+        navigate('/onboarding');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {

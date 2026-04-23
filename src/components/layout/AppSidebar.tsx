@@ -18,7 +18,9 @@ import {
   Webhook,
   ChevronRight,
   Trophy,
+  Crown,
 } from 'lucide-react';
+
 
 const menuItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -111,6 +113,19 @@ export default function AppSidebar() {
     .toUpperCase()
     .slice(0, 2);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles' as any)
+      .select('is_platform_admin')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setIsPlatformAdmin((data as any)?.is_platform_admin === true);
+      });
+  }, [user]);
 
   useEffect(() => {
     const fetchUnread = async () => {
@@ -210,6 +225,18 @@ export default function AppSidebar() {
                 label={item.label}
               />
             ))}
+          </>
+        )}
+
+        {/* Platform admin */}
+        {isPlatformAdmin && (
+          <>
+            <div
+              className="my-2.5 mx-2 h-px"
+              style={{ background: 'rgba(124,58,237,0.12)' }}
+            />
+            <p className="nav-section-label">Plataforma</p>
+            <SidebarNavItem to="/platform-admin" icon={Crown} label="Admin da Plataforma" />
           </>
         )}
       </nav>
