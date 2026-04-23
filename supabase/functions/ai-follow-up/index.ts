@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getWorkspaceAIConfig } from "../_shared/workspace-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,11 +76,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return jsonResponse({ error: "AI not configured" }, 500);
-    }
 
     const now = new Date();
     const currentHour = now.getUTCHours() - 3;
@@ -163,7 +159,7 @@ Deno.serve(async (req) => {
     // Build query
     let query = supabase
       .from("conversations")
-      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at")
+      .select("id, contact_name, contact_phone, niche_id, status, updated_at, tags, ad_title, funnel_stage, sale_registered_at, workspace_id")
       .neq("status", "resolved")
       .is("sale_registered_at", null)
       .in("niche_id", nicheIds)
@@ -236,6 +232,17 @@ Deno.serve(async (req) => {
 
     function trackSkip(reason: string) {
       skippedReasons[reason] = (skippedReasons[reason] || 0) + 1;
+    }
+
+    // Cache AI configs per workspace to avoid redundant DB queries
+    const aiConfigCache = new Map<string, Awaited<ReturnType<typeof getWorkspaceAIConfig>>>();
+
+    async function getConvAIConfig(workspaceId: string | null) {
+      const key = workspaceId || "__fallback__";
+      if (!aiConfigCache.has(key)) {
+        aiConfigCache.set(key, await getWorkspaceAIConfig(supabase, workspaceId));
+      }
+      return aiConfigCache.get(key)!;
     }
 
     for (const conv of conversations) {
@@ -431,14 +438,19 @@ REGRAS:
 15. ${langInstruction}`;
 
         // Generate AI follow-up
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const convAIConfig = await getConvAIConfig(conv.workspace_id ?? null);
+        if (!convAIConfig.apiKey) {
+          trackSkip("ia_nao_configurada");
+          continue;
+        }
+        const aiResponse = await fetch(convAIConfig.apiUrl, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${convAIConfig.apiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: convAIConfig.model,
             messages: [
               { role: "system", content: systemPrompt },
               {

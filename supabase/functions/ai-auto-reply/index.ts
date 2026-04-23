@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getWorkspaceAIConfig } from "../_shared/workspace-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +51,7 @@ async function handleProcess(conversationId: string) {
   // 1. Fetch conversation + niche config in parallel
   const convPromise = supabase
     .from("conversations")
-    .select("contact_phone, niche_id, connection_config_id, sale_registered_at")
+    .select("contact_phone, niche_id, connection_config_id, sale_registered_at, workspace_id")
     .eq("id", conversationId)
     .single();
 
@@ -219,20 +220,20 @@ async function handleProcess(conversationId: string) {
   }
 
   // 7. Call AI
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    console.error("LOVABLE_API_KEY not configured");
+  const aiConfig = await getWorkspaceAIConfig(supabase, conversation.workspace_id);
+  if (!aiConfig.apiKey) {
+    console.error("AI not configured (no API key)");
     return jsonResponse({ error: "AI not configured" }, 500);
   }
 
-  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const aiResponse = await fetch(aiConfig.apiUrl, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${aiConfig.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model: aiConfig.model,
       messages: chatMessages,
       stream: false,
     }),
@@ -254,7 +255,7 @@ async function handleProcess(conversationId: string) {
   if (usage) {
     await supabase.from("ai_usage_logs").insert({
       function_name: "ai-auto-reply",
-      model: "google/gemini-3-flash-preview",
+      model: aiConfig.model,
       input_tokens: usage.prompt_tokens || 0,
       output_tokens: usage.completion_tokens || 0,
       total_tokens: usage.total_tokens || 0,

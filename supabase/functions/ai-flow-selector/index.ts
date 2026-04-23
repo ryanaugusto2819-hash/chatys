@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getWorkspaceAIConfig } from "../_shared/workspace-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
     // Get conversation with niche_id
     const { data: conversation } = await supabase
       .from("conversations")
-      .select("niche_id, sale_registered_at, connection_config_id")
+      .select("niche_id, sale_registered_at, connection_config_id, workspace_id")
       .eq("id", conversationId)
       .single();
 
@@ -228,9 +229,9 @@ ${nodeDetails || "   (sem etapas)"}`;
       ? `Fluxos já enviados nesta conversa (em ordem): ${executedFlowNames.join(" → ")}`
       : "Nenhum fluxo foi enviado nesta conversa ainda.";
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
+    const aiConfig = await getWorkspaceAIConfig(supabase, conversation.workspace_id);
+    if (!aiConfig.apiKey) {
+      console.error("AI not configured (no API key)");
       return jsonResponse({ error: "AI not configured" }, 500);
     }
 
@@ -258,14 +259,14 @@ ${recentMessages}
 
 Qual fluxo deve ser disparado agora?`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(aiConfig.apiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: aiConfig.model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
