@@ -101,7 +101,16 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
 
   const provider = PROVIDER_CONFIG[connection.connection_id];
-  const statusInfo = STATUS_MAP[connection.status] || STATUS_MAP.unknown;
+
+  // Avisos de problema (bloqueado, qualidade baixa, erro, pendente) expiram após 48h sem nova verificação.
+  // Conexões ativas continuam sendo exibidas normalmente.
+  const STALE_WARNING_MS = 48 * 60 * 60 * 1000;
+  const isWarningStatus = ['blocked', 'warning', 'pending_setup', 'error'].includes(connection.status);
+  const lastCheckedMs = connection.last_checked_at ? new Date(connection.last_checked_at).getTime() : 0;
+  const isStale = isWarningStatus && lastCheckedMs > 0 && (Date.now() - lastCheckedMs) > STALE_WARNING_MS;
+  const effectiveStatus = isStale ? 'unknown' : connection.status;
+
+  const statusInfo = STATUS_MAP[effectiveStatus] || STATUS_MAP.unknown;
   const webhookUrl = WEBHOOK_URLS[connection.connection_id];
 
   const formatDiagnosticValue = (value: unknown) => {
