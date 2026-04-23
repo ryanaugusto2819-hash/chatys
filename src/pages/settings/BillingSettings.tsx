@@ -74,8 +74,8 @@ export default function BillingSettings() {
           .eq('workspace_id', currentWorkspace.id)
           .maybeSingle(),
       ]);
-      if (plansRes.data) setPlans(plansRes.data as Plan[]);
-      if (subRes.data) setSubscription(subRes.data as Subscription);
+      if (plansRes.data) setPlans(plansRes.data as unknown as Plan[]);
+      if (subRes.data) setSubscription(subRes.data as unknown as Subscription);
     } finally {
       setLoading(false);
     }

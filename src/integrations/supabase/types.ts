@@ -53,6 +53,59 @@ export type Database = {
           },
         ]
       }
+      ai_configs: {
+        Row: {
+          auto_reply_enabled: boolean
+          created_at: string
+          follow_up_enabled: boolean
+          id: string
+          manager_enabled: boolean
+          max_tokens: number
+          model: string
+          openai_api_key: string | null
+          system_prompt: string | null
+          temperature: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          auto_reply_enabled?: boolean
+          created_at?: string
+          follow_up_enabled?: boolean
+          id?: string
+          manager_enabled?: boolean
+          max_tokens?: number
+          model?: string
+          openai_api_key?: string | null
+          system_prompt?: string | null
+          temperature?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          auto_reply_enabled?: boolean
+          created_at?: string
+          follow_up_enabled?: boolean
+          id?: string
+          manager_enabled?: boolean
+          max_tokens?: number
+          model?: string
+          openai_api_key?: string | null
+          system_prompt?: string | null
+          temperature?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_configs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_logs: {
         Row: {
           conversation_id: string | null
@@ -889,6 +942,7 @@ export type Database = {
           id: string
           mode: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -897,6 +951,7 @@ export type Database = {
           id?: string
           mode?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -905,8 +960,17 @@ export type Database = {
           id?: string
           mode?: string
           updated_at?: string
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "manager_config_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -1210,6 +1274,51 @@ export type Database = {
           },
         ]
       }
+      plans: {
+        Row: {
+          allow_advanced_reports: boolean
+          allow_ai_auto_reply: boolean
+          allow_ai_manager: boolean
+          created_at: string
+          id: string
+          is_active: boolean
+          max_connections: number
+          max_flows: number
+          max_members: number
+          name: string
+          price_monthly: number
+          slug: string
+        }
+        Insert: {
+          allow_advanced_reports?: boolean
+          allow_ai_auto_reply?: boolean
+          allow_ai_manager?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_connections?: number
+          max_flows?: number
+          max_members?: number
+          name: string
+          price_monthly?: number
+          slug: string
+        }
+        Update: {
+          allow_advanced_reports?: boolean
+          allow_ai_auto_reply?: boolean
+          allow_ai_manager?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_connections?: number
+          max_flows?: number
+          max_members?: number
+          name?: string
+          price_monthly?: number
+          slug?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1217,6 +1326,7 @@ export type Database = {
           full_name: string
           id: string
           is_approved: boolean
+          is_platform_admin: boolean
           job_title: string | null
           status: string
           updated_at: string
@@ -1228,6 +1338,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_approved?: boolean
+          is_platform_admin?: boolean
           job_title?: string | null
           status?: string
           updated_at?: string
@@ -1239,6 +1350,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_approved?: boolean
+          is_platform_admin?: boolean
           job_title?: string | null
           status?: string
           updated_at?: string
@@ -1470,6 +1582,50 @@ export type Database = {
           },
         ]
       }
+      workspace_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: string
+          token: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          role?: string
+          token?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: string
+          token?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -1502,41 +1658,196 @@ export type Database = {
           },
         ]
       }
+      workspace_settings: {
+        Row: {
+          business_days: number[] | null
+          business_hours_end: string | null
+          business_hours_start: string | null
+          created_at: string
+          id: string
+          language: string
+          notification_email: string | null
+          timezone: string
+          updated_at: string
+          webhook_url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          business_days?: number[] | null
+          business_hours_end?: string | null
+          business_hours_start?: string | null
+          created_at?: string
+          id?: string
+          language?: string
+          notification_email?: string | null
+          timezone?: string
+          updated_at?: string
+          webhook_url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          business_days?: number[] | null
+          business_hours_end?: string | null
+          business_hours_start?: string | null
+          created_at?: string
+          id?: string
+          language?: string
+          notification_email?: string | null
+          timezone?: string
+          updated_at?: string
+          webhook_url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string
+          id: string
+          plan_id: string
+          status: string
+          trial_ends_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string
+          id?: string
+          plan_id: string
+          status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string
+          id?: string
+          plan_id?: string
+          status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_subscriptions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           country: string
           created_at: string
+          created_by: string | null
           id: string
           is_active: boolean
+          logo_url: string | null
           name: string
+          plan_id: string | null
+          slug: string | null
+          status: string
           updated_at: string
         }
         Insert: {
           country?: string
           created_at?: string
+          created_by?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name: string
+          plan_id?: string | null
+          slug?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
           country?: string
           created_at?: string
+          created_by?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name?: string
+          plan_id?: string | null
+          slug?: string | null
+          status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_workspace_plan"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      accept_workspace_invite: {
+        Args: { p_token: string; p_user_id: string }
+        Returns: Json
+      }
       add_user_to_workspace: {
         Args: { p_role?: string; p_user_id: string; p_workspace_id: string }
         Returns: undefined
+      }
+      admin_list_workspaces: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          country: string
+          created_at: string
+          id: string
+          member_count: number
+          name: string
+          owner_email: string
+          plan_name: string
+          slug: string
+          status: string
+        }[]
+      }
+      check_workspace_limit: {
+        Args: { p_resource: string; p_workspace_id: string }
+        Returns: Json
+      }
+      create_workspace_for_user: {
+        Args: {
+          p_country?: string
+          p_name: string
+          p_slug?: string
+          p_user_id: string
+        }
+        Returns: string
       }
       get_conversations_with_last_message: {
         Args: never
@@ -1621,8 +1932,13 @@ export type Database = {
           country: string
           id: string
           is_active: boolean
+          logo_url: string
           name: string
+          plan_name: string
+          plan_slug: string
           role: string
+          slug: string
+          status: string
         }[]
       }
       has_role: {
