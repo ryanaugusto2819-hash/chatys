@@ -49,6 +49,7 @@ export default function Connections() {
           is_connected: d.is_connected,
           status: d.status || 'unknown',
           last_checked_at: d.last_checked_at,
+          status_since: d.status_since ?? null,
           workspace_id: d.workspace_id,
         }))
       );
