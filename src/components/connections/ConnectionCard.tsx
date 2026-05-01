@@ -33,6 +33,7 @@ interface ConnectionData {
   is_connected: boolean;
   status: string;
   last_checked_at: string | null;
+  status_since?: string | null;
 }
 
 interface ConnectionCardProps {
@@ -102,12 +103,12 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
 
   const provider = PROVIDER_CONFIG[connection.connection_id];
 
-  // Avisos de problema (bloqueado, qualidade baixa, erro, pendente) expiram após 48h sem nova verificação.
-  // Conexões ativas continuam sendo exibidas normalmente.
+  // Avisos de problema (bloqueado, qualidade baixa, erro, pendente) expiram após 48h no mesmo status.
+  // Usamos status_since (registra desde quando o status atual está ativo) para evitar acúmulo de avisos antigos.
   const STALE_WARNING_MS = 48 * 60 * 60 * 1000;
   const isWarningStatus = ['blocked', 'warning', 'pending_setup', 'error'].includes(connection.status);
-  const lastCheckedMs = connection.last_checked_at ? new Date(connection.last_checked_at).getTime() : 0;
-  const isStale = isWarningStatus && lastCheckedMs > 0 && (Date.now() - lastCheckedMs) > STALE_WARNING_MS;
+  const statusSinceMs = connection.status_since ? new Date(connection.status_since).getTime() : 0;
+  const isStale = isWarningStatus && statusSinceMs > 0 && (Date.now() - statusSinceMs) > STALE_WARNING_MS;
   const effectiveStatus = isStale ? 'unknown' : connection.status;
 
   const statusInfo = STATUS_MAP[effectiveStatus] || STATUS_MAP.unknown;
