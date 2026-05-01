@@ -15,6 +15,7 @@ interface ConnectionData {
   is_connected: boolean;
   status: string;
   last_checked_at: string | null;
+  status_since: string | null;
   workspace_id: string | null;
 }
 
