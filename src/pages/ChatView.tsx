@@ -321,10 +321,19 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     const checkConnections = async () => {
       const { data } = await supabase
         .from('connection_configs')
-        .select('id, label, status, connection_id')
+        .select('id, label, status, connection_id, last_checked_at')
         .eq('is_connected', true);
       if (data) {
-        const blocked = data.filter(c => c.status === 'error' || c.status === 'blocked' || c.status === 'warning');
+        const STALE_MS = 48 * 60 * 60 * 1000;
+        const now = Date.now();
+        const blocked = data.filter(c => {
+          const isWarning = c.status === 'error' || c.status === 'blocked' || c.status === 'warning';
+          if (!isWarning) return false;
+          const checkedMs = c.last_checked_at ? new Date(c.last_checked_at).getTime() : 0;
+          // Hide alert if last check is older than 48h (stale warning)
+          if (checkedMs > 0 && (now - checkedMs) > STALE_MS) return false;
+          return true;
+        });
         setBlockedConnections(blocked.map(c => ({ id: c.id, label: c.label || c.connection_id, status: c.status })));
       }
     };
