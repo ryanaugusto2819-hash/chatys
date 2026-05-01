@@ -307,6 +307,7 @@ export type Database = {
           label: string
           last_checked_at: string | null
           status: string
+          status_since: string | null
           updated_at: string
           workspace_id: string | null
         }
@@ -319,6 +320,7 @@ export type Database = {
           label?: string
           last_checked_at?: string | null
           status?: string
+          status_since?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -331,6 +333,7 @@ export type Database = {
           label?: string
           last_checked_at?: string | null
           status?: string
+          status_since?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
