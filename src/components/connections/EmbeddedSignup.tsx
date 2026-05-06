@@ -130,10 +130,10 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
     const loginParams: Record<string, any> = {
       response_type: 'code',
       override_default_response_type: true,
-      auth_type: 'rerequest',
       extras: {
+        feature: 'whatsapp_embedded_signup',
+        sessionInfoVersion: '3',
         setup: {},
-        sessionInfoVersion: 2,
       },
     };
 
