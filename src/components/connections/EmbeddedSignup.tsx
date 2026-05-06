@@ -23,6 +23,8 @@ interface PhoneInfo {
   waba_id: string;
 }
 
+const META_EMBEDDED_SIGNUP_CONFIG_ID = '1661560705138210';
+
 export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupProps) {
   const [sdkReady, setSdkReady] = useState(false);
   const [appId, setAppId] = useState<string | null>(null);
@@ -125,9 +127,19 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
     }
   };
 
-  // Launch Facebook Login with Embedded Signup
+  // Launch official Meta WhatsApp Embedded Signup
   const launchLogin = useCallback(() => {
+    const officialConfigId = configId || META_EMBEDDED_SIGNUP_CONFIG_ID;
+
+    if (!officialConfigId) {
+      setStatus('error');
+      setErrorMsg('Configuração oficial do Embedded Signup não encontrada.');
+      toast.error('Configuração Meta indisponível.');
+      return;
+    }
+
     const loginParams: Record<string, any> = {
+      config_id: officialConfigId,
       response_type: 'code',
       override_default_response_type: true,
       extras: {
@@ -137,32 +149,29 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
       },
     };
 
-    // Use config_id if available (recommended by Meta)
-    if (configId) {
-      loginParams.config_id = configId;
-    } else {
-      loginParams.scope =
-        'whatsapp_business_management,whatsapp_business_messaging,business_management';
-    }
-
-    console.log('[EmbeddedSignup] FB.login params:', loginParams);
+    console.log('Embedded Signup Params:', loginParams);
 
     window.FB.login(
       (response: any) => {
-        console.log('[EmbeddedSignup] FB.login response:', response);
+        console.log('Embedded Signup Response:', response);
 
-        if (response.authResponse?.code) {
-          console.log('[EmbeddedSignup] Authorization code received');
-          handleCodeExchange(response.authResponse.code);
+        if (response.authResponse) {
+          const code = response.authResponse.code;
+          console.log('Authorization Code:', code);
+
+          if (!code) {
+            setStatus('ready');
+            toast.error('A Meta não retornou o código de autorização.');
+            return;
+          }
+
+          handleCodeExchange(code);
           return;
         }
 
         setStatus('ready');
-        if (response.status === 'not_authorized') {
-          toast.error('Você não autorizou o app.');
-        } else {
-          toast.info('Login cancelado.');
-        }
+        console.error('Login cancelado');
+        toast.info('Login cancelado.');
       },
       loginParams
     );
