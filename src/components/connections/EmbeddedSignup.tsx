@@ -129,28 +129,6 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
 
   // Launch official Meta WhatsApp Embedded Signup
   const launchLogin = useCallback(() => {
-    const officialConfigId = configId || META_EMBEDDED_SIGNUP_CONFIG_ID;
-
-    if (!officialConfigId) {
-      setStatus('error');
-      setErrorMsg('Configuração oficial do Embedded Signup não encontrada.');
-      toast.error('Configuração Meta indisponível.');
-      return;
-    }
-
-    const loginParams: Record<string, any> = {
-      config_id: officialConfigId,
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: {
-        feature: 'whatsapp_embedded_signup',
-        sessionInfoVersion: '3',
-        setup: {},
-      },
-    };
-
-    console.log('Embedded Signup Params:', loginParams);
-
     window.FB.login(
       (response: any) => {
         console.log('Embedded Signup Response:', response);
@@ -173,7 +151,16 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
         console.error('Login cancelado');
         toast.info('Login cancelado.');
       },
-      loginParams
+      {
+        config_id: configId || META_EMBEDDED_SIGNUP_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          feature: 'whatsapp_embedded_signup',
+          sessionInfoVersion: '3',
+          setup: {},
+        },
+      }
     );
   }, [configId, handleCodeExchange]);
 
@@ -186,21 +173,7 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
     setStatus('signing_up');
     setErrorMsg('');
     setResultInfo(null);
-
-    // Clear any existing FB session to avoid "JSSDK Unknown Host domain"
-    window.FB.getLoginStatus((statusResponse: any) => {
-      console.log('[EmbeddedSignup] Current FB status:', statusResponse);
-
-      if (statusResponse.status === 'connected' || statusResponse.status === 'not_authorized') {
-        console.log('[EmbeddedSignup] Clearing existing FB session before login');
-        window.FB.logout(() => {
-          console.log('[EmbeddedSignup] FB session cleared, launching login');
-          launchLogin();
-        });
-      } else {
-        launchLogin();
-      }
-    }, true); // true = force roundtrip, don't use cached status
+    launchLogin();
   }, [sdkReady, launchLogin]);
 
   const statusLabel: Record<string, string> = {
