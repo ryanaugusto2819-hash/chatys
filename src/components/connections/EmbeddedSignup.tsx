@@ -126,19 +126,11 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
   };
 
   // Launch Facebook Login with Embedded Signup
-  const handleEmbeddedSignup = useCallback(() => {
-    if (!window.FB || !sdkReady) {
-      toast.error('Facebook SDK ainda não carregou. Aguarde...');
-      return;
-    }
-
-    setStatus('signing_up');
-    setErrorMsg('');
-    setResultInfo(null);
-
+  const launchLogin = useCallback(() => {
     const loginParams: Record<string, any> = {
       response_type: 'code',
       override_default_response_type: true,
+      auth_type: 'rerequest',
       extras: {
         setup: {},
         sessionInfoVersion: 2,
@@ -149,14 +141,18 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
     if (configId) {
       loginParams.config_id = configId;
     } else {
-      // Fallback to scopes
       loginParams.scope =
         'whatsapp_business_management,whatsapp_business_messaging,business_management';
     }
 
+    console.log('[EmbeddedSignup] FB.login params:', loginParams);
+
     window.FB.login(
       (response: any) => {
+        console.log('[EmbeddedSignup] FB.login response:', response);
+
         if (response.authResponse?.code) {
+          console.log('[EmbeddedSignup] Authorization code received');
           handleCodeExchange(response.authResponse.code);
           return;
         }
@@ -170,7 +166,33 @@ export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupPr
       },
       loginParams
     );
-  }, [sdkReady, configId, label, currentWorkspace]);
+  }, [configId, handleCodeExchange]);
+
+  const handleEmbeddedSignup = useCallback(() => {
+    if (!window.FB || !sdkReady) {
+      toast.error('Facebook SDK ainda não carregou. Aguarde...');
+      return;
+    }
+
+    setStatus('signing_up');
+    setErrorMsg('');
+    setResultInfo(null);
+
+    // Clear any existing FB session to avoid "JSSDK Unknown Host domain"
+    window.FB.getLoginStatus((statusResponse: any) => {
+      console.log('[EmbeddedSignup] Current FB status:', statusResponse);
+
+      if (statusResponse.status === 'connected' || statusResponse.status === 'not_authorized') {
+        console.log('[EmbeddedSignup] Clearing existing FB session before login');
+        window.FB.logout(() => {
+          console.log('[EmbeddedSignup] FB session cleared, launching login');
+          launchLogin();
+        });
+      } else {
+        launchLogin();
+      }
+    }, true); // true = force roundtrip, don't use cached status
+  }, [sdkReady, launchLogin]);
 
   const statusLabel: Record<string, string> = {
     loading_sdk: 'Carregando SDK...',
