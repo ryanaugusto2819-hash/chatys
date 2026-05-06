@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
     );
 
     if (action === "get_app_id") {
-      return jsonResponse({ app_id: META_APP_ID, webhook_url: webhookUrl });
+      const META_CONFIG_ID = Deno.env.get("META_CONFIG_ID") || null;
+      return jsonResponse({ app_id: META_APP_ID, webhook_url: webhookUrl, config_id: META_CONFIG_ID });
     }
 
     if (action === "exchange_token") {
