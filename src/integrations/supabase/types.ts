@@ -1071,6 +1071,77 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_connections: {
+        Row: {
+          access_token: string
+          business_id: string | null
+          connected_phone: string | null
+          connection_config_id: string | null
+          created_at: string
+          expires_in: number | null
+          id: string
+          phone_number_id: string
+          quality_rating: string | null
+          raw_debug_info: Json | null
+          status: string
+          token_type: string | null
+          updated_at: string
+          user_id: string
+          verified_name: string | null
+          waba_id: string
+          webhook_status: string
+          workspace_id: string
+        }
+        Insert: {
+          access_token: string
+          business_id?: string | null
+          connected_phone?: string | null
+          connection_config_id?: string | null
+          created_at?: string
+          expires_in?: number | null
+          id?: string
+          phone_number_id: string
+          quality_rating?: string | null
+          raw_debug_info?: Json | null
+          status?: string
+          token_type?: string | null
+          updated_at?: string
+          user_id: string
+          verified_name?: string | null
+          waba_id: string
+          webhook_status?: string
+          workspace_id: string
+        }
+        Update: {
+          access_token?: string
+          business_id?: string | null
+          connected_phone?: string | null
+          connection_config_id?: string | null
+          created_at?: string
+          expires_in?: number | null
+          id?: string
+          phone_number_id?: string
+          quality_rating?: string | null
+          raw_debug_info?: Json | null
+          status?: string
+          token_type?: string | null
+          updated_at?: string
+          user_id?: string
+          verified_name?: string | null
+          waba_id?: string
+          webhook_status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_connections_connection_config_id_fkey"
+            columns: ["connection_config_id"]
+            isOneToOne: false
+            referencedRelation: "connection_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       niche_connections: {
         Row: {
           connection_config_id: string
