@@ -23,7 +23,7 @@ interface PhoneInfo {
   waba_id: string;
 }
 
-const META_EMBEDDED_SIGNUP_CONFIG_ID = '1661560705138210';
+const META_EMBEDDED_SIGNUP_CONFIG_ID = '2075801176659129';
 
 export default function EmbeddedSignup({ onSuccess, onCancel }: EmbeddedSignupProps) {
   const [sdkReady, setSdkReady] = useState(false);
