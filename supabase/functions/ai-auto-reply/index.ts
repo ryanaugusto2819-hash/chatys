@@ -86,8 +86,7 @@
     const nicheId = conversation.niche_id;
 
     let aiEnabled = false;
-    let systemPrompt = "Você é um assistente virtual amigável. Responda de forma concisa e útil em português
-  brasileiro.";
+    let systemPrompt = "Você é um assistente virtual amigável. Responda de forma concisa e útil em português brasileiro.";
     let nicheLanguage = "pt-BR";
 
     if (nicheId) {
