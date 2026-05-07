@@ -65,9 +65,9 @@ Deno.serve(async (req) => {
 
     const serviceClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // ─── STEP 1: Exchange code for access token ───
-    console.log("Step 1: Exchanging code for token...");
-    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&redirect_uri=${encodeURIComponent(webhookUrl)}&code=${encodeURIComponent(code)}`;
+    // ─── STEP 1: Exchange code for access token (General Login flow) ───
+    console.log("Step 1: Exchanging code for token (general login, no redirect_uri)...");
+    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();
 
