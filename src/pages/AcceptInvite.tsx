@@ -46,26 +46,23 @@ export default function AcceptInvite() {
 
     try {
       const { data, error } = await supabase
-        .from('workspace_invites' as any)
-        .select('id, workspace_id, email, role, expires_at')
-        .eq('token', token)
-        .is('accepted_at', null)
-        .maybeSingle();
+        .rpc('get_invite_by_token' as any, { p_token: token });
 
-      if (error || !data) { setPageState('invalid'); return; }
+      const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+      if (error || !row) { setPageState('invalid'); return; }
 
-      const inv = data as unknown as InviteInfo;
+      const inv = {
+        id: row.id,
+        workspace_id: row.workspace_id,
+        email: row.email,
+        role: row.role,
+        expires_at: row.expires_at,
+      } as InviteInfo;
 
       if (new Date(inv.expires_at) < new Date()) { setPageState('expired'); return; }
 
-      // Buscar nome do workspace
-      const { data: ws } = await supabase
-        .from('workspaces' as any)
-        .select('name')
-        .eq('id', inv.workspace_id)
-        .maybeSingle();
+      setInvite({ ...inv, workspace_name: row.workspace_name });
 
-      setInvite({ ...inv, workspace_name: (ws as any)?.name });
 
       // Se já está logado com o email correto → mostrar botão de aceitar
       // Se está logado com email diferente → mostrar aviso
