@@ -2000,6 +2000,18 @@ export type Database = {
               updated_at: string
             }[]
           }
+      get_invite_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          accepted_at: string
+          email: string
+          expires_at: string
+          id: string
+          role: string
+          workspace_id: string
+          workspace_name: string
+        }[]
+      }
       get_user_workspaces: {
         Args: never
         Returns: {
