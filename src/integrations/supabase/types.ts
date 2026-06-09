@@ -1803,6 +1803,7 @@ export type Database = {
       }
       workspace_settings: {
         Row: {
+          ads_order_webhook_url: string | null
           business_days: number[] | null
           business_hours_end: string | null
           business_hours_start: string | null
@@ -1816,6 +1817,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          ads_order_webhook_url?: string | null
           business_days?: number[] | null
           business_hours_end?: string | null
           business_hours_start?: string | null
@@ -1829,6 +1831,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          ads_order_webhook_url?: string | null
           business_days?: number[] | null
           business_hours_end?: string | null
           business_hours_start?: string | null

@@ -1,0 +1,1 @@
+ALTER TABLE public.workspace_settings ADD COLUMN IF NOT EXISTS ads_order_webhook_url TEXT;
