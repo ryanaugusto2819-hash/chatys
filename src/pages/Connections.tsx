@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import TopBar from '@/components/layout/TopBar';
 import ConnectionCard from '@/components/connections/ConnectionCard';
 import AddConnectionDialog from '@/components/connections/AddConnectionDialog';
+import EvolutionInstancesPanel from '@/components/connections/EvolutionInstancesPanel';
 import { Plug, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -140,6 +141,9 @@ export default function Connections() {
             <AddConnectionDialog onCreated={loadConnections} workspaceId={currentWorkspace?.id} />
           </div>
         )}
+
+        {/* Evolution API Instances */}
+        <EvolutionInstancesPanel workspaceId={currentWorkspace?.id} />
 
         {/* Coming Soon */}
         <div className="mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
