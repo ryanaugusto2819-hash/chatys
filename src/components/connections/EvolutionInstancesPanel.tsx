@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Loader2, Plus, RefreshCw, Trash2, QrCode, Zap, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, Trash2, QrCode, Zap, X, CheckCircle2, AlertCircle, Webhook } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -139,6 +139,21 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const fixWebhook = async (name: string) => {
+    setBusy(b => ({ ...b, [name]: true }));
+    try {
+      const { error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'set_webhook', instanceName: name },
+      });
+      if (error) throw error;
+      toast.success('Webhook reconfigurado!');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao configurar webhook');
+    } finally {
+      setBusy(b => ({ ...b, [name]: false }));
+    }
+  };
+
   const getName = (i: EvoInstance) =>
     i.name || i.instanceName || i.instance?.instanceName || '';
   const getState = (i: EvoInstance) =>
@@ -231,6 +246,14 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
                       className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                     >
                       <QrCode className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => fixWebhook(name)}
+                      disabled={isBusy}
+                      title="Reconfigurar webhook"
+                      className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                    >
+                      <Webhook className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => checkStatus(name)}
