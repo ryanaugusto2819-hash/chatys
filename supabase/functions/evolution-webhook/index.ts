@@ -56,11 +56,18 @@ Deno.serve(async (req) => {
       raw_payload: payload,
     });
 
-    // Process message events asynchronously
+    // Process message events (use waitUntil so Edge runtime doesn't kill it)
     if (event === "messages.upsert" || event === "MESSAGES_UPSERT") {
-      processMessageEvent(supabase, payload).catch((err) =>
+      const task = processMessageEvent(supabase, payload).catch((err) =>
         console.error("[evolution-webhook] process error:", err)
       );
+      // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(task);
+      } else {
+        await task;
+      }
     }
 
     return json({ success: true });
