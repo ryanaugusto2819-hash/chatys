@@ -30,50 +30,41 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const event: string = payload?.event ?? payload?.type ?? "";
-    const instanceName: string =
+    const event: string =
+      payload?.event ?? payload?.type ?? payload?.eventName ?? "unknown";
+    const instanceName: string | null =
       payload?.instance ?? payload?.instanceName ?? payload?.instance_name ?? null;
 
-    // 1. Save raw event
-    await supabase.from("evolution_webhook_events").insert({
-      instance_name: instanceName,
+    const data = payload?.data ?? payload?.message ?? payload;
+    const key = data?.key ?? {};
+    const msg = data?.message ?? {};
+
+    const remoteJid: string | null =
+      key?.remoteJid ?? data?.remoteJid ?? data?.from ?? null;
+    const pushName: string | null =
+      data?.pushName ?? data?.pushname ?? data?.notifyName ?? null;
+    const messageText: string | null =
+      msg?.conversation ??
+      msg?.extendedTextMessage?.text ??
+      msg?.imageMessage?.caption ??
+      msg?.videoMessage?.caption ??
+      msg?.documentMessage?.caption ??
+      data?.text ??
+      data?.body ??
+      null;
+
+    const { error } = await supabase.from("evolution_webhook_events").insert({
       event,
+      instance_name: instanceName,
+      remote_jid: remoteJid,
+      push_name: pushName,
+      message_text: messageText,
       raw_payload: payload,
     });
 
-    // 2. If it's a message event, save to whatsapp_messages
-    const data = payload?.data ?? payload?.message ?? payload;
-    const normalizedEvent = String(event).toLowerCase();
-    const isMessageEvent =
-      normalizedEvent.includes("message") || normalizedEvent === "messages.upsert";
-
-    if (isMessageEvent && data) {
-      const key = data?.key ?? {};
-      const msg = data?.message ?? {};
-      const remoteJid: string | null = key?.remoteJid ?? data?.remoteJid ?? null;
-      const fromMe: boolean = Boolean(key?.fromMe ?? data?.fromMe ?? false);
-      const pushName: string | null = data?.pushName ?? data?.pushname ?? null;
-      const messageText: string | null =
-        msg?.conversation ??
-        msg?.extendedTextMessage?.text ??
-        msg?.imageMessage?.caption ??
-        msg?.videoMessage?.caption ??
-        data?.text ??
-        null;
-
-      // Only persist incoming (not from me) messages, but keep the rule loose:
-      // requirement says "mensagem recebida" — store when not from me.
-      if (!fromMe) {
-        await supabase.from("whatsapp_messages").insert({
-          instance_name: instanceName,
-          event,
-          remote_jid: remoteJid,
-          push_name: pushName,
-          message_text: messageText,
-          from_me: fromMe,
-          raw_payload: payload,
-        });
-      }
+    if (error) {
+      console.error("insert error:", error);
+      return json({ success: false, error: error.message }, 500);
     }
 
     return json({ success: true });
