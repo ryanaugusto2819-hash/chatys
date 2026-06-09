@@ -107,6 +107,7 @@ const App = () => (
                   
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
                   <Route path="/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+                  <Route path="/evolution-logs" element={<AdminRoute><EvolutionLogs /></AdminRoute>} />
 
                   {/* Settings multi-tenant */}
                   <Route path="/settings" element={<AdminRoute><SettingsLayout /></AdminRoute>}>
