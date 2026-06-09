@@ -43,6 +43,7 @@ const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const EvolutionLogs = lazy(() => import("./pages/EvolutionLogs"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
