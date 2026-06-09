@@ -50,6 +50,7 @@ interface CheckStatusResponse {
 const WEBHOOK_URLS: Record<string, string> = {
   whatsapp: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/whatsapp-webhook`,
   zapi: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/zapi-webhook`,
+  evolution: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/evolution-webhook`,
 };
 
 const PROVIDER_CONFIG: Record<string, {
