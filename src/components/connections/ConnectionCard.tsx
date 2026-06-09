@@ -80,6 +80,16 @@ const PROVIDER_CONFIG: Record<string, {
       { key: 'client_token', label: 'Client-Token', placeholder: 'F1a2b3c4d5e6...', sensitive: true },
     ],
   },
+  evolution: {
+    name: 'Evolution API',
+    color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    docsUrl: 'https://doc.evolution-api.com',
+    fields: [
+      { key: 'server_url', label: 'Server URL', placeholder: 'https://evolution.seudominio.com', sensitive: false },
+      { key: 'instance_name', label: 'Instance Name', placeholder: 'teste03', sensitive: false },
+      { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
+    ],
+  },
 };
 
 const STATUS_MAP: Record<string, { icon: React.ReactNode; label: string; classes: string }> = {
