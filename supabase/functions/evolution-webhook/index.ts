@@ -182,21 +182,6 @@ async function processMessageEvent(supabase: any, payload: any) {
     content = "[Mensagem]";
   }
 
-  // Dedup
-  const providerMsgId = key?.id || null;
-  if (providerMsgId) {
-    const { data: dup } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("provider_message_id", providerMsgId)
-      .limit(1)
-      .maybeSingle();
-    if (dup) {
-      console.log(`[evolution-webhook] duplicate ${providerMsgId}`);
-      return;
-    }
-  }
-
   // Extract Click-to-WhatsApp ad referral.
   // Evolution exposes it via externalAdReply OR via conversionData/ctwaPayload
   // (the latter happens on the very first message of a CTWA click — no externalAdReply yet).
@@ -206,7 +191,9 @@ async function processMessageEvent(supabase: any, payload: any) {
     msg?.videoMessage?.contextInfo ??
     msg?.audioMessage?.contextInfo ??
     msg?.documentMessage?.contextInfo ??
+    msg?.contextInfo ??
     msg?.conversationContextInfo ??
+    data?.message?.contextInfo ??
     data?.contextInfo ??
     null;
   const ear = ctxInfo?.externalAdReply ?? null;
@@ -237,6 +224,8 @@ async function processMessageEvent(supabase: any, payload: any) {
   const hasAdReferral = Boolean(
     ctwaClid || adSourceId || (conversionSource && /fb|ig|meta/i.test(conversionSource))
   );
+
+  const providerMsgId = key?.id || null;
 
   // Find or create conversation
   let conversationId: string;
