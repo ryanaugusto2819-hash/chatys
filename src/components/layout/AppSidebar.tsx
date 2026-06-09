@@ -20,14 +20,20 @@ import {
   Trophy,
   Crown,
   Radio,
+  Megaphone,
 } from 'lucide-react';
+
+
+
 
 
 const menuItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/conversations', icon: MessageSquare, label: 'Conversas' },
+  { to: '/ads-conversions', icon: Megaphone, label: 'Conversões Ads' },
   { to: '/ranking', icon: Trophy, label: 'Ranking' },
 ];
+
 
 const adminItems = [
   { to: '/agents', icon: Users, label: 'Atendentes' },

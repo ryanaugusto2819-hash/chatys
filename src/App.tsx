@@ -44,6 +44,8 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const EvolutionLogs = lazy(() => import("./pages/EvolutionLogs"));
+const AdsConversions = lazy(() => import("./pages/AdsConversions"));
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -96,6 +98,8 @@ const App = () => (
                   <Route path="/ranking" element={<SalesRanking />} />
                   <Route path="/conversations" element={<ConversationsLayout />} />
                   <Route path="/conversations/:id" element={<ConversationsLayout />} />
+                  <Route path="/ads-conversions" element={<AdsConversions />} />
+
                   <Route path="/agents" element={<AdminRoute><Agents /></AdminRoute>} />
                   <Route path="/automation" element={<AdminRoute><Automation /></AdminRoute>} />
                   <Route path="/automation/:id" element={<AdminRoute><FlowEditor /></AdminRoute>} />
