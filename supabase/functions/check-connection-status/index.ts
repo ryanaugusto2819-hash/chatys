@@ -151,6 +151,33 @@ Deno.serve(async (req) => {
           details = { error: e instanceof Error ? e.message : String(e) };
         }
       }
+    } else if (conn.connection_id === "evolution") {
+      const serverUrl = (config.server_url || "").replace(/\/$/, "");
+      const instanceName = config.instance_name || "";
+      const apiKey = config.api_key || "";
+
+      if (!serverUrl || !instanceName || !apiKey) {
+        status = "error";
+        details = { error: "Missing server_url, instance_name or api_key" };
+      } else {
+        try {
+          const res = await fetch(`${serverUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
+            headers: { apikey: apiKey },
+          });
+          const data = await res.json();
+          const state = data?.instance?.state || data?.state || "unknown";
+          if (state === "open") {
+            status = "active";
+            details = { state, instance: instanceName, server_url: serverUrl };
+          } else {
+            status = "error";
+            details = { error: `Instance state: ${state}`, state, instance: instanceName };
+          }
+        } catch (e) {
+          status = "error";
+          details = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
     } else if (conn.connection_id === "zapi") {
       const instanceId = config.instance_id;
       const token = config.token || Deno.env.get("ZAPI_TOKEN");

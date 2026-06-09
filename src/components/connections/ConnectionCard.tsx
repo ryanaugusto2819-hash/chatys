@@ -50,6 +50,7 @@ interface CheckStatusResponse {
 const WEBHOOK_URLS: Record<string, string> = {
   whatsapp: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/whatsapp-webhook`,
   zapi: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/zapi-webhook`,
+  evolution: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/evolution-webhook`,
 };
 
 const PROVIDER_CONFIG: Record<string, {
@@ -77,6 +78,16 @@ const PROVIDER_CONFIG: Record<string, {
       { key: 'instance_id', label: 'Instance ID', placeholder: '3C2A7F8B9D1E...', sensitive: false },
       { key: 'token', label: 'Token', placeholder: 'A1B2C3D4E5F6...', sensitive: true },
       { key: 'client_token', label: 'Client-Token', placeholder: 'F1a2b3c4d5e6...', sensitive: true },
+    ],
+  },
+  evolution: {
+    name: 'Evolution API',
+    color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    docsUrl: 'https://doc.evolution-api.com',
+    fields: [
+      { key: 'server_url', label: 'Server URL', placeholder: 'https://evolution.seudominio.com', sensitive: false },
+      { key: 'instance_name', label: 'Instance Name', placeholder: 'teste03', sensitive: false },
+      { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
     ],
   },
 };

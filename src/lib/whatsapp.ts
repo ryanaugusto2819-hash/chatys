@@ -49,18 +49,20 @@ export async function sendWhatsAppMessage(
 
     if (connConfig?.connection_id === "zapi") {
       functionName = "zapi-send";
+    } else if (connConfig?.connection_id === "evolution") {
+      functionName = "evolution-send";
     }
   } else {
-    // No connection on conversation — fallback: check if any Z-API is active
+    // No connection on conversation — fallback: check if any Z-API/Evolution is active
     const { data: connections } = await supabase
       .from("connection_configs")
       .select("connection_id")
-      .eq("connection_id", "zapi")
+      .in("connection_id", ["zapi", "evolution"])
       .eq("is_connected", true)
       .limit(1);
 
     if (connections && connections.length > 0) {
-      functionName = "zapi-send";
+      functionName = connections[0].connection_id === "evolution" ? "evolution-send" : "zapi-send";
     }
   }
 

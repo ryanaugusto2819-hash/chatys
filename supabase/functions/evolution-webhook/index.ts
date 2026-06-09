@@ -29,31 +29,25 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "Invalid JSON body" }, 400);
   }
 
+  // Always log raw event first
   try {
-    const event: string =
-      payload?.event ?? payload?.type ?? payload?.eventName ?? "unknown";
-    const instanceName: string | null =
-      payload?.instance ?? payload?.instanceName ?? payload?.instance_name ?? null;
-
-    const data = payload?.data ?? payload?.message ?? payload;
+    const event: string = payload?.event ?? payload?.type ?? "unknown";
+    const instanceName: string | null = payload?.instance ?? payload?.instanceName ?? null;
+    const data = payload?.data ?? {};
     const key = data?.key ?? {};
     const msg = data?.message ?? {};
 
-    const remoteJid: string | null =
-      key?.remoteJid ?? data?.remoteJid ?? data?.from ?? null;
-    const pushName: string | null =
-      data?.pushName ?? data?.pushname ?? data?.notifyName ?? null;
+    const remoteJid: string | null = key?.remoteJid ?? data?.remoteJid ?? null;
+    const pushName: string | null = data?.pushName ?? null;
     const messageText: string | null =
       msg?.conversation ??
       msg?.extendedTextMessage?.text ??
       msg?.imageMessage?.caption ??
       msg?.videoMessage?.caption ??
       msg?.documentMessage?.caption ??
-      data?.text ??
-      data?.body ??
       null;
 
-    const { error } = await supabase.from("evolution_webhook_events").insert({
+    await supabase.from("evolution_webhook_events").insert({
       event,
       instance_name: instanceName,
       remote_jid: remoteJid,
@@ -62,9 +56,11 @@ Deno.serve(async (req) => {
       raw_payload: payload,
     });
 
-    if (error) {
-      console.error("insert error:", error);
-      return json({ success: false, error: error.message }, 500);
+    // Process message events asynchronously
+    if (event === "messages.upsert" || event === "MESSAGES_UPSERT") {
+      processMessageEvent(supabase, payload).catch((err) =>
+        console.error("[evolution-webhook] process error:", err)
+      );
     }
 
     return json({ success: true });
@@ -73,3 +69,166 @@ Deno.serve(async (req) => {
     return json({ success: false, error: String(err) }, 500);
   }
 });
+
+async function processMessageEvent(supabase: any, payload: any) {
+  const instanceName: string | null = payload?.instance ?? payload?.instanceName ?? null;
+  const data = payload?.data ?? {};
+  const key = data?.key ?? {};
+  const msg = data?.message ?? {};
+
+  const remoteJid: string = key?.remoteJid ?? "";
+  const fromMe: boolean = key?.fromMe === true;
+  const pushName: string = data?.pushName ?? "";
+
+  // Ignore groups, status, and own messages
+  if (!remoteJid) return;
+  if (remoteJid.endsWith("@g.us") || remoteJid.includes("-group")) return;
+  if (remoteJid === "status@broadcast") return;
+  if (fromMe) return;
+
+  const phone = remoteJid.replace(/@s\.whatsapp\.net$/, "").replace(/@c\.us$/, "").replace(/\D/g, "");
+  if (!phone) return;
+
+  // Resolve connection_config_id by instance_name
+  let connectionConfigId: string | null = null;
+  let workspaceId: string | null = null;
+  if (instanceName) {
+    const { data: configs } = await supabase
+      .from("connection_configs")
+      .select("id, workspace_id, is_connected, config")
+      .eq("connection_id", "evolution");
+
+    const matched = (configs || []).find(
+      (c: any) => (c.config?.instance_name || "").toLowerCase() === instanceName.toLowerCase()
+    );
+    if (!matched) {
+      console.log(`[evolution-webhook] no connection_config for instance ${instanceName}`);
+      return;
+    }
+    if (!matched.is_connected) {
+      console.log(`[evolution-webhook] connection ${matched.id} not active`);
+      return;
+    }
+    connectionConfigId = matched.id;
+    workspaceId = matched.workspace_id;
+  }
+
+  // Extract content + type
+  let content = "";
+  let messageType = "text";
+  let mediaUrl: string | null = null;
+
+  if (msg?.conversation) {
+    content = msg.conversation;
+  } else if (msg?.extendedTextMessage?.text) {
+    content = msg.extendedTextMessage.text;
+  } else if (msg?.imageMessage) {
+    content = msg.imageMessage.caption || "[Imagem]";
+    messageType = "image";
+    mediaUrl = msg.imageMessage.url || null;
+  } else if (msg?.videoMessage) {
+    content = msg.videoMessage.caption || "[Vídeo]";
+    messageType = "video";
+    mediaUrl = msg.videoMessage.url || null;
+  } else if (msg?.audioMessage) {
+    content = "";
+    messageType = "audio";
+    mediaUrl = msg.audioMessage.url || null;
+    if (!mediaUrl) content = "[Áudio]";
+  } else if (msg?.documentMessage) {
+    content = msg.documentMessage.fileName || "[Documento]";
+    messageType = "document";
+    mediaUrl = msg.documentMessage.url || null;
+  } else if (msg?.stickerMessage) {
+    content = "[Sticker]";
+  } else if (msg?.locationMessage) {
+    const lat = msg.locationMessage.degreesLatitude;
+    const lng = msg.locationMessage.degreesLongitude;
+    content = `[Localização: ${lat}, ${lng}]`;
+  } else {
+    content = "[Mensagem]";
+  }
+
+  // Dedup
+  const providerMsgId = key?.id || null;
+  if (providerMsgId) {
+    const { data: dup } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("provider_message_id", providerMsgId)
+      .limit(1)
+      .maybeSingle();
+    if (dup) {
+      console.log(`[evolution-webhook] duplicate ${providerMsgId}`);
+      return;
+    }
+  }
+
+  // Find or create conversation
+  let conversationId: string;
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("contact_phone", phone)
+    .eq("connection_config_id", connectionConfigId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    conversationId = existing.id;
+    await supabase
+      .from("conversations")
+      .update({ updated_at: new Date().toISOString(), status: "active" })
+      .eq("id", conversationId);
+  } else {
+    const { data: created, error: convErr } = await supabase
+      .from("conversations")
+      .insert({
+        contact_name: pushName || phone,
+        contact_phone: phone,
+        status: "new",
+        tags: [],
+        connection_config_id: connectionConfigId,
+        workspace_id: workspaceId,
+      })
+      .select("id")
+      .single();
+    if (convErr || !created) {
+      console.error("[evolution-webhook] insert conversation error:", convErr);
+      return;
+    }
+    conversationId = created.id;
+  }
+
+  const allowed = ["text", "image", "document", "audio", "video"];
+  const normalizedType = allowed.includes(messageType) ? messageType : "text";
+
+  const { error: msgErr } = await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    content,
+    sender_type: "customer",
+    message_type: normalizedType,
+    media_url: mediaUrl,
+    status: "delivered",
+    provider_message_id: providerMsgId,
+  });
+
+  if (msgErr) {
+    console.error("[evolution-webhook] insert message error:", msgErr);
+    return;
+  }
+
+  // Trigger AI flows (best-effort)
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const fire = (fn: string) =>
+    fetch(`${supabaseUrl}/functions/v1/${fn}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId }),
+    }).catch((e) => console.error(`${fn} trigger error:`, e));
+
+  fire("ai-flow-selector");
+  fire("ai-auto-reply");
+}
