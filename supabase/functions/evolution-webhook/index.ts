@@ -182,21 +182,6 @@ async function processMessageEvent(supabase: any, payload: any) {
     content = "[Mensagem]";
   }
 
-  // Dedup
-  const providerMsgId = key?.id || null;
-  if (providerMsgId) {
-    const { data: dup } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("provider_message_id", providerMsgId)
-      .limit(1)
-      .maybeSingle();
-    if (dup) {
-      console.log(`[evolution-webhook] duplicate ${providerMsgId}`);
-      return;
-    }
-  }
-
   // Extract Click-to-WhatsApp ad referral.
   // Evolution exposes it via externalAdReply OR via conversionData/ctwaPayload
   // (the latter happens on the very first message of a CTWA click — no externalAdReply yet).
@@ -206,7 +191,9 @@ async function processMessageEvent(supabase: any, payload: any) {
     msg?.videoMessage?.contextInfo ??
     msg?.audioMessage?.contextInfo ??
     msg?.documentMessage?.contextInfo ??
+    msg?.contextInfo ??
     msg?.conversationContextInfo ??
+    data?.message?.contextInfo ??
     data?.contextInfo ??
     null;
   const ear = ctxInfo?.externalAdReply ?? null;
@@ -238,6 +225,8 @@ async function processMessageEvent(supabase: any, payload: any) {
     ctwaClid || adSourceId || (conversionSource && /fb|ig|meta/i.test(conversionSource))
   );
 
+  const providerMsgId = key?.id || null;
+
   // Find or create conversation
   let conversationId: string;
   const { data: existing } = await supabase
@@ -256,9 +245,9 @@ async function processMessageEvent(supabase: any, payload: any) {
       status: "active",
     };
     // Backfill ad info if not yet set on this conversation
-    if (hasAdReferral && !existing.ctwa_clid && !existing.source_id) {
-      if (ctwaClid) updates.ctwa_clid = ctwaClid;
-      if (adSourceId) updates.source_id = adSourceId;
+    if (hasAdReferral) {
+      if (ctwaClid && !existing.ctwa_clid) updates.ctwa_clid = ctwaClid;
+      if (adSourceId && !existing.source_id) updates.source_id = adSourceId;
       if (adTitle) updates.ad_title = adTitle;
       updates.source_type = "ads";
     }
@@ -285,6 +274,19 @@ async function processMessageEvent(supabase: any, payload: any) {
       return;
     }
     conversationId = created.id;
+  }
+
+  if (providerMsgId) {
+    const { data: dup } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("provider_message_id", providerMsgId)
+      .limit(1)
+      .maybeSingle();
+    if (dup) {
+      console.log(`[evolution-webhook] duplicate ${providerMsgId}`);
+      return;
+    }
   }
 
   // If we got a source_id, try resolving the human ad name via meta-ad-lookup (best effort, async)

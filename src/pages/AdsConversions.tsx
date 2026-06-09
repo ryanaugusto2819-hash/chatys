@@ -33,7 +33,7 @@ export default function AdsConversions() {
       .from('conversations' as any)
       .select('id, contact_name, contact_phone, ctwa_clid, source_id, ad_title, created_at, sale_registered_at')
       .eq('workspace_id', currentWorkspace.id)
-      .not('ctwa_clid', 'is', null)
+      .or('source_type.eq.ads,ctwa_clid.not.is.null,source_id.not.is.null')
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) toast.error(error.message);
@@ -160,7 +160,7 @@ export default function AdsConversions() {
                     {c.ad_title || <span className="text-muted-foreground italic">não resolvido</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    <div className="truncate max-w-[180px]" title={c.ctwa_clid || ''}>CTWA: {c.ctwa_clid?.slice(0, 14)}…</div>
+                    <div className="truncate max-w-[180px]" title={c.ctwa_clid || ''}>CTWA: {c.ctwa_clid ? `${c.ctwa_clid.slice(0, 14)}…` : '—'}</div>
                     <div>Source: {c.source_id || '—'}</div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
