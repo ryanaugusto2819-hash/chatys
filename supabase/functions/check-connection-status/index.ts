@@ -150,6 +150,7 @@ Deno.serve(async (req) => {
           status = "error";
           details = { error: e instanceof Error ? e.message : String(e) };
         }
+      }
     } else if (conn.connection_id === "evolution") {
       const serverUrl = (config.server_url || "").replace(/\/$/, "");
       const instanceName = config.instance_name || "";
@@ -177,7 +178,6 @@ Deno.serve(async (req) => {
           details = { error: e instanceof Error ? e.message : String(e) };
         }
       }
-    }
     } else if (conn.connection_id === "zapi") {
       const instanceId = config.instance_id;
       const token = config.token || Deno.env.get("ZAPI_TOKEN");
