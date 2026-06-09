@@ -171,11 +171,30 @@ async function processMessageEvent(supabase: any, payload: any) {
     }
   }
 
+  // Extract Click-to-WhatsApp ad referral (externalAdReply), if present.
+  // Baileys/Evolution exposes it under any message type's contextInfo.
+  const ctxInfo =
+    msg?.extendedTextMessage?.contextInfo ??
+    msg?.imageMessage?.contextInfo ??
+    msg?.videoMessage?.contextInfo ??
+    msg?.audioMessage?.contextInfo ??
+    msg?.documentMessage?.contextInfo ??
+    msg?.conversationContextInfo ??
+    data?.contextInfo ??
+    null;
+  const ear = ctxInfo?.externalAdReply ?? null;
+  const ctwaClid: string | null =
+    ear?.ctwaClid ?? ear?.ctwa_clid ?? ctxInfo?.ctwaClid ?? null;
+  const adSourceId: string | null =
+    ear?.sourceId ?? ear?.source_id ?? null;
+  const adTitle: string | null = ear?.title ?? ear?.body ?? null;
+  const hasAdReferral = Boolean(ctwaClid || adSourceId);
+
   // Find or create conversation
   let conversationId: string;
   const { data: existing } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, ctwa_clid, source_id")
     .eq("contact_phone", phone)
     .eq("connection_config_id", connectionConfigId)
     .order("created_at", { ascending: false })
@@ -184,10 +203,18 @@ async function processMessageEvent(supabase: any, payload: any) {
 
   if (existing) {
     conversationId = existing.id;
-    await supabase
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString(), status: "active" })
-      .eq("id", conversationId);
+    const updates: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+      status: "active",
+    };
+    // Backfill ad info if not yet set on this conversation
+    if (hasAdReferral && !existing.ctwa_clid && !existing.source_id) {
+      if (ctwaClid) updates.ctwa_clid = ctwaClid;
+      if (adSourceId) updates.source_id = adSourceId;
+      if (adTitle) updates.ad_title = adTitle;
+      updates.source_type = "ads";
+    }
+    await supabase.from("conversations").update(updates).eq("id", conversationId);
   } else {
     const { data: created, error: convErr } = await supabase
       .from("conversations")
@@ -198,6 +225,10 @@ async function processMessageEvent(supabase: any, payload: any) {
         tags: [],
         connection_config_id: connectionConfigId,
         workspace_id: workspaceId,
+        ctwa_clid: hasAdReferral ? ctwaClid : null,
+        source_id: hasAdReferral ? adSourceId : null,
+        ad_title: hasAdReferral ? adTitle : null,
+        source_type: hasAdReferral ? "ads" : null,
       })
       .select("id")
       .single();
@@ -207,6 +238,18 @@ async function processMessageEvent(supabase: any, payload: any) {
     }
     conversationId = created.id;
   }
+
+  // If we got a source_id, try resolving the human ad name via meta-ad-lookup (best effort, async)
+  if (hasAdReferral && adSourceId) {
+    const supabaseUrlBg = Deno.env.get("SUPABASE_URL")!;
+    const serviceKeyBg = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    fetch(`${supabaseUrlBg}/functions/v1/meta-ad-lookup`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceKeyBg}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceId: adSourceId, conversationId }),
+    }).catch((e) => console.error("[evolution-webhook] meta-ad-lookup error:", e));
+  }
+
 
   const allowed = ["text", "image", "document", "audio", "video"];
   const normalizedType = allowed.includes(messageType) ? messageType : "text";
