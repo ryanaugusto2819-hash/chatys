@@ -197,8 +197,9 @@ async function processMessageEvent(supabase: any, payload: any) {
     }
   }
 
-  // Extract Click-to-WhatsApp ad referral (externalAdReply), if present.
-  // Baileys/Evolution exposes it under any message type's contextInfo.
+  // Extract Click-to-WhatsApp ad referral.
+  // Evolution exposes it via externalAdReply OR via conversionData/ctwaPayload
+  // (the latter happens on the very first message of a CTWA click — no externalAdReply yet).
   const ctxInfo =
     msg?.extendedTextMessage?.contextInfo ??
     msg?.imageMessage?.contextInfo ??
@@ -209,12 +210,33 @@ async function processMessageEvent(supabase: any, payload: any) {
     data?.contextInfo ??
     null;
   const ear = ctxInfo?.externalAdReply ?? null;
-  const ctwaClid: string | null =
+
+  // ctwaPayload/conversionData may arrive as a byte array (object with numeric keys) or string
+  const decodeBytes = (v: any): string | null => {
+    if (!v) return null;
+    if (typeof v === "string") return v;
+    try {
+      const arr = Array.isArray(v)
+        ? v
+        : Object.keys(v).sort((a, b) => Number(a) - Number(b)).map((k) => v[k]);
+      if (!arr.length) return null;
+      return new TextDecoder().decode(new Uint8Array(arr as number[]));
+    } catch {
+      return null;
+    }
+  };
+
+  let ctwaClid: string | null =
     ear?.ctwaClid ?? ear?.ctwa_clid ?? ctxInfo?.ctwaClid ?? null;
-  const adSourceId: string | null =
-    ear?.sourceId ?? ear?.source_id ?? null;
+  if (!ctwaClid) {
+    ctwaClid = decodeBytes(ctxInfo?.ctwaPayload) ?? decodeBytes(ctxInfo?.conversionData);
+  }
+  const adSourceId: string | null = ear?.sourceId ?? ear?.source_id ?? null;
   const adTitle: string | null = ear?.title ?? ear?.body ?? null;
-  const hasAdReferral = Boolean(ctwaClid || adSourceId);
+  const conversionSource: string | null = ctxInfo?.conversionSource ?? null;
+  const hasAdReferral = Boolean(
+    ctwaClid || adSourceId || (conversionSource && /fb|ig|meta/i.test(conversionSource))
+  );
 
   // Find or create conversation
   let conversationId: string;
