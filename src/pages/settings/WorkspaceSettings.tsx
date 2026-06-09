@@ -26,6 +26,8 @@ export default function WorkspaceSettings() {
   const [language, setLanguage] = useState('pt-BR');
   const [notificationEmail, setNotificationEmail] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [adsOrderWebhookUrl, setAdsOrderWebhookUrl] = useState('');
+
 
   useEffect(() => {
     if (!currentWorkspace) return;
@@ -47,6 +49,8 @@ export default function WorkspaceSettings() {
         setLanguage((data as any).language || 'pt-BR');
         setNotificationEmail((data as any).notification_email || '');
         setWebhookUrl((data as any).webhook_url || '');
+        setAdsOrderWebhookUrl((data as any).ads_order_webhook_url || '');
+
       }
     } finally {
       setLoading(false);
@@ -73,6 +77,8 @@ export default function WorkspaceSettings() {
           language,
           notification_email: notificationEmail || null,
           webhook_url: webhookUrl || null,
+          ads_order_webhook_url: adsOrderWebhookUrl || null,
+
           updated_at: new Date().toISOString(),
         }, { onConflict: 'workspace_id' });
       if (sErr) throw sErr;
@@ -200,6 +206,21 @@ export default function WorkspaceSettings() {
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5">Webhook de pedidos (Conversões Ads)</label>
+          <input
+            type="url"
+            value={adsOrderWebhookUrl}
+            onChange={(e) => setAdsOrderWebhookUrl(e.target.value)}
+            placeholder="https://seu-sistema.com/pedido"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Para onde enviar o pedido ao clicar em "Registrar pedido" na tela Conversões Ads.
+          </p>
+        </div>
+
       </div>
 
       <button
