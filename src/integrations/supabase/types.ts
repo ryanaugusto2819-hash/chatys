@@ -618,21 +618,30 @@ export type Database = {
           event: string | null
           id: string
           instance_name: string | null
+          message_text: string | null
+          push_name: string | null
           raw_payload: Json
+          remote_jid: string | null
         }
         Insert: {
           created_at?: string
           event?: string | null
           id?: string
           instance_name?: string | null
+          message_text?: string | null
+          push_name?: string | null
           raw_payload: Json
+          remote_jid?: string | null
         }
         Update: {
           created_at?: string
           event?: string | null
           id?: string
           instance_name?: string | null
+          message_text?: string | null
+          push_name?: string | null
           raw_payload?: Json
+          remote_jid?: string | null
         }
         Relationships: []
       }

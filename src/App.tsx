@@ -43,6 +43,7 @@ const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const EvolutionLogs = lazy(() => import("./pages/EvolutionLogs"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,6 +107,7 @@ const App = () => (
                   
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
                   <Route path="/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+                  <Route path="/evolution-logs" element={<AdminRoute><EvolutionLogs /></AdminRoute>} />
 
                   {/* Settings multi-tenant */}
                   <Route path="/settings" element={<AdminRoute><SettingsLayout /></AdminRoute>}>
