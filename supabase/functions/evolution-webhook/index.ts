@@ -87,11 +87,11 @@ async function processMessageEvent(supabase: any, payload: any) {
   const fromMe: boolean = key?.fromMe === true;
   const pushName: string = data?.pushName ?? "";
 
-  // Ignore groups, status, and own messages
+  // Ignore groups and status. Messages sent directly from the connected phone
+  // must still appear in the CRM chat as agent messages.
   if (!remoteJid) return;
   if (remoteJid.endsWith("@g.us") || remoteJid.includes("-group")) return;
   if (remoteJid === "status@broadcast") return;
-  if (fromMe) return;
 
   const phone = remoteJid.replace(/@s\.whatsapp\.net$/, "").replace(/@c\.us$/, "").replace(/\D/g, "");
   if (!phone) return;
@@ -192,7 +192,7 @@ async function processMessageEvent(supabase: any, payload: any) {
     const { data: created, error: convErr } = await supabase
       .from("conversations")
       .insert({
-        contact_name: pushName || phone,
+        contact_name: fromMe ? phone : (pushName || phone),
         contact_phone: phone,
         status: "new",
         tags: [],
@@ -214,11 +214,12 @@ async function processMessageEvent(supabase: any, payload: any) {
   const { error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     content,
-    sender_type: "customer",
+    sender_type: fromMe ? "agent" : "customer",
     message_type: normalizedType,
     media_url: mediaUrl,
-    status: "delivered",
+    status: fromMe ? "sent" : "delivered",
     provider_message_id: providerMsgId,
+    sender_label: fromMe ? "whatsapp" : null,
   });
 
   if (msgErr) {
