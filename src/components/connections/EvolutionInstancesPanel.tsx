@@ -248,6 +248,14 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
                       <QrCode className="h-4 w-4" />
                     </button>
                     <button
+                      onClick={() => fixWebhook(name)}
+                      disabled={isBusy}
+                      title="Reconfigurar webhook"
+                      className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                    >
+                      <Webhook className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => checkStatus(name)}
                       disabled={isBusy}
                       title="Verificar status"
