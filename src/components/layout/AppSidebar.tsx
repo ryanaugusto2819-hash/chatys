@@ -38,6 +38,7 @@ const adminItems = [
   { to: '/manager-ai', icon: ShieldCheck, label: 'IA Gerente' },
   { to: '/connections', icon: Plug, label: 'Conexões' },
   { to: '/users', icon: Users, label: 'Usuários' },
+  { to: '/evolution-logs', icon: Radio, label: 'Logs Evolution' },
   { to: '/settings', icon: Settings, label: 'Configurações' },
 ];
 
