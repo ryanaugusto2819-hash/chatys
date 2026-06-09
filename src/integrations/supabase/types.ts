@@ -612,6 +612,30 @@ export type Database = {
           },
         ]
       }
+      evolution_webhook_events: {
+        Row: {
+          created_at: string
+          event: string | null
+          id: string
+          instance_name: string | null
+          raw_payload: Json
+        }
+        Insert: {
+          created_at?: string
+          event?: string | null
+          id?: string
+          instance_name?: string | null
+          raw_payload: Json
+        }
+        Update: {
+          created_at?: string
+          event?: string | null
+          id?: string
+          instance_name?: string | null
+          raw_payload?: Json
+        }
+        Relationships: []
+      }
       flow_executions: {
         Row: {
           completed_at: string | null
@@ -1655,6 +1679,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_messages: {
+        Row: {
+          created_at: string
+          event: string | null
+          from_me: boolean | null
+          id: string
+          instance_name: string | null
+          message_text: string | null
+          push_name: string | null
+          raw_payload: Json
+          remote_jid: string | null
+        }
+        Insert: {
+          created_at?: string
+          event?: string | null
+          from_me?: boolean | null
+          id?: string
+          instance_name?: string | null
+          message_text?: string | null
+          push_name?: string | null
+          raw_payload: Json
+          remote_jid?: string | null
+        }
+        Update: {
+          created_at?: string
+          event?: string | null
+          from_me?: boolean | null
+          id?: string
+          instance_name?: string | null
+          message_text?: string | null
+          push_name?: string | null
+          raw_payload?: Json
+          remote_jid?: string | null
+        }
+        Relationships: []
       }
       workspace_invites: {
         Row: {

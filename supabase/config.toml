@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.exchange-meta-code]
 verify_jwt = false
+
+[functions.evolution-webhook]
+verify_jwt = false
