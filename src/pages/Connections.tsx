@@ -142,6 +142,9 @@ export default function Connections() {
           </div>
         )}
 
+        {/* Evolution API Instances */}
+        <EvolutionInstancesPanel workspaceId={currentWorkspace?.id} />
+
         {/* Coming Soon */}
         <div className="mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
           <Plug className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
