@@ -96,9 +96,13 @@ async function processMessageEvent(supabase: any, payload: any) {
   const phone = remoteJid.replace(/@s\.whatsapp\.net$/, "").replace(/@c\.us$/, "").replace(/\D/g, "");
   if (!phone) return;
 
-  // Resolve connection_config_id by instance_name
+  // Resolve connection_config_id by instance_name.
+  // If the instance exists on the Evolution server but has no row yet,
+  // auto-create one in the default workspace so messages are not lost.
   let connectionConfigId: string | null = null;
   let workspaceId: string | null = null;
+  const DEFAULT_WORKSPACE = "10000000-0000-0000-0000-000000000001";
+
   if (instanceName) {
     const { data: configs } = await supabase
       .from("connection_configs")
@@ -108,17 +112,39 @@ async function processMessageEvent(supabase: any, payload: any) {
     const matched = (configs || []).find(
       (c: any) => (c.config?.instance_name || "").toLowerCase() === instanceName.toLowerCase()
     );
-    if (!matched) {
-      console.log(`[evolution-webhook] no connection_config for instance ${instanceName}`);
-      return;
+
+    if (matched) {
+      // Auto-activate if the instance is sending traffic
+      if (!matched.is_connected) {
+        await supabase
+          .from("connection_configs")
+          .update({ is_connected: true })
+          .eq("id", matched.id);
+      }
+      connectionConfigId = matched.id;
+      workspaceId = matched.workspace_id;
+    } else {
+      console.log(`[evolution-webhook] auto-registering instance ${instanceName}`);
+      const { data: created, error: createErr } = await supabase
+        .from("connection_configs")
+        .insert({
+          connection_id: "evolution",
+          workspace_id: DEFAULT_WORKSPACE,
+          is_connected: true,
+          config: { instance_name: instanceName, auto_registered: true },
+        })
+        .select("id, workspace_id")
+        .single();
+      if (createErr || !created) {
+        console.error(`[evolution-webhook] failed to auto-register ${instanceName}:`, createErr);
+        return;
+      }
+      connectionConfigId = created.id;
+      workspaceId = created.workspace_id;
     }
-    if (!matched.is_connected) {
-      console.log(`[evolution-webhook] connection ${matched.id} not active`);
-      return;
-    }
-    connectionConfigId = matched.id;
-    workspaceId = matched.workspace_id;
   }
+
+
 
   // Extract content + type
   let content = "";
