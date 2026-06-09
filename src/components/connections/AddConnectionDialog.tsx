@@ -38,6 +38,17 @@ const PROVIDERS = [
     ],
     isEmbedded: false,
   },
+  {
+    id: 'evolution',
+    name: 'Evolution API (WhatsApp)',
+    description: 'Conecte uma instância da Evolution API self-hosted.',
+    fields: [
+      { key: 'server_url', label: 'Server URL', placeholder: 'https://evolution.seudominio.com', sensitive: false },
+      { key: 'instance_name', label: 'Instance Name', placeholder: 'teste03', sensitive: false },
+      { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
+    ],
+    isEmbedded: false,
+  },
 ];
 
 interface AddConnectionDialogProps {
