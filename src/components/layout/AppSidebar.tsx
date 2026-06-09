@@ -20,7 +20,8 @@ import {
   Trophy,
   Crown,
   Radio,
-} from 'lucide-react';
+  Megaphone,
+
 
 
 const menuItems = [
