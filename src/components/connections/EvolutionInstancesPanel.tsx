@@ -139,6 +139,21 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const fixWebhook = async (name: string) => {
+    setBusy(b => ({ ...b, [name]: true }));
+    try {
+      const { error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'set_webhook', instanceName: name },
+      });
+      if (error) throw error;
+      toast.success('Webhook reconfigurado!');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao configurar webhook');
+    } finally {
+      setBusy(b => ({ ...b, [name]: false }));
+    }
+  };
+
   const getName = (i: EvoInstance) =>
     i.name || i.instanceName || i.instance?.instanceName || '';
   const getState = (i: EvoInstance) =>
