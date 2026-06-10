@@ -46,14 +46,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Flat payload format expected by external systems (e.g. webhookSales)
     const payload = {
+      campaign: conv.ad_title || null,
+      creative: conv.ad_title || null,
+      country: "BR",
+      revenue: Number(amount),
+      currency: currency || "BRL",
+      date: new Date().toISOString().slice(0, 10),
+      phone: conv.contact_phone,
+      contact_name: conv.contact_name,
+      ctwa_clid: conv.ctwa_clid || null,
+      source_id: conv.source_id || null,
+      ad_title: conv.ad_title || null,
+      note: note || null,
+      conversation_id: conv.id,
+      conversation_started_at: conv.created_at,
       event: "ad_order.created",
       timestamp: new Date().toISOString(),
-      conversation_id: conv.id,
-      contact: { name: conv.contact_name, phone: conv.contact_phone },
-      ad: { ctwa_clid: conv.ctwa_clid, source_id: conv.source_id, ad_title: conv.ad_title },
-      order: { amount: Number(amount), currency: currency || "BRL", note: note || null },
-      conversation_started_at: conv.created_at,
     };
 
     let status = 0;
