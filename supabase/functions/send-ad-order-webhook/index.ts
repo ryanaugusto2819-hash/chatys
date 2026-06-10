@@ -39,16 +39,41 @@ Deno.serve(async (req) => {
       .eq("workspace_id", conv.workspace_id)
       .maybeSingle();
 
-    const webhookUrl = (settings as any)?.ads_order_webhook_url;
+    const webhookUrl = String((settings as any)?.ads_order_webhook_url || "").trim();
     if (!webhookUrl) {
-      return new Response(JSON.stringify({ success: false, error: "Webhook de pedidos não configurado. Vá em Configurações → Workspace." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({
+        success: false,
+        code: "missing_ads_order_webhook_url",
+        error: "Webhook de pedidos não configurado. Vá em Configurações → Workspace.",
+        diagnostics: {
+          workspace_id: conv.workspace_id,
+          setting: "ads_order_webhook_url",
+        },
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    let parsedWebhookUrl: URL;
+    try {
+      parsedWebhookUrl = new URL(webhookUrl);
+      if (!["http:", "https:"].includes(parsedWebhookUrl.protocol)) throw new Error("invalid protocol");
+    } catch (_) {
+      return new Response(JSON.stringify({
+        success: false,
+        code: "invalid_ads_order_webhook_url",
+        error: "Webhook de pedidos inválido. Revise a URL em Configurações → Workspace.",
+        diagnostics: { workspace_id: conv.workspace_id },
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const campaignName = conv.ad_title ? String(conv.ad_title).split("›")[0].trim() : null;
+
     // Flat payload format expected by external systems (e.g. webhookSales)
     const payload = {
-      campaign: conv.ad_title || null,
+      campaign: campaignName,
       creative: conv.ad_title || null,
       country: "BR",
       revenue: Number(amount),
@@ -69,7 +94,7 @@ Deno.serve(async (req) => {
     let status = 0;
     let body = "";
     try {
-      const res = await fetch(webhookUrl, {
+      const res = await fetch(parsedWebhookUrl.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

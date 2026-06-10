@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -16,6 +16,23 @@ interface AdConversation {
   sale_registered_at: string | null;
 }
 
+interface WorkspaceSettings {
+  ads_order_webhook_url: string | null;
+}
+
+interface AdLookupResponse {
+  success?: boolean;
+  adTitle?: string;
+  error?: string;
+}
+
+interface OrderWebhookResponse {
+  success?: boolean;
+  error?: string;
+}
+
+const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? err.message : fallback;
+
 export default function AdsConversions() {
   const { currentWorkspace } = useWorkspace();
   const [items, setItems] = useState<AdConversation[]>([]);
@@ -27,6 +44,7 @@ export default function AdsConversions() {
   const [orderNote, setOrderNote] = useState('');
   const [sending, setSending] = useState(false);
   const [bulkResolving, setBulkResolving] = useState(false);
+  const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
 
   const campaignFromTitle = (t: string | null) => {
     if (!t) return null;
@@ -43,12 +61,12 @@ export default function AdsConversions() {
     let ok = 0, fail = 0;
     for (const conv of targets) {
       try {
-        const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
+        const { data, error } = await supabase.functions.invoke<AdLookupResponse>('meta-ad-lookup', {
           body: { sourceId: conv.source_id, conversationId: conv.id },
         });
-        if (!error && (data as any)?.success) {
+        if (!error && data?.success) {
           ok++;
-          setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: (data as any).adTitle } : p));
+          setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: data.adTitle || p.ad_title } : p));
         } else fail++;
       } catch { fail++; }
     }
@@ -56,22 +74,30 @@ export default function AdsConversions() {
     toast.success(`Reprocessado: ${ok} ok, ${fail} falhas`);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     const { data, error } = await supabase
-      .from('conversations' as any)
+      .from('conversations')
       .select('id, contact_name, contact_phone, ctwa_clid, source_id, ad_title, created_at, sale_registered_at')
       .eq('workspace_id', currentWorkspace.id)
       .or('source_type.eq.ads,ctwa_clid.not.is.null,source_id.not.is.null')
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) toast.error(error.message);
-    setItems((data as any) || []);
-    setLoading(false);
-  };
+    setItems(data || []);
 
-  useEffect(() => { load(); }, [currentWorkspace?.id]);
+    const { data: settingsData } = await supabase
+      .from('workspace_settings')
+      .select('ads_order_webhook_url')
+      .eq('workspace_id', currentWorkspace.id)
+      .maybeSingle();
+    setSettings(settingsData || null);
+
+    setLoading(false);
+  }, [currentWorkspace]);
+
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     const q = phoneFilter.replace(/\D/g, '');
@@ -83,18 +109,18 @@ export default function AdsConversions() {
     if (!conv.source_id) return;
     setResolving(conv.id);
     try {
-      const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
+      const { data, error } = await supabase.functions.invoke<AdLookupResponse>('meta-ad-lookup', {
         body: { sourceId: conv.source_id, conversationId: conv.id },
       });
       if (error) throw error;
-      if ((data as any)?.success) {
+      if (data?.success) {
         toast.success('Anúncio resolvido');
-        setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: (data as any).adTitle } : p));
+        setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: data.adTitle || p.ad_title } : p));
       } else {
-        toast.error((data as any)?.error || 'Não foi possível resolver');
+        toast.error(data?.error || 'Não foi possível resolver');
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao resolver anúncio');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Erro ao resolver anúncio'));
     } finally {
       setResolving(null);
     }
@@ -107,23 +133,27 @@ export default function AdsConversions() {
       toast.error('Informe um valor válido');
       return;
     }
+    if (!settings?.ads_order_webhook_url?.trim()) {
+      toast.error('Configure o Webhook de pedidos em Configurações → Workspace antes de enviar.');
+      return;
+    }
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-ad-order-webhook', {
+      const { data, error } = await supabase.functions.invoke<OrderWebhookResponse>('send-ad-order-webhook', {
         body: { conversationId: orderTarget.id, amount, currency: 'BRL', note: orderNote || null },
       });
       if (error) throw error;
-      if ((data as any)?.success) {
+      if (data?.success) {
         toast.success('Pedido enviado ao webhook');
         setOrderTarget(null);
         setOrderAmount('');
         setOrderNote('');
         load();
       } else {
-        toast.error((data as any)?.error || 'Falha ao enviar');
+        toast.error(data?.error || 'Falha ao enviar');
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao enviar pedido');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Erro ao enviar pedido'));
     } finally {
       setSending(false);
     }
