@@ -185,7 +185,7 @@ export default function AdsConversions() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Contato</th>
                 <th className="text-left px-4 py-3 font-medium">Telefone</th>
-                <th className="text-left px-4 py-3 font-medium">Anúncio</th>
+                <th className="text-left px-4 py-3 font-medium">Campanha</th>
                 <th className="text-left px-4 py-3 font-medium">CTWA / Source</th>
                 <th className="text-left px-4 py-3 font-medium">Data</th>
                 <th className="text-right px-4 py-3 font-medium">Ações</th>
@@ -197,7 +197,7 @@ export default function AdsConversions() {
                   <td className="px-4 py-3 font-medium">{c.contact_name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.contact_phone}</td>
                   <td className="px-4 py-3 max-w-xs truncate" title={c.ad_title || ''}>
-                    {c.ad_title || <span className="text-muted-foreground italic">não resolvido</span>}
+                    {campaignFromTitle(c.ad_title) || <span className="text-muted-foreground italic">não resolvido</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     <div className="truncate max-w-[180px]" title={c.ctwa_clid || ''}>CTWA: {c.ctwa_clid ? `${c.ctwa_clid.slice(0, 14)}…` : '—'}</div>
