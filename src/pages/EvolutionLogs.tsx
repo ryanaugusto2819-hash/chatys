@@ -64,7 +64,13 @@ export default function EvolutionLogs() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'evolution_webhook_events' },
         (payload) => {
-          setEvents((prev) => [payload.new as EvolutionEvent, ...prev].slice(0, 100));
+          const ev = payload.new as EvolutionEvent;
+          const digits = phoneFilter.replace(/\D/g, '');
+          if (digits && !(ev.remote_jid ?? '').replace(/\D/g, '').includes(digits)) {
+            setTodayCount((c) => c + 1);
+            return;
+          }
+          setEvents((prev) => [ev, ...prev].slice(0, 500));
           setTodayCount((c) => c + 1);
         }
       )
@@ -72,7 +78,15 @@ export default function EvolutionLogs() {
     return () => {
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Debounced reload when filter changes
+  useEffect(() => {
+    const t = setTimeout(() => { load(); }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneFilter]);
 
   const testWebhook = async () => {
     setTesting(true);
