@@ -29,17 +29,20 @@ export default function EvolutionLogs() {
   const [phoneFilter, setPhoneFilter] = useState('');
 
   const normalizedFilter = phoneFilter.replace(/\D/g, '');
-  const filteredEvents = normalizedFilter
-    ? events.filter((e) => (e.remote_jid ?? '').replace(/\D/g, '').includes(normalizedFilter))
-    : events;
+  const filteredEvents = events;
 
-  const load = async () => {
+  const load = async (filter?: string) => {
     setLoading(true);
-    const { data, error } = await supabase
+    const digits = (filter ?? phoneFilter).replace(/\D/g, '');
+    let query = supabase
       .from('evolution_webhook_events' as any)
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(digits ? 500 : 100);
+    if (digits) {
+      query = query.ilike('remote_jid', `%${digits}%`);
+    }
+    const { data, error } = await query;
     if (error) setLastError(error.message);
     else setEvents((data as any) ?? []);
     setLoading(false);
