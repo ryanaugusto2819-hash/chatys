@@ -26,6 +26,12 @@ export default function EvolutionLogs() {
   const [testing, setTesting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [todayCount, setTodayCount] = useState(0);
+  const [phoneFilter, setPhoneFilter] = useState('');
+
+  const normalizedFilter = phoneFilter.replace(/\D/g, '');
+  const filteredEvents = normalizedFilter
+    ? events.filter((e) => (e.remote_jid ?? '').replace(/\D/g, '').includes(normalizedFilter))
+    : events;
 
   const load = async () => {
     setLoading(true);
