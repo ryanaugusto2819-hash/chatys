@@ -29,17 +29,20 @@ export default function EvolutionLogs() {
   const [phoneFilter, setPhoneFilter] = useState('');
 
   const normalizedFilter = phoneFilter.replace(/\D/g, '');
-  const filteredEvents = normalizedFilter
-    ? events.filter((e) => (e.remote_jid ?? '').replace(/\D/g, '').includes(normalizedFilter))
-    : events;
+  const filteredEvents = events;
 
-  const load = async () => {
+  const load = async (filter?: string) => {
     setLoading(true);
-    const { data, error } = await supabase
+    const digits = (filter ?? phoneFilter).replace(/\D/g, '');
+    let query = supabase
       .from('evolution_webhook_events' as any)
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(digits ? 500 : 100);
+    if (digits) {
+      query = query.ilike('remote_jid', `%${digits}%`);
+    }
+    const { data, error } = await query;
     if (error) setLastError(error.message);
     else setEvents((data as any) ?? []);
     setLoading(false);
@@ -61,7 +64,13 @@ export default function EvolutionLogs() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'evolution_webhook_events' },
         (payload) => {
-          setEvents((prev) => [payload.new as EvolutionEvent, ...prev].slice(0, 100));
+          const ev = payload.new as EvolutionEvent;
+          const digits = phoneFilter.replace(/\D/g, '');
+          if (digits && !(ev.remote_jid ?? '').replace(/\D/g, '').includes(digits)) {
+            setTodayCount((c) => c + 1);
+            return;
+          }
+          setEvents((prev) => [ev, ...prev].slice(0, 500));
           setTodayCount((c) => c + 1);
         }
       )
@@ -69,7 +78,15 @@ export default function EvolutionLogs() {
     return () => {
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Debounced reload when filter changes
+  useEffect(() => {
+    const t = setTimeout(() => { load(); }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneFilter]);
 
   const testWebhook = async () => {
     setTesting(true);
@@ -116,7 +133,7 @@ export default function EvolutionLogs() {
           <p className="text-sm text-muted-foreground">Eventos recebidos da Evolution API em tempo real</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={load} disabled={loading}>
+          <Button variant="outline" onClick={() => load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
