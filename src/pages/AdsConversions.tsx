@@ -26,6 +26,35 @@ export default function AdsConversions() {
   const [orderAmount, setOrderAmount] = useState('');
   const [orderNote, setOrderNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [bulkResolving, setBulkResolving] = useState(false);
+
+  const campaignFromTitle = (t: string | null) => {
+    if (!t) return null;
+    return t.split('›')[0].trim();
+  };
+
+  const bulkResolve = async () => {
+    const targets = items.filter(i => i.source_id && !i.ad_title);
+    if (targets.length === 0) {
+      toast.info('Nada para reprocessar');
+      return;
+    }
+    setBulkResolving(true);
+    let ok = 0, fail = 0;
+    for (const conv of targets) {
+      try {
+        const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
+          body: { sourceId: conv.source_id, conversationId: conv.id },
+        });
+        if (!error && (data as any)?.success) {
+          ok++;
+          setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: (data as any).adTitle } : p));
+        } else fail++;
+      } catch { fail++; }
+    }
+    setBulkResolving(false);
+    toast.success(`Reprocessado: ${ok} ok, ${fail} falhas`);
+  };
 
   const load = async () => {
     if (!currentWorkspace) return;
