@@ -176,10 +176,10 @@ export default function EvolutionLogs() {
               {loading && (
                 <tr><td colSpan={7} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></td></tr>
               )}
-              {!loading && events.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum webhook recebido ainda</td></tr>
+              {!loading && filteredEvents.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">{normalizedFilter ? 'Nenhum evento para esse número' : 'Nenhum webhook recebido ainda'}</td></tr>
               )}
-              {events.map((e) => (
+              {filteredEvents.map((e) => (
                 <tr key={e.id} className="border-t hover:bg-muted/30">
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{new Date(e.created_at).toLocaleString('pt-BR')}</td>
                   <td className="px-3 py-2"><span className="inline-block px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono">{e.event}</span></td>
