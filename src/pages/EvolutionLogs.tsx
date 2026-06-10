@@ -119,7 +119,7 @@ export default function EvolutionLogs() {
           <p className="text-sm text-muted-foreground">Eventos recebidos da Evolution API em tempo real</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={load} disabled={loading}>
+          <Button variant="outline" onClick={() => load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
