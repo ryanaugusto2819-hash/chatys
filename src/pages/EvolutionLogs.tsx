@@ -26,6 +26,12 @@ export default function EvolutionLogs() {
   const [testing, setTesting] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [todayCount, setTodayCount] = useState(0);
+  const [phoneFilter, setPhoneFilter] = useState('');
+
+  const normalizedFilter = phoneFilter.replace(/\D/g, '');
+  const filteredEvents = normalizedFilter
+    ? events.filter((e) => (e.remote_jid ?? '').replace(/\D/g, '').includes(normalizedFilter))
+    : events;
 
   const load = async () => {
     setLoading(true);
@@ -152,6 +158,20 @@ export default function EvolutionLogs() {
         </Card>
       )}
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={phoneFilter}
+          onChange={(e) => setPhoneFilter(e.target.value)}
+          placeholder="Filtrar por número (ex: 5511999999999)"
+          className="flex-1 min-w-[240px] max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        {phoneFilter && (
+          <Button variant="ghost" size="sm" onClick={() => setPhoneFilter('')}>Limpar</Button>
+        )}
+        <p className="text-xs text-muted-foreground ml-auto">{filteredEvents.length} de {events.length}</p>
+      </div>
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -170,10 +190,10 @@ export default function EvolutionLogs() {
               {loading && (
                 <tr><td colSpan={7} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></td></tr>
               )}
-              {!loading && events.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum webhook recebido ainda</td></tr>
+              {!loading && filteredEvents.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">{normalizedFilter ? 'Nenhum evento para esse número' : 'Nenhum webhook recebido ainda'}</td></tr>
               )}
-              {events.map((e) => (
+              {filteredEvents.map((e) => (
                 <tr key={e.id} className="border-t hover:bg-muted/30">
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{new Date(e.created_at).toLocaleString('pt-BR')}</td>
                   <td className="px-3 py-2"><span className="inline-block px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono">{e.event}</span></td>
