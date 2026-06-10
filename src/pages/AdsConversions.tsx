@@ -16,6 +16,10 @@ interface AdConversation {
   sale_registered_at: string | null;
 }
 
+interface WorkspaceSettings {
+  ads_order_webhook_url: string | null;
+}
+
 export default function AdsConversions() {
   const { currentWorkspace } = useWorkspace();
   const [items, setItems] = useState<AdConversation[]>([]);
@@ -27,6 +31,7 @@ export default function AdsConversions() {
   const [orderNote, setOrderNote] = useState('');
   const [sending, setSending] = useState(false);
   const [bulkResolving, setBulkResolving] = useState(false);
+  const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
 
   const campaignFromTitle = (t: string | null) => {
     if (!t) return null;
@@ -68,6 +73,14 @@ export default function AdsConversions() {
       .limit(200);
     if (error) toast.error(error.message);
     setItems((data as any) || []);
+
+    const { data: settingsData } = await supabase
+      .from('workspace_settings' as any)
+      .select('ads_order_webhook_url')
+      .eq('workspace_id', currentWorkspace.id)
+      .maybeSingle();
+    setSettings((settingsData as any) || null);
+
     setLoading(false);
   };
 
@@ -105,6 +118,10 @@ export default function AdsConversions() {
     const amount = parseFloat(orderAmount.replace(',', '.'));
     if (!amount || amount <= 0) {
       toast.error('Informe um valor válido');
+      return;
+    }
+    if (!settings?.ads_order_webhook_url?.trim()) {
+      toast.error('Configure o Webhook de pedidos em Configurações → Workspace antes de enviar.');
       return;
     }
     setSending(true);
