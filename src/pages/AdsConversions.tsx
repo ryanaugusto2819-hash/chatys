@@ -26,6 +26,35 @@ export default function AdsConversions() {
   const [orderAmount, setOrderAmount] = useState('');
   const [orderNote, setOrderNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [bulkResolving, setBulkResolving] = useState(false);
+
+  const campaignFromTitle = (t: string | null) => {
+    if (!t) return null;
+    return t.split('›')[0].trim();
+  };
+
+  const bulkResolve = async () => {
+    const targets = items.filter(i => i.source_id && !i.ad_title);
+    if (targets.length === 0) {
+      toast.info('Nada para reprocessar');
+      return;
+    }
+    setBulkResolving(true);
+    let ok = 0, fail = 0;
+    for (const conv of targets) {
+      try {
+        const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
+          body: { sourceId: conv.source_id, conversationId: conv.id },
+        });
+        if (!error && (data as any)?.success) {
+          ok++;
+          setItems(prev => prev.map(p => p.id === conv.id ? { ...p, ad_title: (data as any).adTitle } : p));
+        } else fail++;
+      } catch { fail++; }
+    }
+    setBulkResolving(false);
+    toast.success(`Reprocessado: ${ok} ok, ${fail} falhas`);
+  };
 
   const load = async () => {
     if (!currentWorkspace) return;
@@ -112,12 +141,22 @@ export default function AdsConversions() {
             Conversas vindas de anúncios (Click-to-WhatsApp). Registre o valor do pedido para enviar ao seu sistema externo.
           </p>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
-        >
-          <RefreshCw className="h-4 w-4" />Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={bulkResolve}
+            disabled={bulkResolving}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
+          >
+            {bulkResolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            Reprocessar anúncios
+          </button>
+          <button
+            onClick={load}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
+          >
+            <RefreshCw className="h-4 w-4" />Atualizar
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -146,7 +185,7 @@ export default function AdsConversions() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Contato</th>
                 <th className="text-left px-4 py-3 font-medium">Telefone</th>
-                <th className="text-left px-4 py-3 font-medium">Anúncio</th>
+                <th className="text-left px-4 py-3 font-medium">Campanha</th>
                 <th className="text-left px-4 py-3 font-medium">CTWA / Source</th>
                 <th className="text-left px-4 py-3 font-medium">Data</th>
                 <th className="text-right px-4 py-3 font-medium">Ações</th>
@@ -158,7 +197,7 @@ export default function AdsConversions() {
                   <td className="px-4 py-3 font-medium">{c.contact_name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.contact_phone}</td>
                   <td className="px-4 py-3 max-w-xs truncate" title={c.ad_title || ''}>
-                    {c.ad_title || <span className="text-muted-foreground italic">não resolvido</span>}
+                    {campaignFromTitle(c.ad_title) || <span className="text-muted-foreground italic">não resolvido</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     <div className="truncate max-w-[180px]" title={c.ctwa_clid || ''}>CTWA: {c.ctwa_clid ? `${c.ctwa_clid.slice(0, 14)}…` : '—'}</div>
