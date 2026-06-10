@@ -141,12 +141,22 @@ export default function AdsConversions() {
             Conversas vindas de anúncios (Click-to-WhatsApp). Registre o valor do pedido para enviar ao seu sistema externo.
           </p>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
-        >
-          <RefreshCw className="h-4 w-4" />Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={bulkResolve}
+            disabled={bulkResolving}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
+          >
+            {bulkResolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            Reprocessar anúncios
+          </button>
+          <button
+            onClick={load}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
+          >
+            <RefreshCw className="h-4 w-4" />Atualizar
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
