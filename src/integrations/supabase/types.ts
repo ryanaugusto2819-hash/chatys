@@ -2106,6 +2106,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_workspace_admin: { Args: { _workspace_id: string }; Returns: boolean }
+      is_workspace_member: { Args: { _workspace_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "supervisor" | "agent"
