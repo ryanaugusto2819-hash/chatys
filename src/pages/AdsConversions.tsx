@@ -79,12 +79,19 @@ export default function AdsConversions() {
     setLoading(true);
     // Mostra leads de anúncio de TODOS os workspaces do usuário (sem separar Brasil/Uruguay).
     // RLS já restringe às conversas dos workspaces em que o usuário é membro.
-    const { data, error } = await supabase
+    // Se houver filtro por telefone, busca server-side (ilimitado) — senão, lista os 200 mais recentes.
+    const phoneQ = phoneFilter.replace(/\D/g, '');
+    let query = supabase
       .from('conversations')
       .select('id, contact_name, contact_phone, ctwa_clid, source_id, ad_title, created_at, sale_registered_at')
       .or('source_type.eq.ads,ctwa_clid.not.is.null,source_id.not.is.null')
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .order('created_at', { ascending: false });
+    if (phoneQ) {
+      query = query.ilike('contact_phone', `%${phoneQ}%`).limit(100);
+    } else {
+      query = query.limit(200);
+    }
+    const { data, error } = await query;
     if (error) toast.error(error.message);
     setItems(data || []);
 
@@ -96,7 +103,7 @@ export default function AdsConversions() {
     setSettings(settingsData || null);
 
     setLoading(false);
-  }, [currentWorkspace]);
+  }, [currentWorkspace, phoneFilter]);
 
   useEffect(() => { load(); }, [load]);
 
