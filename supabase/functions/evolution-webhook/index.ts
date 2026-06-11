@@ -107,8 +107,8 @@ async function processMessageEvent(supabase: any, payload: any) {
   // auto-create one in the default workspace so messages are not lost.
   let connectionConfigId: string | null = null;
   let workspaceId: string | null = null;
-  // All Evolution auto-registered instances default to the Uruguay workspace
-  const DEFAULT_WORKSPACE = "10000000-0000-0000-0000-000000000002";
+  // Single unified workspace
+  const DEFAULT_WORKSPACE = "10000000-0000-0000-0000-000000000001";
 
   if (instanceName) {
     const { data: configs } = await supabase
