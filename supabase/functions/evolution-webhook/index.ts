@@ -29,7 +29,11 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "Invalid JSON body" }, 400);
   }
 
-  // Always log raw event first
+  // Only log events that carry ad-attribution data (the rest is noise we don't use).
+  // We check the raw payload for any of the click-to-WhatsApp / external-ad markers.
+  const rawString = (() => { try { return JSON.stringify(payload); } catch { return ""; } })();
+  const hasAdMarker = /"(ctwaClid|ctwa_clid|sourceId|source_id|externalAdReply|ctwaPayload|conversionData)"/.test(rawString);
+
   try {
     const event: string = payload?.event ?? payload?.type ?? "unknown";
     const instanceName: string | null = payload?.instance ?? payload?.instanceName ?? null;
@@ -47,14 +51,16 @@ Deno.serve(async (req) => {
       msg?.documentMessage?.caption ??
       null;
 
-    await supabase.from("evolution_webhook_events").insert({
-      event,
-      instance_name: instanceName,
-      remote_jid: remoteJid,
-      push_name: pushName,
-      message_text: messageText,
-      raw_payload: payload,
-    });
+    if (hasAdMarker) {
+      await supabase.from("evolution_webhook_events").insert({
+        event,
+        instance_name: instanceName,
+        remote_jid: remoteJid,
+        push_name: pushName,
+        message_text: messageText,
+        raw_payload: payload,
+      });
+    }
 
     // Process message events (use waitUntil so Edge runtime doesn't kill it)
     if (event === "messages.upsert" || event === "MESSAGES_UPSERT") {
