@@ -77,10 +77,11 @@ export default function AdsConversions() {
   const load = useCallback(async () => {
     if (!currentWorkspace) return;
     setLoading(true);
+    // Mostra leads de anúncio de TODOS os workspaces do usuário (sem separar Brasil/Uruguay).
+    // RLS já restringe às conversas dos workspaces em que o usuário é membro.
     const { data, error } = await supabase
       .from('conversations')
       .select('id, contact_name, contact_phone, ctwa_clid, source_id, ad_title, created_at, sale_registered_at')
-      .eq('workspace_id', currentWorkspace.id)
       .or('source_type.eq.ads,ctwa_clid.not.is.null,source_id.not.is.null')
       .order('created_at', { ascending: false })
       .limit(200);
