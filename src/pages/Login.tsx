@@ -18,6 +18,23 @@ const stats = [
   { value: '< 1s', label: 'IA Resposta' },
 ];
 
+function clearLocalAuthTokens() {
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('sb-') && key.includes('-auth-token')) {
+      localStorage.removeItem(key);
+    }
+  });
+}
+
+async function withAuthTimeout<T>(promise: Promise<T>, timeoutMs = 12000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs)
+    ),
+  ]);
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
@@ -31,20 +48,27 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName },
-            emailRedirectTo: window.location.origin,
-          },
-        });
+        const { error } = await withAuthTimeout(
+          supabase.auth.signUp({
+            email: normalizedEmail,
+            password,
+            options: {
+              data: { full_name: fullName.trim() },
+              emailRedirectTo: window.location.origin,
+            },
+          })
+        );
         if (error) throw error;
         toast.success('Conta criada! Configure seu workspace.');
         navigate('/onboarding');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        clearLocalAuthTokens();
+        const { error } = await withAuthTimeout(
+          supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+        );
         if (error) {
           if (error.message?.toLowerCase().includes('email not confirmed')) {
             toast.error('Seu email ainda não foi confirmado. Clique em "Criar conta" e use o mesmo email para reenviar a confirmação, ou use "Esqueceu a senha?" se precisar redefinir a senha.');
@@ -52,10 +76,14 @@ export default function Login() {
           }
           throw error;
         }
-        navigate('/');
+        navigate('/', { replace: true });
       }
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao autenticar');
+      if (error.message === 'TIMEOUT' || error.message === 'Failed to fetch') {
+        toast.error('Não foi possível conectar ao login agora. Recarregue a página e tente novamente.');
+      } else {
+        toast.error(error.message || 'Erro ao autenticar');
+      }
     } finally {
       setLoading(false);
     }
