@@ -24,6 +24,14 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+function clearLocalAuthTokens() {
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('sb-') && key.includes('-auth-token')) {
+      localStorage.removeItem(key);
+    }
+  });
+}
+
 /** Fetch with timeout + retry */
 async function fetchWithRetry<T>(
   fn: () => Promise<T>,
@@ -60,6 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     let requestId = 0;
     let hasInitialized = false;
+
+    if (window.location.pathname === '/login') {
+      clearLocalAuthTokens();
+    }
 
     const resetAuthState = () => {
       setRole(null);
