@@ -26,6 +26,14 @@ function clearLocalAuthTokens() {
   });
 }
 
+async function resetStaleAuthSession() {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    clearLocalAuthTokens();
+  }
+}
+
 async function withAuthTimeout<T>(promise: Promise<T>, timeoutMs = 12000): Promise<T> {
   return Promise.race([
     promise,
@@ -65,7 +73,7 @@ export default function Login() {
         toast.success('Conta criada! Configure seu workspace.');
         navigate('/onboarding');
       } else {
-        clearLocalAuthTokens();
+        await resetStaleAuthSession();
         const { error } = await withAuthTimeout(
           supabase.auth.signInWithPassword({ email: normalizedEmail, password })
         );
