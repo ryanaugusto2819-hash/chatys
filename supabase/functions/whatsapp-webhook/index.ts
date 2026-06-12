@@ -286,8 +286,27 @@ async function processWebhook(body: any) {
 
         const referral = msg.referral || value?.metadata?.referral;
         const ctwaClid = referral?.ctwa_clid || null;
-        const sourceId = referral?.source_id || null;
-        const adTitle = referral?.headline || referral?.body || referral?.source_url || null;
+        let sourceId = referral?.source_id || null;
+        let adTitle = referral?.headline || referral?.body || referral?.source_url || null;
+
+        // Fallback: when the referral arrives without source_id/ad_title (common on repeat
+        // clicks or when Meta omits the fields), inherit from the most recent prior
+        // conversation of the same phone that already has those metadata populated.
+        if (ctwaClid && (!sourceId || !adTitle)) {
+          const { data: prior } = await supabase
+            .from("conversations")
+            .select("source_id, ad_title, ad_id, adset_id, campaign_id, source_type")
+            .eq("contact_phone", phone)
+            .not("ad_title", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (prior) {
+            if (!sourceId && prior.source_id) sourceId = prior.source_id;
+            if (!adTitle && prior.ad_title) adTitle = prior.ad_title;
+            console.log(`[whatsapp-webhook] Inherited ad metadata from prior conversation for ${phone}: ${adTitle}`);
+          }
+        }
 
         let conversationId: string;
 
