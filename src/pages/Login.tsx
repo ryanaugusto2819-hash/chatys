@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { Mail, Lock, User, Eye, EyeOff, MessageSquare, Bot, Zap, ShieldCheck, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import logoImg from '@/assets/logo-group-liberty.jpg';
@@ -26,12 +28,18 @@ function clearLocalAuthTokens() {
   });
 }
 
-async function resetStaleAuthSession() {
-  try {
-    await supabase.auth.signOut({ scope: 'local' });
-  } catch {
-    clearLocalAuthTokens();
-  }
+function createCleanAuthClient() {
+  return createClient<Database>(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    }
+  );
 }
 
 async function withAuthTimeout<T>(promise: Promise<T>, timeoutMs = 12000): Promise<T> {
@@ -73,9 +81,10 @@ export default function Login() {
         toast.success('Conta criada! Configure seu workspace.');
         navigate('/onboarding');
       } else {
-        await resetStaleAuthSession();
-        const { error } = await withAuthTimeout(
-          supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+        clearLocalAuthTokens();
+        const cleanAuthClient = createCleanAuthClient();
+        const { data, error } = await withAuthTimeout(
+          cleanAuthClient.auth.signInWithPassword({ email: normalizedEmail, password })
         );
         if (error) {
           if (error.message?.toLowerCase().includes('email not confirmed')) {
@@ -84,7 +93,14 @@ export default function Login() {
           }
           throw error;
         }
-        navigate('/', { replace: true });
+        if (!data.session) throw new Error('Sessão não retornada pelo login.');
+        await withAuthTimeout(
+          supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          })
+        );
+        window.location.assign('/');
       }
     } catch (error: any) {
       if (error.message === 'TIMEOUT' || error.message === 'Failed to fetch') {
