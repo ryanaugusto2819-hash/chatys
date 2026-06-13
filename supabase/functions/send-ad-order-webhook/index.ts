@@ -69,26 +69,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const campaignName = conv.ad_title ? String(conv.ad_title).split("›")[0].trim() : null;
+    const adTitle = conv.ad_title ? String(conv.ad_title) : "";
+    const campaignName = adTitle ? adTitle.split("›")[0].trim() : null;
+    // Creative = último segmento após o último "›" (ex.: "h1", "h2"); fallback para o título inteiro
+    const creativeName = adTitle.includes("›")
+      ? adTitle.split("›").pop()!.trim()
+      : (adTitle || null);
 
-    // Flat payload format expected by external systems (e.g. webhookSales)
+    // Payload exato esperado pelo webhookSales externo
     const payload = {
       campaign: campaignName,
-      creative: conv.ad_title || null,
+      creative: creativeName,
       country: "BR",
       revenue: Number(amount),
-      currency: currency || "BRL",
       date: new Date().toISOString().slice(0, 10),
-      phone: conv.contact_phone,
-      contact_name: conv.contact_name,
-      ctwa_clid: conv.ctwa_clid || null,
-      source_id: conv.source_id || null,
-      ad_title: conv.ad_title || null,
-      note: note || null,
-      conversation_id: conv.id,
-      conversation_started_at: conv.created_at,
-      event: "ad_order.created",
-      timestamp: new Date().toISOString(),
     };
 
     let status = 0;
