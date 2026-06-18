@@ -171,7 +171,10 @@ Deno.serve(async (req) => {
           .eq("connection_id", "evolution")
           .eq("config->>instance_name", instanceName);
 
-        if (!r.ok) return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
+        // If Evolution returns 400/404 (instance already gone or in bad state), still consider it a success — local record was removed.
+        if (!r.ok && r.status !== 400 && r.status !== 404) {
+          return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
+        }
         return json({ success: true });
       }
 
