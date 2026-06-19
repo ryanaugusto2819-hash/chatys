@@ -77,13 +77,27 @@ Deno.serve(async (req) => {
       ? adTitle.split("›").pop()!.trim()
       : (adTitle || null);
 
-    // Payload exato esperado pelo webhookSales externo
+    // Payload completo (mantém os campos esperados pelo webhookSales + metadados do lead)
     const payload = {
+      // campos requeridos pelo webhookSales externo
       campaign: campaignName,
       creative: creativeName,
       country: "BR",
       revenue: Number(amount),
       date: new Date().toISOString().slice(0, 10),
+      currency: currency || "BRL",
+      // metadados do lead (compatibilidade com payload anterior)
+      conversation_id: conv.id,
+      contact_name: conv.contact_name,
+      contact_phone: conv.contact_phone,
+      phone: conv.contact_phone,
+      ad_title: conv.ad_title,
+      ctwa_clid: conv.ctwa_clid,
+      source_id: conv.source_id,
+      workspace_id: conv.workspace_id,
+      note: note || null,
+      amount: Number(amount),
+      created_at: new Date().toISOString(),
     };
 
     let status = 0;
