@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-api-version, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
@@ -116,11 +117,14 @@ Deno.serve(async (req) => {
     try {
       await supabase.from("webhook_logs").insert({
         conversation_id: conv.id,
-        url: webhookUrl,
-        method: "POST",
-        request_body: payload,
-        response_status: status,
-        response_body: (fetchError ? `FETCH_ERROR: ${fetchError}` : body).slice(0, 2000),
+        contact_name: conv.contact_name || null,
+        phone: conv.contact_phone || "unknown",
+        status_key: "ads_order_webhook",
+        payload: { url: webhookUrl, method: "POST", request_body: payload },
+        result: { status, response_body: (fetchError ? `FETCH_ERROR: ${fetchError}` : body).slice(0, 2000) },
+        success: ok,
+        mapping_found: true,
+        error: ok ? null : (fetchError || `HTTP ${status}`),
       });
     } catch (_) { /* ignore */ }
 
