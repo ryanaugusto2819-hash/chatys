@@ -147,10 +147,37 @@ export default function AdsConversions() {
     }
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke<OrderWebhookResponse>('send-ad-order-webhook', {
-        body: { conversationId: orderTarget.id, amount, currency: 'BRL', note: orderNote || null },
-      });
-      if (error) throw error;
+      // Use direct fetch instead of supabase.functions.invoke to avoid SDK "Failed to fetch"
+      // that occurs even when the Edge Function completes successfully on the server.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL;
+      const ANON = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      let data: OrderWebhookResponse | null = null;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/send-ad-order-webhook`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: ANON,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ conversationId: orderTarget.id, amount, currency: 'BRL', note: orderNote || null }),
+        });
+        data = await res.json().catch(() => null);
+      } catch (fetchErr) {
+        // Network/transport error — verify server-side outcome before reporting failure
+        const { data: conv } = await supabase
+          .from('conversations')
+          .select('sale_registered_at')
+          .eq('id', orderTarget.id)
+          .maybeSingle();
+        if (conv?.sale_registered_at) {
+          data = { success: true };
+        } else {
+          throw fetchErr;
+        }
+      }
       if (data?.success) {
         toast.success('Pedido enviado ao webhook');
         setOrderTarget(null);
@@ -166,6 +193,7 @@ export default function AdsConversions() {
       setSending(false);
     }
   };
+
 
   return (
     <div className="p-6 space-y-4">
