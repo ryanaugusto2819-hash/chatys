@@ -87,22 +87,30 @@ Deno.serve(async (req) => {
 
     let status = 0;
     let body = "";
+    let fetchError: string | null = null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(parsedWebhookUrl.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       status = res.status;
       body = await res.text();
     } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: "Falha ao chamar webhook", detail: String(err) }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      fetchError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
-    // Mark sale registered (stops AI per project rules)
-    await supabase.from("conversations").update({ sale_registered_at: new Date().toISOString() }).eq("id", conv.id);
+    const ok = !fetchError && status >= 200 && status < 300;
+
+    // Mark sale registered only on success
+    if (ok) {
+      await supabase.from("conversations").update({ sale_registered_at: new Date().toISOString() }).eq("id", conv.id);
+    }
 
     // Best-effort log to webhook_logs
     try {
@@ -112,13 +120,19 @@ Deno.serve(async (req) => {
         method: "POST",
         request_body: payload,
         response_status: status,
-        response_body: body.slice(0, 2000),
+        response_body: (fetchError ? `FETCH_ERROR: ${fetchError}` : body).slice(0, 2000),
       });
     } catch (_) { /* ignore */ }
 
-    const ok = status >= 200 && status < 300;
-    return new Response(JSON.stringify({ success: ok, status, response: body.slice(0, 500) }), {
-      status: ok ? 200 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Always return 200 so frontend gets the diagnostic instead of a generic fetch error
+    return new Response(JSON.stringify({
+      success: ok,
+      status,
+      response: body.slice(0, 500),
+      error: ok ? undefined : (fetchError ? `Falha ao chamar webhook externo (${fetchError})` : `Webhook externo retornou status ${status}`),
+      payload_sent: payload,
+    }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: String(err) }), {
