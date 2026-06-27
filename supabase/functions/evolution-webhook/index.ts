@@ -132,22 +132,32 @@ async function processMessageEvent(supabase: any, payload: any) {
       workspaceId = matched.workspace_id;
     } else {
       console.log(`[evolution-webhook] auto-registering instance ${instanceName}`);
-      const { data: created, error: createErr } = await supabase
+      const { error: createErr } = await supabase
         .from("connection_configs")
         .insert({
           connection_id: "evolution",
           workspace_id: DEFAULT_WORKSPACE,
           is_connected: true,
           config: { instance_name: instanceName, auto_registered: true },
-        })
-        .select("id, workspace_id")
-        .single();
-      if (createErr || !created) {
+        });
+      // Ignore unique-violation (23505) — race condition; re-fetch below.
+      if (createErr && (createErr as any).code !== "23505") {
         console.error(`[evolution-webhook] failed to auto-register ${instanceName}:`, createErr);
         return;
       }
-      connectionConfigId = created.id;
-      workspaceId = created.workspace_id;
+      const { data: refetched } = await supabase
+        .from("connection_configs")
+        .select("id, workspace_id, config")
+        .eq("connection_id", "evolution");
+      const found = (refetched || []).find(
+        (c: any) => (c.config?.instance_name || "").toLowerCase() === instanceName.toLowerCase()
+      );
+      if (!found) {
+        console.error(`[evolution-webhook] could not re-fetch ${instanceName} after insert`);
+        return;
+      }
+      connectionConfigId = found.id;
+      workspaceId = found.workspace_id;
     }
   }
 
