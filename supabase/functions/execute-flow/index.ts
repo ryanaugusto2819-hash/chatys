@@ -837,6 +837,8 @@ Deno.serve(async (req) => {
 
       const providerMessageId = useZapi
         ? ((waResult as Record<string, unknown>)?.messageId as string | undefined) || null
+        : useEvolution
+        ? (((waResult as any)?.key?.id as string | undefined) || ((waResult as any)?.messageId as string | undefined) || null)
         : (((waResult as Record<string, unknown>)?.messages as Array<Record<string, unknown>> | undefined)?.[0]?.id as string | undefined) || null;
 
       let msgContent = "";
