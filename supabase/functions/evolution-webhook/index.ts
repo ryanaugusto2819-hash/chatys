@@ -110,6 +110,9 @@ async function processMessageEvent(supabase: any, payload: any) {
   // Single unified workspace
   const DEFAULT_WORKSPACE = "10000000-0000-0000-0000-000000000001";
 
+  let serverUrl = "";
+  let apiKey = "";
+
   if (instanceName) {
     const { data: configs } = await supabase
       .from("connection_configs")
@@ -121,7 +124,6 @@ async function processMessageEvent(supabase: any, payload: any) {
     );
 
     if (matched) {
-      // Auto-activate if the instance is sending traffic
       if (!matched.is_connected) {
         await supabase
           .from("connection_configs")
@@ -130,6 +132,8 @@ async function processMessageEvent(supabase: any, payload: any) {
       }
       connectionConfigId = matched.id;
       workspaceId = matched.workspace_id;
+      serverUrl = (matched.config?.server_url || "").replace(/\/$/, "");
+      apiKey = matched.config?.api_key || "";
     } else {
       console.log(`[evolution-webhook] auto-registering instance ${instanceName}`);
       const { error: createErr } = await supabase
@@ -140,7 +144,6 @@ async function processMessageEvent(supabase: any, payload: any) {
           is_connected: true,
           config: { instance_name: instanceName, auto_registered: true },
         });
-      // Ignore unique-violation (23505) — race condition; re-fetch below.
       if (createErr && (createErr as any).code !== "23505") {
         console.error(`[evolution-webhook] failed to auto-register ${instanceName}:`, createErr);
         return;
@@ -158,8 +161,13 @@ async function processMessageEvent(supabase: any, payload: any) {
       }
       connectionConfigId = found.id;
       workspaceId = found.workspace_id;
+      serverUrl = (found.config?.server_url || "").replace(/\/$/, "");
+      apiKey = found.config?.api_key || "";
     }
   }
+
+  if (!serverUrl) serverUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+  if (!apiKey) apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
 
 
@@ -321,7 +329,7 @@ async function processMessageEvent(supabase: any, payload: any) {
   const allowed = ["text", "image", "document", "audio", "video"];
   const normalizedType = allowed.includes(messageType) ? messageType : "text";
 
-  const { error: msgErr } = await supabase.from("messages").insert({
+  const { data: insertedMsg, error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     content,
     sender_type: fromMe ? "agent" : "customer",
@@ -330,12 +338,25 @@ async function processMessageEvent(supabase: any, payload: any) {
     status: fromMe ? "sent" : "delivered",
     provider_message_id: providerMsgId,
     sender_label: fromMe ? "whatsapp" : null,
-  });
+  }).select("id").single();
 
   if (msgErr) {
     console.error("[evolution-webhook] insert message error:", msgErr);
     return;
   }
+
+  // If media is an encrypted WhatsApp URL (.enc), decrypt via Evolution and re-host on Supabase Storage
+  if (insertedMsg && mediaUrl && /mmg\.whatsapp\.net|\.enc(\?|$)/.test(mediaUrl) && serverUrl && apiKey && instanceName) {
+    const decryptTask = decryptAndRehostEvolutionMedia({
+      supabase, serverUrl, apiKey, instanceName, key, msg, messageId: insertedMsg.id, messageType: normalizedType,
+    }).catch((e) => console.error("[evolution-webhook] media decrypt error:", e));
+    // @ts-ignore
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(decryptTask);
+    }
+  }
+
 
   // Trigger AI flows (best-effort)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -349,4 +370,73 @@ async function processMessageEvent(supabase: any, payload: any) {
 
   fire("ai-flow-selector");
   fire("ai-auto-reply");
+}
+
+async function decryptAndRehostEvolutionMedia(opts: {
+  supabase: any;
+  serverUrl: string;
+  apiKey: string;
+  instanceName: string;
+  key: any;
+  msg: any;
+  messageId: string;
+  messageType: string;
+}) {
+  const { supabase, serverUrl, apiKey, instanceName, key, msg, messageId, messageType } = opts;
+
+  const endpoint = `${serverUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`;
+  const body = { message: { key, message: msg }, convertToMp4: false };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { apikey: apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    console.error(`[evolution-webhook] getBase64 failed ${res.status}: ${await res.text().catch(() => "")}`);
+    return;
+  }
+
+  const data = await res.json().catch(() => null);
+  const base64: string | undefined = data?.base64 || data?.media || data?.buffer;
+  const mimeType: string =
+    data?.mimetype ||
+    data?.mimeType ||
+    msg?.audioMessage?.mimetype ||
+    msg?.imageMessage?.mimetype ||
+    msg?.videoMessage?.mimetype ||
+    msg?.documentMessage?.mimetype ||
+    "application/octet-stream";
+
+  if (!base64) {
+    console.error("[evolution-webhook] getBase64 returned no base64");
+    return;
+  }
+
+  // Decode base64 to bytes
+  const clean = base64.replace(/^data:[^;]+;base64,/, "");
+  const binary = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+
+  const extMap: Record<string, string> = {
+    "audio/ogg": "ogg", "audio/ogg; codecs=opus": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/wav": "wav",
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+    "video/mp4": "mp4", "video/3gpp": "3gp", "video/webm": "webm",
+    "application/pdf": "pdf",
+  };
+  const ext = extMap[mimeType.split(";")[0].trim()] || (messageType === "audio" ? "ogg" : messageType === "image" ? "jpg" : messageType === "video" ? "mp4" : "bin");
+  const fileName = `evolution/${messageId}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("chat-media")
+    .upload(fileName, binary, { contentType: mimeType, upsert: true });
+
+  if (upErr) {
+    console.error("[evolution-webhook] storage upload error:", upErr);
+    return;
+  }
+
+  const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+  await supabase.from("messages").update({ media_url: pub.publicUrl }).eq("id", messageId);
+  console.log(`[evolution-webhook] media rehosted: ${pub.publicUrl}`);
 }
