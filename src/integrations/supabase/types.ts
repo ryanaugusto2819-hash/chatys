@@ -195,6 +195,7 @@ export type Database = {
       }
       automation_flows: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -208,6 +209,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -221,6 +223,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
