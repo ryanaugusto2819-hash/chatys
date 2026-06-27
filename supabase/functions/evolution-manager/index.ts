@@ -164,22 +164,27 @@ Deno.serve(async (req) => {
         await evo(`/instance/logout/${instanceName}`, "DELETE").catch(() => {});
         const r = await evo(`/instance/delete/${instanceName}`, "DELETE");
 
-        // Remove local record regardless
+        // Remove local record regardless of remote outcome
         await supabase
           .from("connection_configs")
           .delete()
           .eq("connection_id", "evolution")
           .eq("config->>instance_name", instanceName);
 
-        // If Evolution says the instance doesn't exist (404, or any body mentioning "does not exist"),
-        // treat as success since the local record was removed.
+        // Treat "doesn't exist" on Evolution as success (local row already removed)
         const bodyStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
-        const notFound = r.status === 404 || r.status === 400 || /does not exist|not found/i.test(bodyStr);
-        if (!r.ok && !notFound) {
-          return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
+        const notFound =
+          r.status === 404 ||
+          r.status === 400 ||
+          /does not exist|not found/i.test(bodyStr);
+
+        if (r.ok || notFound) {
+          return json({ success: true, alreadyGone: !r.ok });
         }
-        return json({ success: true, alreadyGone: !r.ok });
+        return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
       }
+
+
 
       case "set_webhook": {
         if (!instanceName) return json({ error: "instanceName required" }, 400);
