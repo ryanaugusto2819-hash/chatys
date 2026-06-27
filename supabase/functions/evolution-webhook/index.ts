@@ -371,3 +371,72 @@ async function processMessageEvent(supabase: any, payload: any) {
   fire("ai-flow-selector");
   fire("ai-auto-reply");
 }
+
+async function decryptAndRehostEvolutionMedia(opts: {
+  supabase: any;
+  serverUrl: string;
+  apiKey: string;
+  instanceName: string;
+  key: any;
+  msg: any;
+  messageId: string;
+  messageType: string;
+}) {
+  const { supabase, serverUrl, apiKey, instanceName, key, msg, messageId, messageType } = opts;
+
+  const endpoint = `${serverUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`;
+  const body = { message: { key, message: msg }, convertToMp4: false };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { apikey: apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    console.error(`[evolution-webhook] getBase64 failed ${res.status}: ${await res.text().catch(() => "")}`);
+    return;
+  }
+
+  const data = await res.json().catch(() => null);
+  const base64: string | undefined = data?.base64 || data?.media || data?.buffer;
+  const mimeType: string =
+    data?.mimetype ||
+    data?.mimeType ||
+    msg?.audioMessage?.mimetype ||
+    msg?.imageMessage?.mimetype ||
+    msg?.videoMessage?.mimetype ||
+    msg?.documentMessage?.mimetype ||
+    "application/octet-stream";
+
+  if (!base64) {
+    console.error("[evolution-webhook] getBase64 returned no base64");
+    return;
+  }
+
+  // Decode base64 to bytes
+  const clean = base64.replace(/^data:[^;]+;base64,/, "");
+  const binary = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+
+  const extMap: Record<string, string> = {
+    "audio/ogg": "ogg", "audio/ogg; codecs=opus": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/wav": "wav",
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+    "video/mp4": "mp4", "video/3gpp": "3gp", "video/webm": "webm",
+    "application/pdf": "pdf",
+  };
+  const ext = extMap[mimeType.split(";")[0].trim()] || (messageType === "audio" ? "ogg" : messageType === "image" ? "jpg" : messageType === "video" ? "mp4" : "bin");
+  const fileName = `evolution/${messageId}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("chat-media")
+    .upload(fileName, binary, { contentType: mimeType, upsert: true });
+
+  if (upErr) {
+    console.error("[evolution-webhook] storage upload error:", upErr);
+    return;
+  }
+
+  const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+  await supabase.from("messages").update({ media_url: pub.publicUrl }).eq("id", messageId);
+  console.log(`[evolution-webhook] media rehosted: ${pub.publicUrl}`);
+}
