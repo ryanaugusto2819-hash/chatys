@@ -685,6 +685,55 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify(zapiBody),
           });
+        } else if (useEvolution) {
+          let evoEndpoint: string;
+          let evoBody: Record<string, unknown>;
+          const evoBase = `${evoServerUrl}/message`;
+          const inst = encodeURIComponent(evoInstanceName);
+
+          if (node.node_type === "audio") {
+            evoEndpoint = `${evoBase}/sendWhatsAppAudio/${inst}`;
+            evoBody = { number: phone, audio: config.media_url };
+          } else if (node.node_type === "image" || node.node_type === "video") {
+            evoEndpoint = `${evoBase}/sendMedia/${inst}`;
+            evoBody = {
+              number: phone,
+              mediatype: node.node_type === "video" ? "video" : "image",
+              media: config.media_url,
+              caption: replaceVariables((config.caption as string) || ""),
+            };
+          } else if (node.node_type === "call_button") {
+            const content = replaceVariables((config.content as string) || "");
+            const callPhone = (config.call_phone as string) || "";
+            const callButtonText = (config.call_button_text as string) || "Ligar agora";
+            evoEndpoint = `${evoBase}/sendText/${inst}`;
+            evoBody = { number: phone, text: `${content}\n\n📞 ${callButtonText}: ${callPhone}` };
+          } else {
+            const textBody = (waPayload as Record<string, unknown>).text as Record<string, unknown> | undefined;
+            const interactiveBody = (waPayload as Record<string, unknown>).interactive as Record<string, unknown> | undefined;
+            let textContent = "";
+            if (textBody) {
+              textContent = (textBody.body as string) || "";
+            } else if (interactiveBody) {
+              const body = ((interactiveBody.body as Record<string, unknown>)?.text as string) || "";
+              const action = interactiveBody.action as Record<string, unknown>;
+              const buttons = (action?.buttons as Array<Record<string, unknown>>) || [];
+              const btnText = buttons
+                .map((b, i) => `${i + 1}. ${(b.reply as Record<string, unknown>)?.title || ""}`)
+                .join("\n");
+              textContent = body + (btnText ? "\n\n" + btnText : "");
+            }
+            evoEndpoint = `${evoBase}/sendText/${inst}`;
+            evoBody = { number: phone, text: textContent };
+          }
+
+          console.log(`[execute-flow] Sending via Evolution node ${node.id} (${node.node_type}) to ${phone}`);
+
+          waResponse = await fetch(evoEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoApiKey },
+            body: JSON.stringify(evoBody),
+          });
         } else {
           console.log(`[execute-flow] Sending via WA Cloud node ${node.id} (${node.node_type}) to ${phone}`);
 
@@ -702,7 +751,7 @@ Deno.serve(async (req) => {
         console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
 
         // Validate response body beyond just HTTP status
-        sendValidation = validateSendResponse(waResponse, waResult, useZapi, node.id);
+        sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
       } catch (error) {
         console.error("[execute-flow] Send exception for node", node.id, ":", error);
         waResponse = new Response(null, { status: 500 });
