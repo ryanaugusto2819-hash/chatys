@@ -110,6 +110,9 @@ async function processMessageEvent(supabase: any, payload: any) {
   // Single unified workspace
   const DEFAULT_WORKSPACE = "10000000-0000-0000-0000-000000000001";
 
+  let serverUrl = "";
+  let apiKey = "";
+
   if (instanceName) {
     const { data: configs } = await supabase
       .from("connection_configs")
@@ -121,7 +124,6 @@ async function processMessageEvent(supabase: any, payload: any) {
     );
 
     if (matched) {
-      // Auto-activate if the instance is sending traffic
       if (!matched.is_connected) {
         await supabase
           .from("connection_configs")
@@ -130,6 +132,8 @@ async function processMessageEvent(supabase: any, payload: any) {
       }
       connectionConfigId = matched.id;
       workspaceId = matched.workspace_id;
+      serverUrl = (matched.config?.server_url || "").replace(/\/$/, "");
+      apiKey = matched.config?.api_key || "";
     } else {
       console.log(`[evolution-webhook] auto-registering instance ${instanceName}`);
       const { error: createErr } = await supabase
@@ -140,7 +144,6 @@ async function processMessageEvent(supabase: any, payload: any) {
           is_connected: true,
           config: { instance_name: instanceName, auto_registered: true },
         });
-      // Ignore unique-violation (23505) — race condition; re-fetch below.
       if (createErr && (createErr as any).code !== "23505") {
         console.error(`[evolution-webhook] failed to auto-register ${instanceName}:`, createErr);
         return;
@@ -158,8 +161,13 @@ async function processMessageEvent(supabase: any, payload: any) {
       }
       connectionConfigId = found.id;
       workspaceId = found.workspace_id;
+      serverUrl = (found.config?.server_url || "").replace(/\/$/, "");
+      apiKey = found.config?.api_key || "";
     }
   }
+
+  if (!serverUrl) serverUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+  if (!apiKey) apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
 
 
