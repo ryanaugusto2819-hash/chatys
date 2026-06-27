@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : "WA Cloud"}`);
+    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : useEvolution ? "Evolution" : "WA Cloud"}`);
 
     const { data: nodes } = await supabase
       .from("automation_nodes")
