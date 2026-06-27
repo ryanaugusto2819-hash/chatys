@@ -872,9 +872,9 @@ Deno.serve(async (req) => {
         sender_type: "agent",
         message_type: normalizedType,
         media_url: msgMediaUrl,
-        status: providerMessageId ? "pending" : "sent",
+        status: useEvolution ? "sent" : providerMessageId ? "pending" : "sent",
         provider_message_id: providerMessageId,
-        provider_status: providerMessageId ? "accepted" : null,
+        provider_status: providerMessageId ? (useEvolution ? "sent" : "accepted") : null,
         sender_label: requestedLabel || "fluxo",
       });
 
