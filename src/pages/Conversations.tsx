@@ -669,7 +669,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                             }}
                             className="rounded border-input text-primary focus:ring-ring h-3.5 w-3.5"
                           />
-                          <span className="text-xs text-foreground">{c.label} ({c.connection_id === 'whatsapp' ? 'Meta' : 'Z-API'})</span>
+                          <span className="text-xs text-foreground">{c.label} ({c.connection_id === 'whatsapp' ? 'Meta' : c.connection_id === 'evolution' ? 'Evolution' : 'Z-API'})</span>
                         </label>
                       );
                     }) : (
