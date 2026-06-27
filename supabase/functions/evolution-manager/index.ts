@@ -171,11 +171,14 @@ Deno.serve(async (req) => {
           .eq("connection_id", "evolution")
           .eq("config->>instance_name", instanceName);
 
-        // If Evolution returns 400/404 (instance already gone or in bad state), still consider it a success — local record was removed.
-        if (!r.ok && r.status !== 400 && r.status !== 404) {
+        // If Evolution says the instance doesn't exist (404, or any body mentioning "does not exist"),
+        // treat as success since the local record was removed.
+        const bodyStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
+        const notFound = r.status === 404 || r.status === 400 || /does not exist|not found/i.test(bodyStr);
+        if (!r.ok && !notFound) {
           return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
         }
-        return json({ success: true });
+        return json({ success: true, alreadyGone: !r.ok });
       }
 
       case "set_webhook": {
