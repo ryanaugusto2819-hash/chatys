@@ -213,11 +213,16 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const { data: allConnections = [] } = useQuery({
     queryKey: ['filter-connections'],
     queryFn: async () => {
-      const { data } = await supabase.from('connection_configs').select('id, label, connection_id').eq('is_connected', true);
-      return (data || []).map(c => ({ id: c.id, label: c.label, connection_id: c.connection_id })) as ConnectionInfo[];
+      const { data } = await supabase.from('connection_configs').select('id, label, connection_id, config').eq('is_connected', true);
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        label: c.label || c.config?.instance_name || c.config?.phone_number || 'Sem nome',
+        connection_id: c.connection_id,
+      })) as ConnectionInfo[];
     },
     staleTime: 300_000,
   });
+
 
   // Compute effective connection IDs based on tab + manual filter
   const effectiveConnectionIds = useMemo(() => {
