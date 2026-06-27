@@ -329,7 +329,7 @@ async function processMessageEvent(supabase: any, payload: any) {
   const allowed = ["text", "image", "document", "audio", "video"];
   const normalizedType = allowed.includes(messageType) ? messageType : "text";
 
-  const { error: msgErr } = await supabase.from("messages").insert({
+  const { data: insertedMsg, error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     content,
     sender_type: fromMe ? "agent" : "customer",
@@ -338,12 +338,25 @@ async function processMessageEvent(supabase: any, payload: any) {
     status: fromMe ? "sent" : "delivered",
     provider_message_id: providerMsgId,
     sender_label: fromMe ? "whatsapp" : null,
-  });
+  }).select("id").single();
 
   if (msgErr) {
     console.error("[evolution-webhook] insert message error:", msgErr);
     return;
   }
+
+  // If media is an encrypted WhatsApp URL (.enc), decrypt via Evolution and re-host on Supabase Storage
+  if (insertedMsg && mediaUrl && /mmg\.whatsapp\.net|\.enc(\?|$)/.test(mediaUrl) && serverUrl && apiKey && instanceName) {
+    const decryptTask = decryptAndRehostEvolutionMedia({
+      supabase, serverUrl, apiKey, instanceName, key, msg, messageId: insertedMsg.id, messageType: normalizedType,
+    }).catch((e) => console.error("[evolution-webhook] media decrypt error:", e));
+    // @ts-ignore
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(decryptTask);
+    }
+  }
+
 
   // Trigger AI flows (best-effort)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
