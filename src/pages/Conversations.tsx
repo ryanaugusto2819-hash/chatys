@@ -128,26 +128,30 @@ const ConversationItem = memo(function ConversationItem({ conversation: c, isSel
 function ConnectionBadge({ conn }: { conn: ConnectionInfo | null }) {
   if (!conn) return null;
   const isMeta = conn.connection_id === 'whatsapp';
+  const isEvolution = conn.connection_id === 'evolution';
   const Icon = isMeta ? Globe : Smartphone;
+  const providerLabel = isMeta ? 'Meta Cloud API' : isEvolution ? 'Evolution' : 'Z-API';
+  const colorClass = isMeta
+    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+    : isEvolution
+    ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
 
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${
-            isMeta
-              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          }`}>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${colorClass}`}>
             <Icon className="h-3 w-3" />
             <span className="max-w-[100px] truncate">{conn.label}</span>
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          {conn.label} ({isMeta ? 'Meta Cloud API' : 'Z-API'})
+          {conn.label} ({providerLabel})
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+
   );
 }
 
