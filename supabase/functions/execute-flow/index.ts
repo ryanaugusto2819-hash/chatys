@@ -221,6 +221,7 @@ Deno.serve(async (req) => {
     // Resolve connection for this conversation's niche
     let resolvedConnection: Record<string, unknown> | null = null;
     let useZapi = false;
+    let useEvolution = false;
 
     if (conversation.connection_config_id) {
       const { data: directConfig } = await supabase
@@ -233,6 +234,7 @@ Deno.serve(async (req) => {
       if (directConfig) {
         resolvedConnection = directConfig.config as Record<string, unknown>;
         useZapi = directConfig.connection_id === "zapi";
+        useEvolution = directConfig.connection_id === "evolution";
       }
     }
 
@@ -251,11 +253,15 @@ Deno.serve(async (req) => {
           .eq("is_connected", true);
 
         const zapiConn = configs?.find((c: any) => c.connection_id === "zapi");
+        const evoConn = configs?.find((c: any) => c.connection_id === "evolution");
         const waConn = configs?.find((c: any) => c.connection_id === "whatsapp");
 
         if (zapiConn) {
           resolvedConnection = zapiConn.config as Record<string, unknown>;
           useZapi = true;
+        } else if (evoConn) {
+          resolvedConnection = evoConn.config as Record<string, unknown>;
+          useEvolution = true;
         } else if (waConn) {
           resolvedConnection = waConn.config as Record<string, unknown>;
         }
@@ -267,15 +273,19 @@ Deno.serve(async (req) => {
       const { data: connections } = await supabase
         .from("connection_configs")
         .select("connection_id, config, is_connected")
-        .in("connection_id", ["zapi", "whatsapp"])
+        .in("connection_id", ["zapi", "evolution", "whatsapp"])
         .eq("is_connected", true);
 
       const zapiConnection = connections?.find((c: any) => c.connection_id === "zapi");
+      const evoConnection = connections?.find((c: any) => c.connection_id === "evolution");
       const waConnection = connections?.find((c: any) => c.connection_id === "whatsapp");
 
       if (zapiConnection) {
         resolvedConnection = zapiConnection.config as Record<string, unknown>;
         useZapi = true;
+      } else if (evoConnection) {
+        resolvedConnection = evoConnection.config as Record<string, unknown>;
+        useEvolution = true;
       } else if (waConnection) {
         resolvedConnection = waConnection.config as Record<string, unknown>;
       }
@@ -291,10 +301,18 @@ Deno.serve(async (req) => {
       ? (resolvedConnection?.client_token as string) || Deno.env.get("ZAPI_CLIENT_TOKEN") || ""
       : "";
 
-    const phoneNumberId = !useZapi
+    const evoServerUrl = useEvolution
+      ? ((resolvedConnection?.server_url as string) || Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/+$/, "")
+      : "";
+    const evoInstanceName = useEvolution ? ((resolvedConnection?.instance_name as string) || "") : "";
+    const evoApiKey = useEvolution
+      ? ((resolvedConnection?.api_key as string) || Deno.env.get("EVOLUTION_API_KEY") || "")
+      : "";
+
+    const phoneNumberId = (!useZapi && !useEvolution)
       ? (resolvedConnection?.phone_number_id as string) || Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")
       : null;
-    const accessToken = !useZapi
+    const accessToken = (!useZapi && !useEvolution)
       ? (resolvedConnection?.access_token as string) || Deno.env.get("WHATSAPP_ACCESS_TOKEN")
       : null;
 
@@ -302,7 +320,11 @@ Deno.serve(async (req) => {
       return createJsonResponse({ error: "Z-API not configured" }, 500);
     }
 
-    if (!useZapi && (!phoneNumberId || !accessToken)) {
+    if (useEvolution && (!evoServerUrl || !evoInstanceName || !evoApiKey)) {
+      return createJsonResponse({ error: "Evolution not configured" }, 500);
+    }
+
+    if (!useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
       return createJsonResponse({ error: "WhatsApp not configured" }, 500);
     }
 
@@ -317,7 +339,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : "WA Cloud"}`);
+    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : useEvolution ? "Evolution" : "WA Cloud"}`);
 
     const { data: nodes } = await supabase
       .from("automation_nodes")
@@ -663,6 +685,55 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify(zapiBody),
           });
+        } else if (useEvolution) {
+          let evoEndpoint: string;
+          let evoBody: Record<string, unknown>;
+          const evoBase = `${evoServerUrl}/message`;
+          const inst = encodeURIComponent(evoInstanceName);
+
+          if (node.node_type === "audio") {
+            evoEndpoint = `${evoBase}/sendWhatsAppAudio/${inst}`;
+            evoBody = { number: phone, audio: config.media_url };
+          } else if (node.node_type === "image" || node.node_type === "video") {
+            evoEndpoint = `${evoBase}/sendMedia/${inst}`;
+            evoBody = {
+              number: phone,
+              mediatype: node.node_type === "video" ? "video" : "image",
+              media: config.media_url,
+              caption: replaceVariables((config.caption as string) || ""),
+            };
+          } else if (node.node_type === "call_button") {
+            const content = replaceVariables((config.content as string) || "");
+            const callPhone = (config.call_phone as string) || "";
+            const callButtonText = (config.call_button_text as string) || "Ligar agora";
+            evoEndpoint = `${evoBase}/sendText/${inst}`;
+            evoBody = { number: phone, text: `${content}\n\n📞 ${callButtonText}: ${callPhone}` };
+          } else {
+            const textBody = (waPayload as Record<string, unknown>).text as Record<string, unknown> | undefined;
+            const interactiveBody = (waPayload as Record<string, unknown>).interactive as Record<string, unknown> | undefined;
+            let textContent = "";
+            if (textBody) {
+              textContent = (textBody.body as string) || "";
+            } else if (interactiveBody) {
+              const body = ((interactiveBody.body as Record<string, unknown>)?.text as string) || "";
+              const action = interactiveBody.action as Record<string, unknown>;
+              const buttons = (action?.buttons as Array<Record<string, unknown>>) || [];
+              const btnText = buttons
+                .map((b, i) => `${i + 1}. ${(b.reply as Record<string, unknown>)?.title || ""}`)
+                .join("\n");
+              textContent = body + (btnText ? "\n\n" + btnText : "");
+            }
+            evoEndpoint = `${evoBase}/sendText/${inst}`;
+            evoBody = { number: phone, text: textContent };
+          }
+
+          console.log(`[execute-flow] Sending via Evolution node ${node.id} (${node.node_type}) to ${phone}`);
+
+          waResponse = await fetch(evoEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoApiKey },
+            body: JSON.stringify(evoBody),
+          });
         } else {
           console.log(`[execute-flow] Sending via WA Cloud node ${node.id} (${node.node_type}) to ${phone}`);
 
@@ -680,7 +751,7 @@ Deno.serve(async (req) => {
         console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
 
         // Validate response body beyond just HTTP status
-        sendValidation = validateSendResponse(waResponse, waResult, useZapi, node.id);
+        sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
       } catch (error) {
         console.error("[execute-flow] Send exception for node", node.id, ":", error);
         waResponse = new Response(null, { status: 500 });
@@ -766,6 +837,8 @@ Deno.serve(async (req) => {
 
       const providerMessageId = useZapi
         ? ((waResult as Record<string, unknown>)?.messageId as string | undefined) || null
+        : useEvolution
+        ? (((waResult as any)?.key?.id as string | undefined) || ((waResult as any)?.messageId as string | undefined) || null)
         : (((waResult as Record<string, unknown>)?.messages as Array<Record<string, unknown>> | undefined)?.[0]?.id as string | undefined) || null;
 
       let msgContent = "";
