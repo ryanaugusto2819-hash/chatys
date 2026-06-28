@@ -791,7 +791,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         </div>
 
         {/* Input */}
-        <div className="border-t border-border bg-card p-4 relative">
+        <div className="border-t border-border bg-card p-2 sm:p-4 relative shrink-0" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           {/* File preview */}
           {selectedFile && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-secondary/50 p-2">
