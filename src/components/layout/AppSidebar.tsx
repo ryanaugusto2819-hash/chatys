@@ -110,7 +110,12 @@ function SidebarNavItem({
   );
 }
 
-export default function AppSidebar() {
+interface AppSidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProps = {}) {
   const { user, signOut, isAdmin } = useAuth();
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
