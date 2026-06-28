@@ -110,7 +110,12 @@ function SidebarNavItem({
   );
 }
 
-export default function AppSidebar() {
+interface AppSidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProps = {}) {
   const { user, signOut, isAdmin } = useAuth();
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
@@ -162,7 +167,9 @@ export default function AppSidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r"
+      className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r transition-transform duration-300 lg:translate-x-0 ${
+        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
       style={{
         background: 'linear-gradient(180deg, #0F0A14 0%, #130D1A 60%, #0D0A12 100%)',
         borderColor: 'rgba(124,58,237,0.15)',

@@ -110,7 +110,7 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubb
       </div>
 
       <div
-        className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 ${
           msg.status === 'failed'
             ? 'bg-destructive/10 border border-destructive/30 text-destructive rounded-br-md'
             : msg.sender_type === 'agent'
@@ -732,7 +732,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   }
 
   return (
-    <div className={embedded ? "flex h-full" : "flex h-screen"}>
+    <div className={embedded ? "flex h-full min-w-0" : "flex h-[calc(100vh-3.5rem)] lg:h-screen min-w-0"}>
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <div className="flex h-16 items-center justify-between border-b border-border bg-card px-4">
@@ -769,7 +769,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         )}
 
         {/* Messages */}
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 scrollbar-thin bg-background">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 scrollbar-thin bg-background">
           {/* Load older messages */}
           {hasMore && (
             <div className="flex justify-center pb-2">
@@ -791,7 +791,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         </div>
 
         {/* Input */}
-        <div className="border-t border-border bg-card p-4 relative">
+        <div className="border-t border-border bg-card p-2 sm:p-4 relative shrink-0" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           {/* File preview */}
           {selectedFile && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-secondary/50 p-2">
