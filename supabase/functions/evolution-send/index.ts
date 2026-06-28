@@ -77,6 +77,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Fallback to global env credentials (covers auto-registered instances without per-row keys)
+    if (!serverUrl) serverUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/+$/, "");
+    if (!apiKey) apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+
     if (!serverUrl || !instanceName || !apiKey) {
       return json({ error: "Evolution credentials missing" }, 500);
     }
