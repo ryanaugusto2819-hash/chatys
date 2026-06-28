@@ -732,7 +732,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   }
 
   return (
-    <div className={embedded ? "flex h-full" : "flex h-screen"}>
+    <div className={embedded ? "flex h-full min-w-0" : "flex h-[calc(100vh-3.5rem)] lg:h-screen min-w-0"}>
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <div className="flex h-16 items-center justify-between border-b border-border bg-card px-4">
