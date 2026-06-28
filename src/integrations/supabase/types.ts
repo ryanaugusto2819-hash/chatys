@@ -356,18 +356,21 @@ export type Database = {
           created_at: string
           id: string
           tag_id: string
+          workspace_id: string
         }
         Insert: {
           contact_phone: string
           created_at?: string
           id?: string
           tag_id: string
+          workspace_id?: string
         }
         Update: {
           contact_phone?: string
           created_at?: string
           id?: string
           tag_id?: string
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -1479,6 +1482,7 @@ export type Database = {
           title: string
           type: string
           updated_at: string
+          workspace_id: string
         }
         Insert: {
           audio_url?: string | null
@@ -1490,6 +1494,7 @@ export type Database = {
           title: string
           type?: string
           updated_at?: string
+          workspace_id?: string
         }
         Update: {
           audio_url?: string | null
@@ -1501,6 +1506,7 @@ export type Database = {
           title?: string
           type?: string
           updated_at?: string
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -1561,18 +1567,21 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          workspace_id: string
         }
         Insert: {
           color?: string
           created_at?: string
           id?: string
           name: string
+          workspace_id?: string
         }
         Update: {
           color?: string
           created_at?: string
           id?: string
           name?: string
+          workspace_id?: string
         }
         Relationships: []
       }
