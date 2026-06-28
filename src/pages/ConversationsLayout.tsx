@@ -13,7 +13,7 @@ export default function ConversationsLayout() {
   };
 
   return (
-    <div className="flex h-[calc(100vh)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] lg:h-screen overflow-hidden">
       {/* Left panel - Conversation list */}
       <div className={`${id ? 'hidden lg:flex' : 'flex'} w-full lg:w-[380px] xl:w-[420px] flex-col border-r border-border shrink-0 overflow-hidden`}>
         <Conversations
