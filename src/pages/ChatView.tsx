@@ -110,7 +110,7 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubb
       </div>
 
       <div
-        className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 ${
           msg.status === 'failed'
             ? 'bg-destructive/10 border border-destructive/30 text-destructive rounded-br-md'
             : msg.sender_type === 'agent'
