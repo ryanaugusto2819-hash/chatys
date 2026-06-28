@@ -12,6 +12,61 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const cleanUrl = (url: string | null | undefined) => (url || "").replace(/\/+$/, "");
+
+const extractInstanceName = (item: any): string =>
+  item?.instance?.instanceName ||
+  item?.instance?.instance_name ||
+  item?.instanceName ||
+  item?.instance_name ||
+  item?.name ||
+  "";
+
+const extractInstanceApiKey = (item: any): string => {
+  const hash = item?.hash;
+  if (typeof hash === "string") return hash;
+  return (
+    hash?.apikey ||
+    hash?.apiKey ||
+    item?.apikey ||
+    item?.apiKey ||
+    item?.instance?.apikey ||
+    item?.instance?.apiKey ||
+    ""
+  );
+};
+
+async function resolveEvolutionInstanceKey(serverUrl: string, globalApiKey: string, instanceName: string) {
+  if (!serverUrl || !globalApiKey || !instanceName) return "";
+  try {
+    const res = await fetch(`${serverUrl}/instance/fetchInstances`, {
+      method: "GET",
+      headers: { apikey: globalApiKey, "Content-Type": "application/json" },
+    });
+    if (!res.ok) return "";
+    const data = await res.json().catch(() => null);
+    const list = Array.isArray(data) ? data : Array.isArray(data?.instances) ? data.instances : [];
+    const found = list.find(
+      (item: any) => extractInstanceName(item).toLowerCase() === instanceName.toLowerCase()
+    );
+    return extractInstanceApiKey(found);
+  } catch (err) {
+    console.error("[evolution-send] failed to resolve instance key:", err instanceof Error ? err.message : String(err));
+    return "";
+  }
+}
+
+async function callEvolution(endpoint: string, apiKey: string, body: Record<string, unknown>) {
+  const headers = { apikey: apiKey, "Content-Type": "application/json" };
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -54,7 +109,7 @@ Deno.serve(async (req) => {
         .single();
       if (cc?.connection_id === "evolution") {
         const cfg = (cc.config as any) || {};
-        serverUrl = (cfg.server_url || "").replace(/\/$/, "");
+        serverUrl = cleanUrl(cfg.server_url);
         instanceName = cfg.instance_name || "";
         apiKey = cfg.api_key || "";
       }
@@ -71,15 +126,20 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (any) {
         const cfg = (any.config as any) || {};
-        serverUrl = serverUrl || (cfg.server_url || "").replace(/\/$/, "");
+        serverUrl = serverUrl || cleanUrl(cfg.server_url);
         instanceName = instanceName || cfg.instance_name || "";
         apiKey = apiKey || cfg.api_key || "";
       }
     }
 
     // Fallback to global env credentials (covers auto-registered instances without per-row keys)
-    if (!serverUrl) serverUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/+$/, "");
-    if (!apiKey) apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+    const globalServerUrl = cleanUrl(Deno.env.get("EVOLUTION_API_URL"));
+    const globalApiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+    if (!serverUrl) serverUrl = globalServerUrl;
+    if (!apiKey) {
+      apiKey = await resolveEvolutionInstanceKey(serverUrl, globalApiKey, instanceName);
+    }
+    if (!apiKey) apiKey = globalApiKey;
 
     if (!serverUrl || !instanceName || !apiKey) {
       return json({ error: "Evolution credentials missing" }, 500);
@@ -101,13 +161,22 @@ Deno.serve(async (req) => {
       };
     }
 
-    const apiRes = await fetch(endpoint, {
-      method: "POST",
-      headers: { apikey: apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    let { res: apiRes, data: apiData } = await callEvolution(endpoint, apiKey, body);
 
-    const apiData = await apiRes.json().catch(() => ({}));
+    // Auto-registered instances may reject the global key for send operations.
+    // Resolve the per-instance key from Evolution and retry once without exposing credentials.
+    if (apiRes.status === 401 && globalApiKey && apiKey !== globalApiKey) {
+      const retry = await callEvolution(endpoint, globalApiKey, body);
+      apiRes = retry.res;
+      apiData = retry.data;
+    } else if (apiRes.status === 401 && globalApiKey) {
+      const instanceApiKey = await resolveEvolutionInstanceKey(serverUrl, globalApiKey, instanceName);
+      if (instanceApiKey && instanceApiKey !== apiKey) {
+        const retry = await callEvolution(endpoint, instanceApiKey, body);
+        apiRes = retry.res;
+        apiData = retry.data;
+      }
+    }
     const providerMsgId = apiData?.key?.id || apiData?.messageId || null;
 
     const allowed = ["text", "image", "document", "audio", "video"];
