@@ -163,14 +163,15 @@ Deno.serve(async (req) => {
 
     // Auto-registered instances may reject the global key for send operations.
     // Resolve the per-instance key from Evolution and retry once without exposing credentials.
-    if (apiRes.status === 401 && globalApiKey && apiKey !== globalApiKey) {
-      const retry = await callEvolution(endpoint, globalApiKey, body);
-      apiRes = retry.res;
-      apiData = retry.data;
-    } else if (apiRes.status === 401 && globalApiKey) {
+    if (apiRes.status === 401 && globalApiKey) {
       const instanceApiKey = await resolveEvolutionInstanceKey(serverUrl, globalApiKey, instanceName);
       if (instanceApiKey && instanceApiKey !== apiKey) {
         const retry = await callEvolution(endpoint, instanceApiKey, body);
+        apiRes = retry.res;
+        apiData = retry.data;
+      }
+      if (apiRes.status === 401 && apiKey !== globalApiKey) {
+        const retry = await callEvolution(endpoint, globalApiKey, body);
         apiRes = retry.res;
         apiData = retry.data;
       }
