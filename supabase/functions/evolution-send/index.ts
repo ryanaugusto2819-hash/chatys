@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
         const cfg = (any.config as any) || {};
         serverUrl = serverUrl || cleanUrl(cfg.server_url);
         instanceName = instanceName || cfg.instance_name || "";
-        apiKey = apiKey || cfg.api_key || "";
+        if (!apiKey && !instanceName) apiKey = cfg.api_key || "";
       }
     }
 
@@ -136,9 +136,7 @@ Deno.serve(async (req) => {
     const globalServerUrl = cleanUrl(Deno.env.get("EVOLUTION_API_URL"));
     const globalApiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
     if (!serverUrl) serverUrl = globalServerUrl;
-    if (!apiKey) {
-      apiKey = await resolveEvolutionInstanceKey(serverUrl, globalApiKey, instanceName);
-    }
+    if (!apiKey) apiKey = await resolveEvolutionInstanceKey(serverUrl, globalApiKey, instanceName);
     if (!apiKey) apiKey = globalApiKey;
 
     if (!serverUrl || !instanceName || !apiKey) {
