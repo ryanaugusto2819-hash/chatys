@@ -49,6 +49,7 @@ interface ConnectionConfig {
 const PROVIDER_NAMES: Record<string, string> = {
   whatsapp: 'WhatsApp Cloud API',
   zapi: 'Z-API (QR Code)',
+  evolution: 'Evolution API',
 };
 
 const defaultPrompt =
