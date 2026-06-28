@@ -769,7 +769,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         )}
 
         {/* Messages */}
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 scrollbar-thin bg-background">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 scrollbar-thin bg-background">
           {/* Load older messages */}
           {hasMore && (
             <div className="flex justify-center pb-2">
