@@ -63,10 +63,29 @@ Deno.serve(async (req) => {
     }
 
     // Process message events (use waitUntil so Edge runtime doesn't kill it)
-    if (event === "messages.upsert" || event === "MESSAGES_UPSERT") {
-      const task = processMessageEvent(supabase, payload).catch((err) =>
-        console.error("[evolution-webhook] process error:", err)
-      );
+    // Evolution sends history via "messages.set" (batch array) and live messages via "messages.upsert".
+    // During initial sync, "messages.upsert" may also arrive with data as an array.
+    if (
+      event === "messages.upsert" || event === "MESSAGES_UPSERT" ||
+      event === "messages.set" || event === "MESSAGES_SET"
+    ) {
+      const rawData = payload?.data;
+      const items: any[] = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.messages)
+          ? rawData.messages
+          : [rawData];
+
+      const task = (async () => {
+        for (const item of items) {
+          if (!item) continue;
+          const single = { ...payload, data: item };
+          await processMessageEvent(supabase, single).catch((err) =>
+            console.error("[evolution-webhook] process error:", err)
+          );
+        }
+      })();
+
       // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
         // @ts-ignore
