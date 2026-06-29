@@ -863,6 +863,14 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               />
             </div>
             <button
+              onClick={translateToUruguayan}
+              disabled={translating || !input.trim()}
+              title="Traduzir para espanhol (Uruguay) 🇺🇾"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-40"
+            >
+              {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
+            </button>
+            <button
               onClick={handleSend}
               disabled={sending || uploading || (!input.trim() && !selectedFile)}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
