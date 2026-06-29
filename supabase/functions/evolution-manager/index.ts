@@ -71,6 +71,9 @@ Deno.serve(async (req) => {
           instanceName,
           qrcode: true,
           integration: "WHATSAPP-BAILEYS",
+          // Pull full chat history once the device pairs
+          syncFullHistory: true,
+          alwaysOnline: false,
           webhook: {
             url: WEBHOOK_URL,
             byEvents: false,
@@ -78,6 +81,8 @@ Deno.serve(async (req) => {
             events: [
               "MESSAGES_UPSERT",
               "MESSAGES_UPDATE",
+              "MESSAGES_SET",
+              "CHATS_SET",
               "CONNECTION_UPDATE",
               "QRCODE_UPDATED",
               "SEND_MESSAGE",
@@ -96,6 +101,8 @@ Deno.serve(async (req) => {
             events: [
               "MESSAGES_UPSERT",
               "MESSAGES_UPDATE",
+              "MESSAGES_SET",
+              "CHATS_SET",
               "CONNECTION_UPDATE",
               "QRCODE_UPDATED",
               "SEND_MESSAGE",
@@ -197,6 +204,8 @@ Deno.serve(async (req) => {
             events: [
               "MESSAGES_UPSERT",
               "MESSAGES_UPDATE",
+              "MESSAGES_SET",
+              "CHATS_SET",
               "CONNECTION_UPDATE",
               "QRCODE_UPDATED",
               "SEND_MESSAGE",
