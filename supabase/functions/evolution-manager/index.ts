@@ -185,10 +185,8 @@ Deno.serve(async (req) => {
           r.status === 400 ||
           /does not exist|not found/i.test(bodyStr);
 
-        if (r.ok || notFound) {
-          return json({ success: true, alreadyGone: !r.ok });
-        }
-        return json({ error: "Failed to delete on Evolution (local removed)", detail: r.data }, r.status);
+        // Local row is already removed; never fail the client.
+        return json({ success: true, alreadyGone: !r.ok, remoteStatus: r.status, remoteDetail: r.ok ? null : r.data });
       }
 
 
