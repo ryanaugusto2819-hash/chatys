@@ -1,0 +1,1 @@
+UPDATE public.connection_configs SET label='wpp09', status='active' WHERE id='11c761bc-00ea-4448-aded-6d5cb8604770';
