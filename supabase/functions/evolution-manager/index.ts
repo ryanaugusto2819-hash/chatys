@@ -204,6 +204,8 @@ Deno.serve(async (req) => {
             events: [
               "MESSAGES_UPSERT",
               "MESSAGES_UPDATE",
+              "MESSAGES_SET",
+              "CHATS_SET",
               "CONNECTION_UPDATE",
               "QRCODE_UPDATED",
               "SEND_MESSAGE",
