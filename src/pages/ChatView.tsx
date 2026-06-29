@@ -141,11 +141,11 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubb
 
         {/* Audio */}
         {msg.message_type === 'audio' && msg.media_url && (
-          <div className={`mb-1.5 min-w-[220px] ${msg.status === 'failed' ? 'opacity-50' : ''}`}>
-            <audio controls preload="metadata" className="w-full h-10 rounded-lg" style={{ filter: msg.sender_type === 'agent' && msg.status !== 'failed' ? 'invert(1) hue-rotate(180deg)' : 'none' }}>
-              <source src={msg.media_url} />
-            </audio>
-          </div>
+          <AudioPlayer
+            src={msg.media_url}
+            inverted={msg.sender_type === 'agent' && msg.status !== 'failed'}
+            failed={msg.status === 'failed'}
+          />
         )}
 
         {/* Audio without media_url — show transcription or fallback */}
