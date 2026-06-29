@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText, Languages } from 'lucide-react';
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
 import BetLeadPanel from '@/components/chat/BetLeadPanel';
@@ -264,6 +264,27 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const id = conversationId || paramId;
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [translating, setTranslating] = useState(false);
+
+  const translateToUruguayan = async () => {
+    if (!input.trim() || translating) return;
+    setTranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-message', {
+        body: { text: input, target: 'es-UY' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.translation) {
+        setInput(data.translation);
+        toast.success('Traduzido para espanhol uruguaio');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao traduzir');
+    } finally {
+      setTranslating(false);
+    }
+  };
   const [conversation, setConversation] = useState<ConversationData | null>(null);
   const [convLoading, setConvLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -841,6 +862,14 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 className="w-full resize-none rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            <button
+              onClick={translateToUruguayan}
+              disabled={translating || !input.trim()}
+              title="Traduzir para espanhol (Uruguay) 🇺🇾"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-40"
+            >
+              {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
+            </button>
             <button
               onClick={handleSend}
               disabled={sending || uploading || (!input.trim() && !selectedFile)}
