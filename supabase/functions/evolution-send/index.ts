@@ -181,6 +181,18 @@ Deno.serve(async (req) => {
     const allowed = ["text", "image", "document", "audio", "video"];
     const normalizedType = allowed.includes(type) ? type : "text";
 
+    const errorDetail = apiRes.ok
+      ? null
+      : (apiData?.response?.message || apiData?.message || apiData?.error || `HTTP ${apiRes.status}`);
+    const errorPayload = apiRes.ok
+      ? null
+      : JSON.stringify({
+          code: apiRes.status,
+          title: "Evolution API",
+          message: Array.isArray(errorDetail) ? errorDetail.join(" • ") : String(errorDetail),
+          error_data: { details: typeof apiData === "string" ? apiData : JSON.stringify(apiData).slice(0, 500) },
+        });
+
     const savedMessage = {
       conversation_id: conversationId,
       content: message ?? "",
@@ -189,6 +201,8 @@ Deno.serve(async (req) => {
       media_url: mediaUrl,
       status: apiRes.ok ? "sent" : "failed",
       provider_message_id: providerMsgId,
+      provider_status: apiRes.ok ? null : String(apiRes.status),
+      provider_error: errorPayload,
       sender_agent_id: senderAgentId,
       sender_label: senderLabel,
     };
@@ -196,11 +210,14 @@ Deno.serve(async (req) => {
     const { data: inserted } = await supabase.from("messages").insert(savedMessage).select().single();
 
     if (!apiRes.ok) {
+      // Return 200 so the frontend can read the structured error instead of crashing on a 502.
       return json({
         success: false,
-        error: apiData?.response?.message || apiData?.error || `HTTP ${apiRes.status}`,
+        error: Array.isArray(errorDetail) ? errorDetail.join(" • ") : String(errorDetail),
+        providerStatus: apiRes.status,
+        providerResponse: apiData,
         savedMessage: inserted,
-      }, 502);
+      }, 200);
     }
 
     await supabase
