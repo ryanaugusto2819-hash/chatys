@@ -264,6 +264,27 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const id = conversationId || paramId;
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [translating, setTranslating] = useState(false);
+
+  const translateToUruguayan = async () => {
+    if (!input.trim() || translating) return;
+    setTranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-message', {
+        body: { text: input, target: 'es-UY' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.translation) {
+        setInput(data.translation);
+        toast.success('Traduzido para espanhol uruguaio');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao traduzir');
+    } finally {
+      setTranslating(false);
+    }
+  };
   const [conversation, setConversation] = useState<ConversationData | null>(null);
   const [convLoading, setConvLoading] = useState(true);
   const [sending, setSending] = useState(false);
