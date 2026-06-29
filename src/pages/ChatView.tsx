@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText, Languages } from 'lucide-react';
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
 import BetLeadPanel from '@/components/chat/BetLeadPanel';
