@@ -121,9 +121,20 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubb
       >
         {/* Failed banner */}
         {msg.status === 'failed' && (
-          <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-destructive/20">
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-            <span className="text-[11px] font-medium text-destructive">Falha no envio</span>
+          <div className="mb-2 pb-1.5 border-b border-destructive/20">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+              <span className="text-[11px] font-medium text-destructive">
+                Falha no envio{providerError?.code ? ` (cód. ${providerError.code})` : ''}
+              </span>
+            </div>
+            {(providerError?.title || providerError?.message || providerError?.details) && (
+              <div className="mt-1 text-[11px] leading-snug text-destructive/90 space-y-0.5">
+                {providerError.title && <div className="font-medium">{providerError.title}</div>}
+                {providerError.message && <div>{providerError.message}</div>}
+                {providerError.details && <div className="opacity-80">{providerError.details}</div>}
+              </div>
+            )}
           </div>
         )}
 
