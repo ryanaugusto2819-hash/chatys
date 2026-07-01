@@ -162,7 +162,7 @@ async function generateTermoPDF(vars: {
   drawSectionTitle("I. CONSEQUENCIAS DO INADIMPLEMENTO:");
 
   drawParagraph(
-    "Em caso de inadimplemento (falta de pagamento), sera aplicada uma multa de 10% sobre o valor da compra, juros de 1% ao mes, correcao monetaria com base no IGPM-FGV, e honorarios advocaticios no percentual de 20% sobre o valor total devido."
+    "Em caso de inadimplemento (falta de pagamento), sera aplicada uma multa de 10% ao mes sobre o valor da compra. Caso o pagamento nao seja realizado ate a data de vencimento, sera cobrada uma multa fixa de R$ 150,00. Alem disso, incidirao juros de 1% ao mes, correcao monetaria com base no IGPM-FGV, e honorarios advocaticios no percentual de 20% sobre o valor total devido."
   );
 
   drawParagraph(
