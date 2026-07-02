@@ -27,12 +27,8 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
-const PAGAMENTO_OPTS = ['Pendente', 'Pago', 'Estornado', 'Reembolsado'];
-const ENVIO_OPTS = ['Não Enviado', 'Enviado', 'Em Trânsito', 'Entregue'];
-const STATUS_COBRANCA_OPTS = ['Pendente', 'Em Atraso', 'Quitado', 'Cancelado'];
-const FORMA_PGTO_OPTS = ['Pix', 'Cartão', 'Boleto', 'Dinheiro', 'Transferência'];
-const LOGISTICA_OPTS = ['Correios', 'Transportadora', 'Motoboy', 'Retirada'];
-const WPP_COBRANCA_OPTS = ['Pendente', 'Enviado', 'Respondido', 'Concluído'];
+// Options are loaded dynamically from the LibertyPOS proxy.
+type OptionsMap = Record<string, string[]>;
 
 const badgeColor = (v?: string) => {
   const s = (v || '').toLowerCase();
