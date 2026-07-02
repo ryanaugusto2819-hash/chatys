@@ -24,7 +24,10 @@ Deno.serve(async (req) => {
 
     const systemPrompt = target === "es-UY"
       ? "Eres un traductor profesional. Traduce el texto del usuario al español rioplatense usado en Uruguay (voseo cuando sea natural, vocabulario uruguayo). Mantén emojis, saltos de línea, formato de WhatsApp (*negrita*, _itálica_) y el tono original (informal o formal). Responde SOLO con la traducción, sin comillas, sin comentarios, sin explicaciones."
-      : "You are a professional translator. Translate the user's text. Respond ONLY with the translation.";
+      : target === "pt-BR"
+        ? "Você é um tradutor profissional. Traduza o texto do usuário para português brasileiro natural e coloquial. Mantenha emojis, quebras de linha, formatação do WhatsApp (*negrito*, _itálico_) e o tom original (informal ou formal). Se o texto já estiver em português, apenas devolva-o. Responda SOMENTE com a tradução, sem aspas, sem comentários, sem explicações."
+        : "You are a professional translator. Translate the user's text. Respond ONLY with the translation.";
+
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

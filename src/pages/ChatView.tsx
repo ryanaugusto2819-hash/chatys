@@ -74,7 +74,28 @@ interface MessageBubbleProps {
 const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const providerError = parseProviderError(msg.provider_error);
+
+  const handleTranslate = async () => {
+    if (translation) { setTranslation(null); return; }
+    if (!msg.content?.trim()) return;
+    setTranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-message', {
+        body: { text: msg.content, target: 'pt-BR' },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setTranslation((data as any)?.translation || '');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao traduzir');
+    } finally {
+      setTranslating(false);
+    }
+  };
+
 
   return (
     <div
@@ -102,15 +123,33 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => setConfirming(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-card/80 border border-border shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground backdrop-blur-sm"
-            title="Excluir mensagem"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          <div className="flex items-center gap-1">
+            {msg.content?.trim() && (
+              <button
+                onClick={handleTranslate}
+                disabled={translating}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border border-border shadow-sm transition-colors backdrop-blur-sm ${
+                  translation
+                    ? 'bg-primary/15 text-primary hover:bg-primary/25'
+                    : 'bg-card/80 text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                }`}
+                title={translation ? 'Ocultar tradução' : 'Traduzir para português'}
+              >
+                {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Languages className="h-3 w-3" />}
+              </button>
+            )}
+            <button
+              onClick={() => setConfirming(true)}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-card/80 border border-border shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground backdrop-blur-sm"
+              title="Excluir mensagem"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         )}
       </div>
+
+
 
       <div
         className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 ${
@@ -206,6 +245,23 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
         {msg.content && msg.message_type !== 'document' && !(msg.message_type === 'audio' && msg.media_url && !msg.content.trim()) && (
           <p className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.status === 'failed' ? 'text-destructive/80' : ''}`}>{msg.content}</p>
         )}
+
+        {/* Inline translation */}
+        {translation !== null && (
+          <div className={`mt-1.5 pt-1.5 border-t text-sm leading-relaxed whitespace-pre-wrap ${
+            msg.sender_type === 'agent'
+              ? 'border-primary-foreground/25 text-primary-foreground/90'
+              : 'border-border text-card-foreground/90'
+          }`}>
+            <div className={`mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${
+              msg.sender_type === 'agent' ? 'text-primary-foreground/60' : 'text-primary/80'
+            }`}>
+              <Languages className="h-2.5 w-2.5" /> PT-BR
+            </div>
+            {translation || <span className="italic opacity-60">Sem tradução</span>}
+          </div>
+        )}
+
 
         {/* Fallback for image/video without URL and no content */}
         {(['image', 'video'].includes(msg.message_type)) && !msg.media_url && !msg.content && (
