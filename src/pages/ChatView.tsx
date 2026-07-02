@@ -1412,6 +1412,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               {/* Pinned Flow Shortcuts */}
               <PinnedFlowShortcuts conversationId={id!} />
 
+              {/* Pinned Quick Message Shortcuts */}
+              <PinnedQuickMessageShortcuts
+                conversationId={id!}
+                contactPhone={conversation.contact_phone}
+                onTagChanged={fetchConversation}
+              />
+
               {/* Tags */}
               <div>
                 <div className="flex items-center justify-between mb-3">
