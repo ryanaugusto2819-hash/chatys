@@ -94,21 +94,21 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
 
   const handleSave = async () => {
     if (!formTitle.trim()) return;
-    if (formType === 'text' && !formContent.trim()) return;
-    if (formType === 'audio' && !formContent) return;
-    if (formType === 'tag_action' && !formAddTagId && !formRemoveTagId) {
-      toast.error('Selecione ao menos uma etiqueta (adicionar ou remover)');
+    const hasTagAction = !!formAddTagId || !!formRemoveTagId;
+    if (formType === 'text' && !formContent.trim() && !hasTagAction) {
+      toast.error('Adicione um texto ou uma ação de etiqueta');
       return;
     }
+    if (formType === 'audio' && !formContent) return;
 
-    const isTag = formType === 'tag_action';
+    // Persisted "type" reflects the message media type. Tag actions can coexist with text or audio.
     const payload: any = {
       title: formTitle,
-      content: isTag || formType === 'audio' ? (formType === 'audio' ? formContent : '') : formContent,
-      type: formType,
+      content: formContent || '',
+      type: formType === 'audio' ? 'audio' : 'text',
       shortcut: formShortcut || null,
-      add_tag_id: isTag ? (formAddTagId || null) : null,
-      remove_tag_id: isTag ? (formRemoveTagId || null) : null,
+      add_tag_id: formAddTagId || null,
+      remove_tag_id: formRemoveTagId || null,
       tag_id: null,
     };
 
