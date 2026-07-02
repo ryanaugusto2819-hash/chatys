@@ -1458,10 +1458,10 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <PinnedFlowShortcuts conversationId={id!} />
 
               {/* LibertyPOS pedidos - apenas na aba Cobrança */}
-              {(typeof window !== 'undefined' &&
-                localStorage.getItem('conversations-active-tab') === 'cobranca') && (
+              {activeSectorTab === 'cobranca' && (
                 <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
               )}
+
 
 
 
