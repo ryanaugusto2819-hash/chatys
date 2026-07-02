@@ -81,10 +81,18 @@ export default function PinnedFlowShortcuts({ conversationId, preferredCategory 
 
   useEffect(() => {
     if (grouped.length === 0) return;
+    // If a preferred category matches an existing group, force-select it (e.g. Cobrança tab)
+    if (preferredCategory) {
+      const match = grouped.find(g => g.label.toLowerCase() === preferredCategory.toLowerCase());
+      if (match && activeCategory !== match.label) {
+        selectCategory(match.label);
+        return;
+      }
+    }
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
       selectCategory(grouped[0].label);
     }
-  }, [grouped, activeCategory]);
+  }, [grouped, activeCategory, preferredCategory]);
 
   const runFlow = async (flow: PinnedFlow) => {
     if (executing) return;
