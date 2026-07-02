@@ -162,6 +162,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormTitle(msg.title);
     setFormContent(msg.content);
     setFormShortcut(msg.shortcut || '');
+    setFormCategory(msg.category || '');
     const k = kindOf(msg);
     setFormType(k);
     if (k === 'tag_action') {
