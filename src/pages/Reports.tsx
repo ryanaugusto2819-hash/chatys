@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import TopBar from '@/components/layout/TopBar';
 import { useLeadMonitor, LeadPeriod } from '@/hooks/useLeadMonitor';
+import FunnelReport from '@/components/reports/FunnelReport';
 
 const PERIODS: { key: LeadPeriod; label: string }[] = [
   { key: 'hoje',  label: 'Hoje' },
@@ -115,6 +116,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Reports() {
   const [period, setPeriod] = useState<LeadPeriod>('hoje');
+  const [tab, setTab] = useState<'leads' | 'funil'>('leads');
   const { data, isLoading, refetch, isFetching } = useLeadMonitor(period);
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
@@ -126,6 +128,30 @@ export default function Reports() {
       <TopBar title="Relatórios" subtitle="Monitoramento de Leads" />
 
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
+
+        {/* ── Tabs ── */}
+        <div className="flex items-center gap-1.5 border-b border-border">
+          {([
+            { key: 'leads', label: 'Leads' },
+            { key: 'funil', label: 'Funil de Etapas' },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-4 py-2 text-sm font-semibold border-b-2 transition-colors -mb-px"
+              style={
+                tab === t.key
+                  ? { color: '#C4B5FD', borderColor: '#7C3AED' }
+                  : { color: 'hsl(var(--muted-foreground))', borderColor: 'transparent' }
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'funil' ? <FunnelReport /> : <>
+
 
         {/* ── Filter bar ── */}
         <div className="flex flex-wrap items-center justify-between gap-3">
