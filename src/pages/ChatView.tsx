@@ -1094,7 +1094,11 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       <div className="hidden lg:flex w-80 flex-col border-l border-border bg-card overflow-y-auto">
         {conversation ? (
           activeSectorTab === 'cobranca' ? (
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 p-4 overflow-y-auto space-y-4">
+              <PinnedFlowShortcuts
+                conversationId={id!}
+                sector="cobranca"
+              />
               <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
             </div>
           ) : (
