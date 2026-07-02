@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText, Languages } from 'lucide-react';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText, Languages, Eye, EyeOff } from 'lucide-react';
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
 import BetLeadPanel from '@/components/chat/BetLeadPanel';
@@ -327,6 +328,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [motoboyCity, setMotoboyCity] = useState('');
   const [motoboyResult, setMotoboyResult] = useState<string | null>(null);
   const [blockedConnections, setBlockedConnections] = useState<{ id: string; label: string; status: string }[]>([]);
+  const { currentWorkspace } = useWorkspace();
+  const [rmkTag, setRmkTag] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [rmkLoading, setRmkLoading] = useState(false);
 
   // Reset termo state when conversation changes
   useEffect(() => {
@@ -457,6 +461,46 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
     return () => { supabase.removeChannel(channel); };
   }, [id]);
+
+  // Fetch RMK tag for quick toggle
+  const fetchRmkTag = useCallback(async () => {
+    if (!currentWorkspace) return;
+    const { data } = await supabase
+      .from('tags')
+      .select('id, name, color')
+      .eq('name', 'RMK')
+      .eq('workspace_id', currentWorkspace.id)
+      .maybeSingle();
+    if (data) setRmkTag(data);
+    else setRmkTag(null);
+  }, [currentWorkspace]);
+
+  useEffect(() => {
+    fetchRmkTag();
+  }, [fetchRmkTag]);
+
+  const toggleRmkTag = async () => {
+    if (!rmkTag || !conversation) return;
+    setRmkLoading(true);
+    try {
+      const isAssigned = contactTags.some(ct => ct.tag.id === rmkTag.id);
+      if (isAssigned) {
+        const ct = contactTags.find(ct => ct.tag.id === rmkTag.id);
+        if (ct) {
+          await supabase.from('contact_tags').delete().eq('id', ct.id);
+          toast.success('Etiqueta RMK removida');
+        }
+      } else {
+        await supabase.from('contact_tags').insert({ contact_phone: conversation.contact_phone, tag_id: rmkTag.id });
+        toast.success('Etiqueta RMK adicionada');
+      }
+      fetchConversation();
+    } catch {
+      toast.error('Erro ao alterar etiqueta RMK');
+    } finally {
+      setRmkLoading(false);
+    }
+  };
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1457,6 +1501,26 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     <p className="text-xs text-muted-foreground text-center py-1">Sem etiquetas</p>
                   )}
                 </div>
+                {rmkTag && (
+                  <button
+                    onClick={toggleRmkTag}
+                    disabled={rmkLoading}
+                    className={`mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-medium transition-colors ${
+                      contactTags.some(ct => ct.tag.id === rmkTag.id)
+                        ? 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30'
+                        : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
+                    }`}
+                  >
+                    {rmkLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : contactTags.some(ct => ct.tag.id === rmkTag.id) ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                    RMK
+                  </button>
+                )}
               </div>
 
               {/* Conversation Info */}
