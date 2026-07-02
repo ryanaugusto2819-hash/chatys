@@ -312,7 +312,6 @@ export default function SalesRanking() {
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
   const totalQty    = stats.reduce((s, v) => s + v.totalQuantidade, 0);
   const maxValor    = stats[0]?.totalValor || 1;
-  const top3        = stats.slice(0, 3);
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
   const currencySymbol = country === 'uruguay' ? '$U ' : 'R$ ';
@@ -614,70 +613,6 @@ export default function SalesRanking() {
         </motion.div>
       )}
 
-      {/* ── Podium top 3 ── */}
-      {!loading && top3.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider mb-3 text-muted-foreground">
-            Pódio — {activePeriodLabel}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {top3.map((vendor, i) => {
-              const rs = RANK_STYLES[i];
-              const barPct = Math.round((vendor.totalValor / maxValor) * 100);
-              return (
-                <motion.div
-                  key={vendor.vendedor}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.42, delay: i * 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  className="rounded-2xl p-5 flex flex-col gap-3 relative overflow-hidden"
-                  style={{ background: rs.bg, border: `1px solid ${rs.border}` }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl">{rs.badge}</span>
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                      style={{ color: rs.nameColor, background: rs.border.replace('0.3)', '0.12)').replace('0.25)', '0.12)'), border: `1px solid ${rs.border}` }}
-                    >
-                      {rs.label}
-                    </span>
-                  </div>
-
-                  <div>
-                    <p className="text-base font-bold truncate" style={{ color: rs.nameColor }}>
-                      {vendor.vendedor}
-                    </p>
-                    <p className="text-xl font-bold tabular-nums text-card-foreground mt-0.5">
-                      {formatCurrency(vendor.totalValor)}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 flex-wrap">
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ShoppingBag className="h-3 w-3" style={{ color: rs.barColor }} />
-                      {vendor.totalPedidos} pedidos
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Package className="h-3 w-3" style={{ color: rs.barColor }} />
-                      {vendor.totalQuantidade} un.
-                    </span>
-                  </div>
-
-                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: `linear-gradient(90deg, ${rs.barColor}, ${rs.barColor}88)` }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${barPct}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.12 + 0.3, ease: 'easeOut' }}
-                    />
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ── Full ranking table ── */}
       {!loading && stats.length > 0 && (
