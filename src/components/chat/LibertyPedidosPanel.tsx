@@ -178,7 +178,7 @@ function PedidoCard({
   onDelete: () => void;
   saving: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [local, setLocal] = useState<Pedido>(pedido);
   useEffect(() => setLocal(pedido), [pedido]);
 
@@ -201,10 +201,19 @@ function PedidoCard({
   const paisOptions = ['Brasil', 'Uruguay'];
   const paisCurrent = String(val('pais', 'country') || '');
 
-  const fmtPhone = (p: string) => {
+  const fmtPhone = (p: string, pais: string) => {
     const d = p.replace(/\D/g, '');
-    if (d.length >= 12) return `+${d.slice(0, d.length - 10)} (${d.slice(-10, -8)}) ${d.slice(-8, -4)}-${d.slice(-4)}`;
-    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    const country = pais.toLowerCase();
+    // Uruguay: +598 9 XXX XX XX (mobile) or +598 X XXX XXXX
+    if (country.startsWith('uru') || country === 'uy') {
+      const local = d.startsWith('598') ? d.slice(3) : d;
+      if (local.length === 8) return `+598 ${local.slice(0, 1)} ${local.slice(1, 4)} ${local.slice(4, 6)} ${local.slice(6)}`;
+      return `+598 ${local}`;
+    }
+    // Brasil: +55 (XX) XXXXX-XXXX
+    const local = d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
+    if (local.length === 11) return `+55 (${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    if (local.length === 10) return `+55 (${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
     return p;
   };
 
@@ -212,49 +221,52 @@ function PedidoCard({
     <div className="rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/40">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full p-3 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
+        className="w-full p-4 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
       >
-        <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="text-[12px] font-semibold text-foreground truncate">{cliente}</div>
+            <div className="text-sm font-semibold text-foreground truncate">{cliente}</div>
             {paisCurrent && (
-              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 shrink-0 uppercase tracking-wide">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 shrink-0 uppercase tracking-wide">
                 {paisCurrent}
               </span>
             )}
           </div>
-          <div className="text-[11px] text-muted-foreground truncate">{produto}</div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {valor != null && (
-              <span className="text-[11px] font-semibold text-primary">
-                R$ {Number(valor).toFixed(2).replace('.', ',')}
-              </span>
-            )}
+          <div className="text-xs text-muted-foreground truncate">{produto}</div>
+
+          {valor != null && (
+            <div className="text-lg font-bold text-primary leading-none">
+              R$ {Number(valor).toFixed(2).replace('.', ',')}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-0.5 pt-0.5">
             {telefone && (
-              <span className="text-[10px] text-muted-foreground">
-                {fmtPhone(String(telefone))}
+              <span className="text-xs text-foreground/90 font-medium">
+                {fmtPhone(String(telefone), paisCurrent)}
               </span>
             )}
             {entrada && (
-              <span className="text-[10px] text-muted-foreground/70">
+              <span className="text-[10px] text-muted-foreground">
                 {new Date(entrada).toLocaleDateString('pt-BR')}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-wrap pt-0.5">
+
+          <div className="flex items-center gap-1 flex-wrap pt-1">
             {val('status_cobranca') && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_cobranca'))))}>
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_cobranca'))))}>
                 {String(val('status_cobranca'))}
               </span>
             )}
             {val('status_envio', 'envio') && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_envio', 'envio'))))}>
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_envio', 'envio'))))}>
                 {String(val('status_envio', 'envio'))}
               </span>
             )}
           </div>
         </div>
-        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" />}
+        {expanded ? <ChevronDown className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" />}
       </button>
 
       {expanded && (
@@ -270,7 +282,6 @@ function PedidoCard({
             <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
           </div>
 
-          <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />
 
 
 
