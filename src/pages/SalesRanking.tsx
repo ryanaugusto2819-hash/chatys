@@ -436,26 +436,6 @@ export default function SalesRanking() {
           loading={kpiLoading}
         />
         <KpiCard
-          title="Meta do Dia"
-          value={formatCurrency(metaDia)}
-          pct={kpis ? pctChange(kpis.receitaTotal, metaDia) : 0}
-          icon={Target}
-          accentColor="#F59E0B"
-          iconBg="rgba(245,158,11,0.15)"
-          delay={0.2}
-          loading={kpiLoading}
-        />
-        <KpiCard
-          title="Meta do Mês"
-          value={formatCurrency(metaMes)}
-          pct={kpis ? pctChange(kpis.receitaTotal, metaMes) : 0}
-          icon={Target}
-          accentColor="#F59E0B"
-          iconBg="rgba(245,158,11,0.15)"
-          delay={0.25}
-          loading={kpiLoading}
-        />
-        <KpiCard
           title="Taxa de Conversão"
           value={kpis ? `${kpis.taxaConversao}%` : '—'}
           pct={kpis ? pctChange(kpis.taxaConversao, kpis.taxaConversaoPrev) : 0}
