@@ -1478,9 +1478,11 @@ export type Database = {
         Row: {
           add_tag_id: string | null
           audio_url: string | null
+          category: string | null
           content: string
           created_at: string
           id: string
+          is_pinned_sidebar: boolean
           remove_tag_id: string | null
           shortcut: string | null
           sort_order: number
@@ -1493,9 +1495,11 @@ export type Database = {
         Insert: {
           add_tag_id?: string | null
           audio_url?: string | null
+          category?: string | null
           content?: string
           created_at?: string
           id?: string
+          is_pinned_sidebar?: boolean
           remove_tag_id?: string | null
           shortcut?: string | null
           sort_order?: number
@@ -1508,9 +1512,11 @@ export type Database = {
         Update: {
           add_tag_id?: string | null
           audio_url?: string | null
+          category?: string | null
           content?: string
           created_at?: string
           id?: string
+          is_pinned_sidebar?: boolean
           remove_tag_id?: string | null
           shortcut?: string | null
           sort_order?: number
