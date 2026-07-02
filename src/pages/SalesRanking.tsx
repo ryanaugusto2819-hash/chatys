@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
   Package, CalendarDays, TrendingUp, TrendingDown,
-  Facebook, Percent, Settings, X, Check, Globe,
+  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesKPIs, pctChange } from '@/hooks/useSalesKPIs';
+import { usePendingTagCounts } from '@/hooks/usePendingTagCounts';
+
 
 interface VendorStats {
   vendedor: string;
