@@ -27,12 +27,8 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
-const PAGAMENTO_OPTS = ['Pendente', 'Pago', 'Estornado', 'Reembolsado'];
-const ENVIO_OPTS = ['Não Enviado', 'Enviado', 'Em Trânsito', 'Entregue'];
-const STATUS_COBRANCA_OPTS = ['Pendente', 'Em Atraso', 'Quitado', 'Cancelado'];
-const FORMA_PGTO_OPTS = ['Pix', 'Cartão', 'Boleto', 'Dinheiro', 'Transferência'];
-const LOGISTICA_OPTS = ['Correios', 'Transportadora', 'Motoboy', 'Retirada'];
-const WPP_COBRANCA_OPTS = ['Pendente', 'Enviado', 'Respondido', 'Concluído'];
+// Options are loaded dynamically from the LibertyPOS proxy.
+type OptionsMap = Record<string, string[]>;
 
 const badgeColor = (v?: string) => {
   const s = (v || '').toLowerCase();
@@ -56,6 +52,20 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
     enabled: !!phone,
     staleTime: 15_000,
   });
+
+  const { data: optionsMap } = useQuery({
+    queryKey: ['libertypos-options'],
+    queryFn: async () => {
+      const res = await call({ action: 'options' });
+      return ((res as any)?.options || {}) as OptionsMap;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const opts = optionsMap || {};
+  const pick = (...keys: string[]) => {
+    for (const k of keys) if (opts[k]?.length) return opts[k];
+    return [] as string[];
+  };
 
   const upsert = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
@@ -140,6 +150,14 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
             <PedidoCard
               key={p.id}
               pedido={p}
+              options={{
+                status_cobranca: pick('status_cobranca'),
+                status_pagamento: pick('status_pagamento', 'pagamento'),
+                forma_pagamento: pick('forma_pagamento', 'forma_pgto'),
+                logistica: pick('logistica', 'tipo_entrega'),
+                status_envio: pick('status_envio', 'envio'),
+                wpp_cobranca: pick('wpp_cobranca'),
+              }}
               onPatch={(patch) => upsert.mutate({ id: p.id, patch })}
               onDelete={() => remove.mutate(p.id)}
               saving={upsert.isPending}
@@ -152,9 +170,10 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
 }
 
 function PedidoCard({
-  pedido, onPatch, onDelete, saving,
+  pedido, options, onPatch, onDelete, saving,
 }: {
   pedido: Pedido;
+  options: Record<string, string[]>;
   onPatch: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
   saving: boolean;
@@ -215,12 +234,13 @@ function PedidoCard({
 
       {expanded && (
         <div className="p-2.5 pt-0 space-y-2 border-t border-border/60">
-          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={STATUS_COBRANCA_OPTS} onChange={(v) => patch('status_cobranca', v)} />
-          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={PAGAMENTO_OPTS} onChange={(v) => patch('status_pagamento', v)} />
-          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={FORMA_PGTO_OPTS} onChange={(v) => patch('forma_pagamento', v)} />
-          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={LOGISTICA_OPTS} onChange={(v) => patch('logistica', v)} />
-          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={ENVIO_OPTS} onChange={(v) => patch('status_envio', v)} />
-          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={WPP_COBRANCA_OPTS} onChange={(v) => patch('wpp_cobranca', v)} />
+          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
+          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={options.status_pagamento} onChange={(v) => patch('status_pagamento', v)} />
+          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={options.forma_pagamento} onChange={(v) => patch('forma_pagamento', v)} />
+          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={options.logistica} onChange={(v) => patch('logistica', v)} />
+          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={options.status_envio} onChange={(v) => patch('status_envio', v)} />
+          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
+
 
           <TextField label="Rastreamento" value={String(val('codigo_rastreamento', 'rastreamento'))} onCommit={(v) => patch('codigo_rastreamento', v)} />
           <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />

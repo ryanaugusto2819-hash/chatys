@@ -6,7 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-type Action = 'list' | 'get' | 'create' | 'update' | 'delete';
+type Action = 'list' | 'get' | 'create' | 'update' | 'delete' | 'options';
+
+const OPTION_FIELDS = [
+  'status_cobranca',
+  'status_pagamento', 'pagamento',
+  'forma_pagamento', 'forma_pgto',
+  'logistica', 'tipo_entrega',
+  'status_envio', 'envio',
+  'wpp_cobranca',
+];
 
 interface Body {
   action: Action;
@@ -50,8 +59,11 @@ Deno.serve(async (req) => {
 
     // For list/get by phone, fetch ALL and filter locally by normalized digits
     // (upstream stores phones with spaces/dashes and doesn't normalize on filter).
+    // For 'options', we also fetch the full list to derive distinct values.
     const upstreamBody =
-      (body.action === 'list' || body.action === 'get') && normalizedPhone
+      body.action === 'options'
+        ? { action: 'list' }
+        : (body.action === 'list' || body.action === 'get') && normalizedPhone
         ? { action: 'list' }
         : body;
 
@@ -82,6 +94,20 @@ Deno.serve(async (req) => {
         const cand = digits(row?.telefone ?? row?.phone ?? row?.whatsapp);
         return cand && (cand.endsWith(needle) || needle.endsWith(cand.slice(-8)));
       });
+    }
+
+    // Derive distinct option values per field from all upstream rows
+    if (body.action === 'options' && parsed && Array.isArray(parsed.data)) {
+      const options: Record<string, string[]> = {};
+      for (const field of OPTION_FIELDS) {
+        const set = new Set<string>();
+        for (const row of parsed.data) {
+          const v = row?.[field];
+          if (v != null && String(v).trim() !== '') set.add(String(v).trim());
+        }
+        if (set.size > 0) options[field] = Array.from(set).sort();
+      }
+      return json({ ok: true, options }, 200);
     }
 
     return json(parsed as Record<string, unknown>, 200);
