@@ -304,6 +304,20 @@ function PedidoCard({
           )}
         </div>
       )}
+
+      <PagoUruguayDialog
+        open={pagoDialog.open}
+        onOpenChange={(o) => setPagoDialog((p) => ({ ...p, open: o }))}
+        newStatus={pagoDialog.newStatus}
+        contaOptions={options.conta_bancaria || []}
+        currentComprovante={String(val('comprovante', 'comprovante_pagamento') || '')}
+        currentConta={String(val('conta_bancaria', 'conta', 'banco') || '')}
+        onConfirm={(payload) => {
+          setLocal((prev) => ({ ...prev, status_pagamento: pagoDialog.newStatus, ...payload }));
+          onPatch({ status_pagamento: pagoDialog.newStatus, ...payload });
+          setPagoDialog({ open: false, newStatus: '' });
+        }}
+      />
     </div>
   );
 }
