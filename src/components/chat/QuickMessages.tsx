@@ -385,6 +385,13 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
 
                     {formType === 'tag_action' && (
                       <div className="space-y-2">
+                        <textarea
+                          value={formContent}
+                          onChange={(e) => setFormContent(e.target.value)}
+                          placeholder="Mensagem opcional (será inserida no campo de texto)..."
+                          rows={2}
+                          className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
                         {tags.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground px-1">
                             Nenhuma etiqueta cadastrada. Crie uma etiqueta primeiro no gerenciador de etiquetas.
