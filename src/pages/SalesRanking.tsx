@@ -487,7 +487,28 @@ export default function SalesRanking() {
           delay={0.35}
           loading={kpiLoading}
         />
+        <KpiCard
+          title={`Endereço Pendente${country === 'all' ? '' : country === 'brasil' ? ' • BR' : ' • UY'}`}
+          value={pending.loading ? '—' : String(enderecoPendente)}
+          pct={0}
+          icon={MapPin}
+          accentColor="#EF4444"
+          iconBg="rgba(239,68,68,0.15)"
+          delay={0.4}
+          loading={pending.loading}
+        />
+        <KpiCard
+          title={`Confirmação Pendente${country === 'all' ? '' : country === 'brasil' ? ' • BR' : ' • UY'}`}
+          value={pending.loading ? '—' : String(confirmacaoPendente)}
+          pct={0}
+          icon={ClipboardCheck}
+          accentColor="#3B82F6"
+          iconBg="rgba(59,130,246,0.15)"
+          delay={0.45}
+          loading={pending.loading}
+        />
       </div>
+
 
       {/* ── Metric cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
