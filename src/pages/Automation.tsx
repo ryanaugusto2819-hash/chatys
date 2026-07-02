@@ -341,17 +341,26 @@ export default function Automation() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => togglePinned(flow, e)}
-                            className={`transition-colors ${
-                              flow.is_pinned_sidebar
-                                ? 'text-primary hover:text-primary/80'
-                                : 'text-muted-foreground hover:text-primary'
-                            }`}
-                            title={flow.is_pinned_sidebar ? 'Desafixar da barra lateral do chat' : 'Fixar como atalho na barra lateral do chat'}
-                          >
-                            {flow.is_pinned_sidebar ? <Pin className="h-4 w-4 fill-current" /> : <PinOff className="h-4 w-4" />}
-                          </button>
+                          <div className="flex items-center gap-0.5 mr-1 rounded-md border border-border/60 bg-background/50 px-1 py-0.5">
+                            {SECTOR_OPTIONS.map((s) => {
+                              const active = (flow.pinned_sectors || []).includes(s.value);
+                              return (
+                                <button
+                                  key={s.value}
+                                  onClick={(e) => togglePinnedSector(flow, s.value, e)}
+                                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                                    active
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'text-muted-foreground hover:text-foreground'
+                                  }`}
+                                  title={active ? `Desafixar de ${s.label}` : `Fixar em ${s.label}`}
+                                >
+                                  {active ? <Pin className="inline h-2.5 w-2.5 mr-0.5 fill-current" /> : null}
+                                  {s.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/automation/${flow.id}/metrics`); }}
                             className="text-muted-foreground hover:text-primary transition-colors"
