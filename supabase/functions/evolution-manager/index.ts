@@ -189,6 +189,20 @@ Deno.serve(async (req) => {
         return json({ success: true, alreadyGone: !r.ok, remoteStatus: r.status, remoteDetail: r.ok ? null : r.data });
       }
 
+      case "restart": {
+        if (!instanceName) return json({ error: "instanceName required" }, 400);
+        const r = await evo(`/instance/restart/${instanceName}`, "PUT");
+        if (!r.ok) {
+          // Some Evolution versions expect POST
+          const r2 = await evo(`/instance/restart/${instanceName}`, "POST");
+          if (!r2.ok) return json({ error: "Failed to restart", detail: r2.data }, r2.status);
+          return json({ success: true, raw: r2.data });
+        }
+        return json({ success: true, raw: r.data });
+      }
+
+
+
 
 
       case "set_webhook": {
