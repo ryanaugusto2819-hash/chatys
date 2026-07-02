@@ -912,7 +912,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
             >
               <Paperclip className="h-4 w-4" />
             </button>
-            <QuickMessages onSelect={(content) => setInput(content)} />
+            <QuickMessages
+              onSelect={(content) => setInput(content)}
+              contactPhone={conversation?.contact_phone}
+              onTagChanged={fetchConversation}
+            />
+
             <FlowTrigger conversationId={id!} nicheId={(conversation as any)?.niche_id || null} />
             <div className="flex-1 relative">
               <textarea
