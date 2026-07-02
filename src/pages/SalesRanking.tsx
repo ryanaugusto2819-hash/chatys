@@ -293,7 +293,7 @@ export default function SalesRanking() {
   // KPIs hook
   const { from: kpiFrom, to: kpiTo } = getDateRange(period, customFrom, customTo);
   const { data: kpis, isLoading: kpiLoading } = useSalesKPIs(
-    kpiFrom, kpiTo, 0, 0, commissionRate, country === 'all' ? null : country,
+    kpiFrom, kpiTo, 0, 0, country === 'all' ? null : country,
   );
 
   // Real-time pending tag counts (endereço / confirmação, por país)

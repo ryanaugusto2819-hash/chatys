@@ -41,7 +41,7 @@ function getPrevRange(from: string | null, to: string | null): { from: string | 
 }
 
 async function fetchSalesData(from: string | null, to: string | null, pais: string | null) {
-  let query = supabase.from('sales_orders' as any).select('valor, quantidade');
+  let query = supabase.from('sales_orders' as any).select('valor, quantidade, pais');
   if (from) query = (query as any).gte('created_at', from);
   if (to)   query = (query as any).lte('created_at', to);
   if (pais) query = (query as any).eq('pais', pais);
@@ -51,8 +51,10 @@ async function fetchSalesData(from: string | null, to: string | null, pais: stri
 
   const totalValor = rows.reduce((s, r) => s + (Number(r.valor) || 0), 0);
   const count = rows.length;
+  const brCount = rows.filter(r => String(r.pais).toLowerCase() === 'brasil').length;
+  const uyCount = rows.filter(r => String(r.pais).toLowerCase() === 'uruguay').length;
 
-  return { totalValor, count };
+  return { totalValor, count, brCount, uyCount };
 }
 
 async function fetchConversationsData(from: string | null, to: string | null) {
@@ -82,11 +84,10 @@ export function useSalesKPIs(
   to: string | null,
   metaDia: number,
   metaMes: number,
-  commissionRate: number,
   pais: string | null = null,
 ) {
   return useQuery<SalesKPIs>({
-    queryKey: ['sales-kpis', from, to, metaDia, metaMes, commissionRate, pais],
+    queryKey: ['sales-kpis', from, to, metaDia, metaMes, pais],
     queryFn: async () => {
       const prev = getPrevRange(from, to);
 
@@ -101,8 +102,8 @@ export function useSalesKPIs(
       const receitaTotalPrev = previous.totalValor;
       const vendas           = current.count;
       const vendasPrev       = previous.count;
-      const comissao         = receitaTotal * commissionRate;
-      const comissaoPrev     = receitaTotalPrev * commissionRate;
+      const comissao         = current.brCount * 2 + current.uyCount * 3;
+      const comissaoPrev     = previous.brCount * 2 + previous.uyCount * 3;
       const ticketMedio      = vendas > 0 ? receitaTotal / vendas : 0;
       const ticketMedioPrev  = vendasPrev > 0 ? receitaTotalPrev / vendasPrev : 0;
 
@@ -121,7 +122,7 @@ export function useSalesKPIs(
         leadsFacebookPrev: convPrevious.total,
         metaDia,
         metaMes,
-        commissionRate,
+        commissionRate: 0,
       };
     },
     staleTime: 1000 * 60 * 2,
