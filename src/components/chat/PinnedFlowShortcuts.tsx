@@ -20,7 +20,7 @@ interface Props {
 const UNCATEGORIZED = 'Sem categoria';
 const LS_KEY = 'pinnedFlows.activeCategory';
 
-export default function PinnedFlowShortcuts({ conversationId }: Props) {
+export default function PinnedFlowShortcuts({ conversationId, preferredCategory }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [flows, setFlows] = useState<PinnedFlow[]>([]);
   const [loading, setLoading] = useState(true);
