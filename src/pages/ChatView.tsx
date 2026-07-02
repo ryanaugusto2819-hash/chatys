@@ -1420,32 +1420,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 )}
               </div>
 
-              {/* Assigned Agent */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <User className="h-3 w-3" /> Agente Responsável
-                </p>
-                <div className="rounded-lg border border-border bg-background/50 p-3">
-                  {assignedAgent ? (
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {assignedAgent.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-card-foreground">{assignedAgent.full_name}</p>
-                        <p className="text-[10px] text-muted-foreground">Atribuído</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
-                        <User className="h-3.5 w-3.5" />
-                      </div>
-                      <p className="text-xs text-muted-foreground">Nenhum agente atribuído</p>
-                    </div>
-                  )}
-                </div>
-              </div>
 
 
               {/* Tags */}
