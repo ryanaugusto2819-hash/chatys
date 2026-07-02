@@ -150,6 +150,14 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
             <PedidoCard
               key={p.id}
               pedido={p}
+              options={{
+                status_cobranca: pick('status_cobranca'),
+                status_pagamento: pick('status_pagamento', 'pagamento'),
+                forma_pagamento: pick('forma_pagamento', 'forma_pgto'),
+                logistica: pick('logistica', 'tipo_entrega'),
+                status_envio: pick('status_envio', 'envio'),
+                wpp_cobranca: pick('wpp_cobranca'),
+              }}
               onPatch={(patch) => upsert.mutate({ id: p.id, patch })}
               onDelete={() => remove.mutate(p.id)}
               saving={upsert.isPending}
