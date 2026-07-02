@@ -74,7 +74,28 @@ interface MessageBubbleProps {
 const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const providerError = parseProviderError(msg.provider_error);
+
+  const handleTranslate = async () => {
+    if (translation) { setTranslation(null); return; }
+    if (!msg.content?.trim()) return;
+    setTranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-message', {
+        body: { text: msg.content, target: 'pt-BR' },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setTranslation((data as any)?.translation || '');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao traduzir');
+    } finally {
+      setTranslating(false);
+    }
+  };
+
 
   return (
     <div
