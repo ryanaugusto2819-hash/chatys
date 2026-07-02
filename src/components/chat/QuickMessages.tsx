@@ -484,12 +484,18 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       key={msg.id}
                       className="group flex items-start gap-2 rounded-lg p-2.5 hover:bg-secondary/60 transition-colors cursor-pointer"
                       onClick={() => {
-                        if (k === 'text') {
+                        const hasTag = !!(msg.add_tag_id || msg.remove_tag_id || msg.type === 'add_tag' || msg.type === 'remove_tag' || msg.type === 'tag_action');
+                        const hasText = !!(msg.content && msg.content.trim() && msg.type !== 'audio');
+                        // Fill the input for review (text) — user will hit send.
+                        if (hasText) {
                           onSelect(msg.content);
-                          setOpen(false);
-                        } else if (k === 'tag_action') {
+                        }
+                        // Apply tag actions immediately, in parallel.
+                        if (hasTag) {
                           handleTagAction(msg);
                         }
+                        // Close panel unless nothing happened.
+                        if (hasText || hasTag) setOpen(false);
                       }}
                     >
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${typeIconBg(k)}`}>
