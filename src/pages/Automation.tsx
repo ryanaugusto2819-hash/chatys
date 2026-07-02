@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import TopBar from '@/components/layout/TopBar';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { GitBranch, Plus, Play, Pause, Trash2, Loader2, BarChart3, Copy, Tag, Pencil, FolderOpen } from 'lucide-react';
+import { GitBranch, Plus, Play, Pause, Trash2, Loader2, BarChart3, Copy, Tag, Pencil, FolderOpen, Pin, PinOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -18,6 +18,7 @@ interface FlowRow {
   created_at: string;
   updated_at: string;
   category: string | null;
+  is_pinned_sidebar?: boolean;
 }
 
 const UNCATEGORIZED = '__sem_categoria__';
@@ -119,6 +120,20 @@ export default function Automation() {
       .eq('id', flow.id);
 
     if (error) toast.error('Erro ao atualizar fluxo');
+  };
+
+  const togglePinned = async (flow: FlowRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!flow.category || !flow.category.trim()) {
+      toast.error('Defina uma categoria/nicho antes de fixar');
+      return;
+    }
+    const { error } = await supabase
+      .from('automation_flows')
+      .update({ is_pinned_sidebar: !flow.is_pinned_sidebar } as any)
+      .eq('id', flow.id);
+    if (error) toast.error('Erro ao fixar fluxo');
+    else toast.success(flow.is_pinned_sidebar ? 'Fluxo desafixado' : 'Fluxo fixado na barra lateral do chat');
   };
 
   const saveCategory = async (flowId: string) => {
@@ -309,6 +324,17 @@ export default function Automation() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => togglePinned(flow, e)}
+                            className={`transition-colors ${
+                              flow.is_pinned_sidebar
+                                ? 'text-primary hover:text-primary/80'
+                                : 'text-muted-foreground hover:text-primary'
+                            }`}
+                            title={flow.is_pinned_sidebar ? 'Desafixar da barra lateral do chat' : 'Fixar como atalho na barra lateral do chat'}
+                          >
+                            {flow.is_pinned_sidebar ? <Pin className="h-4 w-4 fill-current" /> : <PinOff className="h-4 w-4" />}
+                          </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/automation/${flow.id}/metrics`); }}
                             className="text-muted-foreground hover:text-primary transition-colors"
