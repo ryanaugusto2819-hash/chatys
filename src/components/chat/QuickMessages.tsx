@@ -369,51 +369,56 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       </div>
                     )}
 
-                    {formType === 'tag_action' && (
-                      <div className="space-y-2">
-                        {tags.length === 0 ? (
-                          <p className="text-[11px] text-muted-foreground px-1">
-                            Nenhuma etiqueta cadastrada. Crie uma etiqueta primeiro no gerenciador de etiquetas.
-                          </p>
-                        ) : (
-                          <>
-                            <div>
-                              <label className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1 block">
-                                + Adicionar etiqueta
-                              </label>
-                              <select
-                                value={formAddTagId}
-                                onChange={(e) => setFormAddTagId(e.target.value)}
-                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              >
-                                <option value="">Nenhuma</option>
-                                {tags.filter(t => t.id !== formRemoveTagId).map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1 block">
-                                − Remover etiqueta
-                              </label>
-                              <select
-                                value={formRemoveTagId}
-                                onChange={(e) => setFormRemoveTagId(e.target.value)}
-                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              >
-                                <option value="">Nenhuma</option>
-                                {tags.filter(t => t.id !== formAddTagId).map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground px-1">
-                              Selecione uma ou ambas. Ao clicar, as duas ações serão aplicadas de uma só vez.
-                            </p>
-                          </>
-                        )}
+                    {/* Tag actions — always available, coexist with text/audio */}
+                    <div className="space-y-2 rounded-lg border border-dashed border-border/60 p-2.5 bg-secondary/30">
+                      <div className="flex items-center gap-1.5">
+                        <TagIcon className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Etiquetas (opcional)
+                        </span>
                       </div>
-                    )}
+                      {tags.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Nenhuma etiqueta cadastrada. Crie uma no gerenciador de etiquetas.
+                        </p>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1 block">
+                              + Adicionar
+                            </label>
+                            <select
+                              value={formAddTagId}
+                              onChange={(e) => setFormAddTagId(e.target.value)}
+                              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">Nenhuma</option>
+                              {tags.filter(t => t.id !== formRemoveTagId).map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1 block">
+                              − Remover
+                            </label>
+                            <select
+                              value={formRemoveTagId}
+                              onChange={(e) => setFormRemoveTagId(e.target.value)}
+                              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">Nenhuma</option>
+                              {tags.filter(t => t.id !== formAddTagId).map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            As etiquetas serão aplicadas junto com o envio da mensagem.
+                          </p>
+                        </>
+                      )}
+                    </div>
 
                     <input
                       value={formShortcut}
