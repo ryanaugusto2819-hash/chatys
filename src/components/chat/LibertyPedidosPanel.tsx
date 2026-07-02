@@ -177,6 +177,7 @@ function PedidoCard({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [local, setLocal] = useState<Pedido>(pedido);
+  const [pagoDialog, setPagoDialog] = useState<{ open: boolean; newStatus: string }>({ open: false, newStatus: '' });
   useEffect(() => setLocal(pedido), [pedido]);
 
   const patch = (k: string, v: unknown) => {
