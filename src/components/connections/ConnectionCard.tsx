@@ -112,6 +112,26 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [deleting, setDeleting] = useState(false);
   const [checking, setChecking] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [restarting, setRestarting] = useState(false);
+
+  const handleRestartEvolution = async () => {
+    const instanceName = connection.config?.instance_name;
+    if (!instanceName) { toast.error('instance_name não configurado'); return; }
+    setRestarting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'restart', instanceName },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Instância reiniciada. Aguarde alguns segundos e verifique o status.');
+      setTimeout(() => onUpdated(), 3000);
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao reiniciar a instância.');
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   const provider = PROVIDER_CONFIG[connection.connection_id];
 
