@@ -10,35 +10,38 @@ interface PinnedFlow {
   name: string;
   category: string | null;
   is_active: boolean;
+  pinned_sectors: string[] | null;
 }
 
 interface Props {
   conversationId: string;
-  preferredCategory?: string | null;
+  sector?: string | null;
 }
 
 const UNCATEGORIZED = 'Sem categoria';
-const LS_KEY = 'pinnedFlows.activeCategory';
+const LS_KEY_PREFIX = 'pinnedFlows.activeCategory.';
 
-export default function PinnedFlowShortcuts({ conversationId, preferredCategory }: Props) {
+export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [flows, setFlows] = useState<PinnedFlow[]>([]);
   const [loading, setLoading] = useState(true);
+  const activeSector = sector || 'comercial';
+  const lsKey = LS_KEY_PREFIX + activeSector;
   const [activeCategory, setActiveCategory] = useState<string | null>(() => {
-    try { return localStorage.getItem(LS_KEY); } catch { return null; }
+    try { return localStorage.getItem(lsKey); } catch { return null; }
   });
   const [executing, setExecuting] = useState<string | null>(null);
 
   const selectCategory = (label: string) => {
     setActiveCategory(label);
-    try { localStorage.setItem(LS_KEY, label); } catch {}
+    try { localStorage.setItem(lsKey, label); } catch {}
   };
 
   const fetchFlows = async () => {
     setLoading(true);
     let query: any = supabase
       .from('automation_flows')
-      .select('id, name, category, is_active')
+      .select('id, name, category, is_active, pinned_sectors')
       .eq('is_pinned_sidebar', true)
       .order('name');
 
@@ -63,9 +66,23 @@ export default function PinnedFlowShortcuts({ conversationId, preferredCategory 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWorkspace?.id]);
 
+  // Reload preferred category when sector changes
+  useEffect(() => {
+    try { setActiveCategory(localStorage.getItem(lsKey)); } catch {}
+  }, [lsKey]);
+
+  const sectorFlows = useMemo(() => {
+    return flows.filter((f) => {
+      const sectors = f.pinned_sectors || [];
+      // Backward compat: no sectors set → treat as comercial
+      if (sectors.length === 0) return activeSector === 'comercial';
+      return sectors.includes(activeSector);
+    });
+  }, [flows, activeSector]);
+
   const grouped = useMemo(() => {
     const map: Record<string, PinnedFlow[]> = {};
-    flows.forEach((f) => {
+    sectorFlows.forEach((f) => {
       const key = (f.category && f.category.trim()) || UNCATEGORIZED;
       if (!map[key]) map[key] = [];
       map[key].push(f);
@@ -77,22 +94,14 @@ export default function PinnedFlowShortcuts({ conversationId, preferredCategory 
         return a.localeCompare(b);
       })
       .map(([label, items]) => ({ label, items }));
-  }, [flows]);
+  }, [sectorFlows]);
 
   useEffect(() => {
     if (grouped.length === 0) return;
-    // If a preferred category matches an existing group, force-select it (e.g. Cobrança tab)
-    if (preferredCategory) {
-      const match = grouped.find(g => g.label.toLowerCase() === preferredCategory.toLowerCase());
-      if (match && activeCategory !== match.label) {
-        selectCategory(match.label);
-        return;
-      }
-    }
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
       selectCategory(grouped[0].label);
     }
-  }, [grouped, activeCategory, preferredCategory]);
+  }, [grouped, activeCategory]);
 
   const runFlow = async (flow: PinnedFlow) => {
     if (executing) return;
@@ -129,13 +138,13 @@ export default function PinnedFlowShortcuts({ conversationId, preferredCategory 
         <div className="rounded-lg border border-border bg-background/50 p-4 flex items-center justify-center">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
-      ) : flows.length === 0 ? (
+      ) : sectorFlows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-background/30 p-4 text-center">
           <Pin className="h-4 w-4 text-muted-foreground/40 mx-auto mb-1.5" />
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Nenhum fluxo fixado. Vá em <span className="font-medium text-foreground">Automação</span> e clique no
-            <Pin className="inline h-2.5 w-2.5 mx-1" />
-            para fixar aqui por categoria.
+            Nenhum fluxo fixado para este setor. Vá em <span className="font-medium text-foreground">Automação</span> e escolha
+            <span className="font-medium text-foreground"> {activeSector === 'cobranca' ? 'Cobrança' : activeSector === 'pos_venda' ? 'Pós-Venda' : 'Comercial'} </span>
+            no seletor de setores do fluxo.
           </p>
         </div>
       ) : (
