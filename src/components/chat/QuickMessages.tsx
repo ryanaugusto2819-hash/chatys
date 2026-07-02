@@ -464,6 +464,17 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
 
+                    <input
+                      list="qm-cats"
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value)}
+                      placeholder="Categoria/Nicho (ex: Adulto Uruguay) — necessário para fixar"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <datalist id="qm-cats">
+                      {existingCategories.map(c => <option key={c} value={c} />)}
+                    </datalist>
+
                     <button
                       onClick={handleSave}
                       disabled={
