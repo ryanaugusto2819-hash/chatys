@@ -548,8 +548,33 @@ export default function SalesRanking() {
               : 'Contatos aguardando confirmação'
           }
         />
+        <KpiCard
+          title="% Endereços Confirmados"
+          value={pending.loading ? '—' : `${pctEnderecoConfirmado}%`}
+          pct={0}
+          icon={CheckCircle2}
+          accentColor="#10B981"
+          iconBg="rgba(16,185,129,0.15)"
+          delay={0.5}
+          loading={pending.loading}
+          hideDelta
+          subtitle={`${enderecoConfirmado} de ${totalEnderecos} enviaram endereço`}
+        />
+        <KpiCard
+          title="% Confirmações Confirmadas"
+          value={pending.loading ? '—' : `${pctConfirmacaoConfirmada}%`}
+          pct={0}
+          icon={BadgeCheck}
+          accentColor="#8B5CF6"
+          iconBg="rgba(139,92,246,0.15)"
+          delay={0.55}
+          loading={pending.loading}
+          hideDelta
+          subtitle={`${pedidoAgendado} agendados de ${totalConfirmacoes}`}
+        />
 
       </div>
+
 
 
       {/* ── Metric cards ── */}
