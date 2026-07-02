@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon, TagIcon as TagOff } from 'lucide-react';
+import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -13,6 +13,8 @@ interface QuickMessage {
   shortcut: string | null;
   sort_order: number;
   tag_id?: string | null;
+  add_tag_id?: string | null;
+  remove_tag_id?: string | null;
 }
 
 interface TagOption {
@@ -21,7 +23,7 @@ interface TagOption {
   color: string;
 }
 
-type QMType = 'text' | 'audio' | 'add_tag' | 'remove_tag';
+type QMType = 'text' | 'audio' | 'tag_action';
 
 interface Props {
   onSelect: (content: string) => void;
@@ -40,7 +42,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
   const [formContent, setFormContent] = useState('');
   const [formType, setFormType] = useState<QMType>('text');
   const [formShortcut, setFormShortcut] = useState('');
-  const [formTagId, setFormTagId] = useState<string>('');
+  const [formAddTagId, setFormAddTagId] = useState<string>('');
+  const [formRemoveTagId, setFormRemoveTagId] = useState<string>('');
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -74,27 +77,39 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormContent('');
     setFormType('text');
     setFormShortcut('');
-    setFormTagId('');
+    setFormAddTagId('');
+    setFormRemoveTagId('');
     setEditingId(null);
     setShowForm(false);
   };
 
+  // Normalize DB row into a display "kind"
+  const kindOf = (m: QuickMessage): 'text' | 'audio' | 'tag_action' => {
+    if (m.type === 'audio') return 'audio';
+    if (m.type === 'add_tag' || m.type === 'remove_tag' || m.type === 'tag_action' || m.add_tag_id || m.remove_tag_id) {
+      return 'tag_action';
+    }
+    return 'text';
+  };
+
   const handleSave = async () => {
     if (!formTitle.trim()) return;
-    const isTagType = formType === 'add_tag' || formType === 'remove_tag';
     if (formType === 'text' && !formContent.trim()) return;
     if (formType === 'audio' && !formContent) return;
-    if (isTagType && !formTagId) {
-      toast.error('Selecione uma etiqueta');
+    if (formType === 'tag_action' && !formAddTagId && !formRemoveTagId) {
+      toast.error('Selecione ao menos uma etiqueta (adicionar ou remover)');
       return;
     }
 
+    const isTag = formType === 'tag_action';
     const payload: any = {
       title: formTitle,
-      content: isTagType ? '' : formContent,
+      content: isTag || formType === 'audio' ? (formType === 'audio' ? formContent : '') : formContent,
       type: formType,
       shortcut: formShortcut || null,
-      tag_id: isTagType ? formTagId : null,
+      add_tag_id: isTag ? (formAddTagId || null) : null,
+      remove_tag_id: isTag ? (formRemoveTagId || null) : null,
+      tag_id: null,
     };
 
     if (editingId) {
@@ -125,9 +140,17 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setEditingId(msg.id);
     setFormTitle(msg.title);
     setFormContent(msg.content);
-    setFormType(msg.type as QMType);
     setFormShortcut(msg.shortcut || '');
-    setFormTagId(msg.tag_id || '');
+    const k = kindOf(msg);
+    setFormType(k);
+    if (k === 'tag_action') {
+      // Backfill legacy add_tag/remove_tag rows into the unified form
+      setFormAddTagId(msg.add_tag_id || (msg.type === 'add_tag' ? (msg.tag_id || '') : ''));
+      setFormRemoveTagId(msg.remove_tag_id || (msg.type === 'remove_tag' ? (msg.tag_id || '') : ''));
+    } else {
+      setFormAddTagId('');
+      setFormRemoveTagId('');
+    }
     setShowForm(true);
   };
 
@@ -169,39 +192,45 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
       toast.error('Nenhum contato selecionado');
       return;
     }
-    if (!msg.tag_id) {
+
+    // Support legacy rows + new unified rows
+    const addId = msg.add_tag_id || (msg.type === 'add_tag' ? msg.tag_id : null) || null;
+    const removeId = msg.remove_tag_id || (msg.type === 'remove_tag' ? msg.tag_id : null) || null;
+
+    if (!addId && !removeId) {
       toast.error('Etiqueta não configurada');
       return;
     }
-    const tag = tags.find(t => t.id === msg.tag_id);
-    const tagName = tag?.name || 'etiqueta';
+
+    const tagName = (id: string) => tags.find(t => t.id === id)?.name || 'etiqueta';
+    const successMsgs: string[] = [];
 
     try {
-      if (msg.type === 'add_tag') {
-        const { data: existing } = await supabase
-          .from('contact_tags')
-          .select('id')
-          .eq('contact_phone', contactPhone)
-          .eq('tag_id', msg.tag_id)
-          .maybeSingle();
-        if (existing) {
-          toast.info(`Etiqueta "${tagName}" já está aplicada`);
-        } else {
-          await supabase.from('contact_tags').insert({ contact_phone: contactPhone, tag_id: msg.tag_id });
-          toast.success(`Etiqueta "${tagName}" adicionada`);
-        }
-      } else {
+      if (removeId) {
         await supabase
           .from('contact_tags')
           .delete()
           .eq('contact_phone', contactPhone)
-          .eq('tag_id', msg.tag_id);
-        toast.success(`Etiqueta "${tagName}" removida`);
+          .eq('tag_id', removeId);
+        successMsgs.push(`− ${tagName(removeId)}`);
       }
+      if (addId) {
+        const { data: existing } = await supabase
+          .from('contact_tags')
+          .select('id')
+          .eq('contact_phone', contactPhone)
+          .eq('tag_id', addId)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from('contact_tags').insert({ contact_phone: contactPhone, tag_id: addId });
+        }
+        successMsgs.push(`+ ${tagName(addId)}`);
+      }
+      toast.success(`Etiquetas atualizadas: ${successMsgs.join('  ')}`);
       onTagChanged?.();
       setOpen(false);
     } catch {
-      toast.error('Erro ao alterar etiqueta');
+      toast.error('Erro ao alterar etiquetas');
     }
   };
 
@@ -211,28 +240,28 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     (m.shortcut && m.shortcut.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const isTagType = formType === 'add_tag' || formType === 'remove_tag';
-
-  const renderTypeIcon = (t: string) => {
-    if (t === 'audio') return <Mic className="h-3.5 w-3.5" />;
-    if (t === 'add_tag') return <TagIcon className="h-3.5 w-3.5" />;
-    if (t === 'remove_tag') return <TagOff className="h-3.5 w-3.5" />;
+  const renderTypeIcon = (k: string) => {
+    if (k === 'audio') return <Mic className="h-3.5 w-3.5" />;
+    if (k === 'tag_action') return <TagIcon className="h-3.5 w-3.5" />;
     return <Type className="h-3.5 w-3.5" />;
   };
 
-  const typeIconBg = (t: string) => {
-    if (t === 'audio') return 'bg-orange-500/10 text-orange-500';
-    if (t === 'add_tag') return 'bg-emerald-500/10 text-emerald-500';
-    if (t === 'remove_tag') return 'bg-red-500/10 text-red-500';
+  const typeIconBg = (k: string) => {
+    if (k === 'audio') return 'bg-orange-500/10 text-orange-500';
+    if (k === 'tag_action') return 'bg-emerald-500/10 text-emerald-500';
     return 'bg-primary/10 text-primary';
   };
 
   const previewText = (m: QuickMessage) => {
-    if (m.type === 'audio') return '🎵 Mensagem de áudio';
-    if (m.type === 'add_tag' || m.type === 'remove_tag') {
-      const tag = tags.find(t => t.id === m.tag_id);
-      const label = m.type === 'add_tag' ? 'Adicionar' : 'Remover';
-      return `🏷️ ${label} etiqueta "${tag?.name || '—'}"`;
+    const k = kindOf(m);
+    if (k === 'audio') return '🎵 Mensagem de áudio';
+    if (k === 'tag_action') {
+      const addId = m.add_tag_id || (m.type === 'add_tag' ? m.tag_id : null);
+      const removeId = m.remove_tag_id || (m.type === 'remove_tag' ? m.tag_id : null);
+      const parts: string[] = [];
+      if (addId) parts.push(`+ ${tags.find(t => t.id === addId)?.name || '—'}`);
+      if (removeId) parts.push(`− ${tags.find(t => t.id === removeId)?.name || '—'}`);
+      return `🏷️ ${parts.join('   ') || 'etiqueta não configurada'}`;
     }
     return m.content;
   };
@@ -283,7 +312,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                 >
                   <div className="p-3 space-y-2.5">
                     {/* Type selector */}
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-3 gap-1.5">
                       <button
                         onClick={() => setFormType('text')}
                         className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
@@ -301,27 +330,19 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                         <Mic className="h-3 w-3" /> Áudio
                       </button>
                       <button
-                        onClick={() => setFormType('add_tag')}
+                        onClick={() => setFormType('tag_action')}
                         className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                          formType === 'add_tag' ? 'bg-emerald-500 text-white' : 'bg-secondary text-secondary-foreground'
+                          formType === 'tag_action' ? 'bg-emerald-500 text-white' : 'bg-secondary text-secondary-foreground'
                         }`}
                       >
-                        <TagIcon className="h-3 w-3" /> Add Etiqueta
-                      </button>
-                      <button
-                        onClick={() => setFormType('remove_tag')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                          formType === 'remove_tag' ? 'bg-red-500 text-white' : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        <TagOff className="h-3 w-3" /> Remover Etiqueta
+                        <TagIcon className="h-3 w-3" /> Etiquetas
                       </button>
                     </div>
 
                     <input
                       value={formTitle}
                       onChange={(e) => setFormTitle(e.target.value)}
-                      placeholder="Título (ex: Saudação)"
+                      placeholder="Título (ex: Mover para Etapa 2)"
                       className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
 
@@ -361,23 +382,48 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       </div>
                     )}
 
-                    {isTagType && (
-                      <div className="space-y-1.5">
+                    {formType === 'tag_action' && (
+                      <div className="space-y-2">
                         {tags.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground px-1">
                             Nenhuma etiqueta cadastrada. Crie uma etiqueta primeiro no gerenciador de etiquetas.
                           </p>
                         ) : (
-                          <select
-                            value={formTagId}
-                            onChange={(e) => setFormTagId(e.target.value)}
-                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">Selecione uma etiqueta...</option>
-                            {tags.map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                          </select>
+                          <>
+                            <div>
+                              <label className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1 block">
+                                + Adicionar etiqueta
+                              </label>
+                              <select
+                                value={formAddTagId}
+                                onChange={(e) => setFormAddTagId(e.target.value)}
+                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <option value="">Nenhuma</option>
+                                {tags.filter(t => t.id !== formRemoveTagId).map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1 block">
+                                − Remover etiqueta
+                              </label>
+                              <select
+                                value={formRemoveTagId}
+                                onChange={(e) => setFormRemoveTagId(e.target.value)}
+                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <option value="">Nenhuma</option>
+                                {tags.filter(t => t.id !== formAddTagId).map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground px-1">
+                              Selecione uma ou ambas. Ao clicar, as duas ações serão aplicadas de uma só vez.
+                            </p>
+                          </>
                         )}
                       </div>
                     )}
@@ -395,7 +441,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                         !formTitle.trim() ||
                         (formType === 'text' && !formContent.trim()) ||
                         (formType === 'audio' && !formContent) ||
-                        (isTagType && !formTagId)
+                        (formType === 'tag_action' && !formAddTagId && !formRemoveTagId)
                       }
                       className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
@@ -440,51 +486,54 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                   )}
                 </div>
               ) : (
-                filteredMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className="group flex items-start gap-2 rounded-lg p-2.5 hover:bg-secondary/60 transition-colors cursor-pointer"
-                    onClick={() => {
-                      if (msg.type === 'text') {
-                        onSelect(msg.content);
-                        setOpen(false);
-                      } else if (msg.type === 'add_tag' || msg.type === 'remove_tag') {
-                        handleTagAction(msg);
-                      }
-                    }}
-                  >
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${typeIconBg(msg.type)}`}>
-                      {renderTypeIcon(msg.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium text-card-foreground truncate">{msg.title}</span>
-                        {msg.shortcut && (
-                          <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
-                            {msg.shortcut}
-                          </span>
-                        )}
+                filteredMessages.map((msg) => {
+                  const k = kindOf(msg);
+                  return (
+                    <div
+                      key={msg.id}
+                      className="group flex items-start gap-2 rounded-lg p-2.5 hover:bg-secondary/60 transition-colors cursor-pointer"
+                      onClick={() => {
+                        if (k === 'text') {
+                          onSelect(msg.content);
+                          setOpen(false);
+                        } else if (k === 'tag_action') {
+                          handleTagAction(msg);
+                        }
+                      }}
+                    >
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${typeIconBg(k)}`}>
+                        {renderTypeIcon(k)}
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {previewText(msg)}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-card-foreground truncate">{msg.title}</span>
+                          {msg.shortcut && (
+                            <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
+                              {msg.shortcut}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                          {previewText(msg)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEdit(msg); }}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-card-foreground hover:bg-secondary"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEdit(msg); }}
-                        className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-card-foreground hover:bg-secondary"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
-                        className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </motion.div>

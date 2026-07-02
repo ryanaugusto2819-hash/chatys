@@ -1473,10 +1473,12 @@ export type Database = {
       }
       quick_messages: {
         Row: {
+          add_tag_id: string | null
           audio_url: string | null
           content: string
           created_at: string
           id: string
+          remove_tag_id: string | null
           shortcut: string | null
           sort_order: number
           tag_id: string | null
@@ -1486,10 +1488,12 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          add_tag_id?: string | null
           audio_url?: string | null
           content?: string
           created_at?: string
           id?: string
+          remove_tag_id?: string | null
           shortcut?: string | null
           sort_order?: number
           tag_id?: string | null
@@ -1499,10 +1503,12 @@ export type Database = {
           workspace_id?: string
         }
         Update: {
+          add_tag_id?: string | null
           audio_url?: string | null
           content?: string
           created_at?: string
           id?: string
+          remove_tag_id?: string | null
           shortcut?: string | null
           sort_order?: number
           tag_id?: string | null
@@ -1512,6 +1518,20 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "quick_messages_add_tag_id_fkey"
+            columns: ["add_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_messages_remove_tag_id_fkey"
+            columns: ["remove_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quick_messages_tag_id_fkey"
             columns: ["tag_id"]
