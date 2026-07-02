@@ -40,7 +40,7 @@ export default function PinnedQuickMessageShortcuts({ conversationId, contactPho
       .select('id, title, content, type, audio_url, category, tag_id, add_tag_id, remove_tag_id')
       .eq('is_pinned_sidebar', true)
       .order('sort_order');
-    if (currentWorkspace) query = query.eq('workspace_id', currentWorkspace.id);
+    // Quick messages are shared across workspaces (QuickMessages.tsx doesn't filter by workspace)
     const { data } = await query;
     setItems((data as any) || []);
     setLoading(false);
