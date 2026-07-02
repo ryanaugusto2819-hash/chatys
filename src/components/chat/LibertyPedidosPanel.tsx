@@ -187,6 +187,7 @@ function PedidoCard({
   const telefone = local.telefone || local.phone || local.whatsapp || '';
   const valor = local.valor ?? local.value;
   const entrada = local.data_entrada || local.entrada || local.created_at;
+  const quantidade = local.quantidade ?? local.qtd ?? local.quantidade_potes ?? local.qtd_potes ?? local.potes;
 
   const val = (...keys: string[]) => {
     for (const k of keys) if (local[k] != null && local[k] !== '') return local[k];
@@ -214,12 +215,16 @@ function PedidoCard({
 
   const isUruguay = paisCurrent.toLowerCase().startsWith('uru') || paisCurrent.toLowerCase() === 'uy';
   const currency = isUruguay ? '$U' : 'R$';
+  const valorFmt = valor != null ? `${currency} ${Number(valor).toFixed(2).replace('.', ',')}` : '';
+  const telefoneFmt = telefone ? fmtPhone(String(telefone), paisCurrent) : '';
+  const dataFmt = entrada ? new Date(entrada).toLocaleDateString('pt-BR') : '';
+  const qtdFmt = quantidade != null && quantidade !== '' ? String(quantidade) : '';
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/40">
-      <button
+      <div
         onClick={() => setExpanded((v) => !v)}
-        className="w-full p-4 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
+        className="w-full p-4 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left cursor-pointer"
       >
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -229,18 +234,21 @@ function PedidoCard({
                 {paisCurrent}
               </span>
             )}
+            <CopyBtn value={cliente} label="Nome" className="ml-auto" />
           </div>
 
           {valor != null && (
-            <div className="text-xl font-bold text-primary leading-none">
-              {currency} {Number(valor).toFixed(2).replace('.', ',')}
+            <div className="flex items-center gap-2">
+              <div className="text-xl font-bold text-primary leading-none">{valorFmt}</div>
+              <CopyBtn value={valorFmt} label="Valor" />
             </div>
           )}
 
-          <div className="space-y-2 pt-1">
-            <InfoRow label="Produto" value={produto} />
-            {telefone && <InfoRow label="Telefone" value={fmtPhone(String(telefone), paisCurrent)} mono />}
-            {entrada && <InfoRow label="Data" value={new Date(entrada).toLocaleDateString('pt-BR')} />}
+          <div className="space-y-1 pt-1">
+            <InfoRow label="Produto" value={produto} copyValue={produto} />
+            {qtdFmt && <InfoRow label="Qtd. Potes" value={qtdFmt} copyValue={qtdFmt} />}
+            {telefone && <InfoRow label="Telefone" value={telefoneFmt} mono copyValue={telefoneFmt} />}
+            {entrada && <InfoRow label="Data" value={dataFmt} copyValue={dataFmt} />}
           </div>
 
           <div className="flex items-center gap-1 flex-wrap pt-1">
@@ -257,7 +265,7 @@ function PedidoCard({
           </div>
         </div>
         {expanded ? <ChevronDown className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" />}
-      </button>
+      </div>
 
       {expanded && (
         <div className="p-3 pt-2 space-y-3 border-t border-border">
