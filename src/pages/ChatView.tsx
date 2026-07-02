@@ -233,7 +233,7 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
               : label === 'ia-follow-up' ? 'IA Follow-Up'
               : label === 'fluxo' ? 'Fluxo'
               : label === 'ia-seletora' ? 'IA Seletora'
-              : isHuman ? 'Humano'
+              : isHuman ? (senderName || 'Humano')
               : label ? label
               : 'IA';
             const Icon = isHuman ? UserRound : Bot;
