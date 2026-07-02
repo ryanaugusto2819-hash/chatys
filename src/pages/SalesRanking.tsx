@@ -346,11 +346,29 @@ export default function SalesRanking() {
                 ) : p.label}
               </button>
             ))}
+            <div className="flex items-center gap-1 ml-1 pl-2 border-l" style={{ borderColor: 'hsl(var(--border))' }}>
+              {COUNTRIES.map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => handleCountryChange(c.key)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border flex items-center gap-1"
+                  style={
+                    country === c.key
+                      ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.28), rgba(124,58,237,0.12))', color: '#C4B5FD', borderColor: 'rgba(124,58,237,0.45)' }
+                      : { color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }
+                  }
+                  title={`Filtrar por ${c.label}`}
+                >
+                  <span>{c.flag}</span>
+                  <span>{c.label}</span>
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setShowGoals(true)}
               className="flex items-center justify-center h-8 w-8 rounded-lg border transition-colors"
               style={{ color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }}
-              title="Configurar metas"
+              title="Configurar comissão"
             >
               <Settings className="h-3.5 w-3.5" />
             </button>
