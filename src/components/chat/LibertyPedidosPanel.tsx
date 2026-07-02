@@ -313,8 +313,13 @@ function PedidoCard({
         currentComprovante={String(val('comprovante_url', 'comprovante', 'comprovante_pagamento') || '')}
         currentConta={String(val('conta_usada', 'conta_bancaria', 'conta', 'banco') || '')}
         onConfirm={(payload) => {
-          setLocal((prev) => ({ ...prev, status_pagamento: pagoDialog.newStatus, ...payload }));
-          onPatch({ status_pagamento: pagoDialog.newStatus, ...payload });
+          const apiPatch = {
+            status_pagamento: pagoDialog.newStatus,
+            comprovante_url: payload.comprovante,
+            conta_usada: payload.conta_bancaria,
+          };
+          setLocal((prev) => ({ ...prev, ...apiPatch }));
+          onPatch(apiPatch);
           setPagoDialog({ open: false, newStatus: '' });
         }}
       />
