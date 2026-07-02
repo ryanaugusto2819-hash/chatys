@@ -46,6 +46,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
   const [formShortcut, setFormShortcut] = useState('');
   const [formAddTagId, setFormAddTagId] = useState<string>('');
   const [formRemoveTagId, setFormRemoveTagId] = useState<string>('');
+  const [formCategory, setFormCategory] = useState('');
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -74,6 +75,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
+  const existingCategories = Array.from(new Set(messages.map(m => (m.category || '').trim()).filter(Boolean))).sort();
+
   const resetForm = () => {
     setFormTitle('');
     setFormContent('');
@@ -81,8 +84,22 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormShortcut('');
     setFormAddTagId('');
     setFormRemoveTagId('');
+    setFormCategory('');
     setEditingId(null);
     setShowForm(false);
+  };
+
+  const togglePinned = async (msg: QuickMessage, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!msg.category || !msg.category.trim()) {
+      toast.error('Defina uma categoria antes de fixar (edite a mensagem)');
+      return;
+    }
+    await (supabase.from('quick_messages') as any)
+      .update({ is_pinned_sidebar: !msg.is_pinned_sidebar })
+      .eq('id', msg.id);
+    toast.success(msg.is_pinned_sidebar ? 'Desafixada' : 'Fixada na barra lateral do chat');
+    fetchMessages();
   };
 
   // Normalize DB row into a display "kind"
