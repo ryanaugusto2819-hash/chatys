@@ -379,8 +379,10 @@ export default function Reports() {
             )}
           </motion.div>
         </div>
+        </>}
 
       </div>
     </div>
+
   );
 }
