@@ -1364,28 +1364,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 )}
               </div>
 
-              {/* Conversation Info */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <MessageSquare className="h-3 w-3" /> Conversa
-                </p>
-                <div className="space-y-2.5 rounded-lg border border-border bg-background/50 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">ID</span>
-                    <span className="text-[10px] font-mono text-card-foreground">{id?.slice(0, 8)}...</span>
-                  </div>
-                  <div className="h-px bg-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Status</span>
-                    <StatusBadge status={conversation.status as 'new' | 'pending' | 'active' | 'resolved'} />
-                  </div>
-                  <div className="h-px bg-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Mensagens</span>
-                    <span className="text-xs font-medium text-card-foreground">{messages.length}</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </>
         ) : (
