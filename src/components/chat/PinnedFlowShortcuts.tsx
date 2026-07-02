@@ -140,7 +140,7 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
               {grouped.map(g => (
                 <button
                   key={g.label}
-                  onClick={() => setActiveCategory(g.label)}
+                  onClick={() => selectCategory(g.label)}
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     activeCategory === g.label
                       ? 'bg-primary text-primary-foreground'
