@@ -325,6 +325,17 @@ export default function Automation() {
                         </div>
                         <div className="flex items-center gap-1">
                           <button
+                            onClick={(e) => togglePinned(flow, e)}
+                            className={`transition-colors ${
+                              flow.is_pinned_sidebar
+                                ? 'text-primary hover:text-primary/80'
+                                : 'text-muted-foreground hover:text-primary'
+                            }`}
+                            title={flow.is_pinned_sidebar ? 'Desafixar da barra lateral do chat' : 'Fixar como atalho na barra lateral do chat'}
+                          >
+                            {flow.is_pinned_sidebar ? <Pin className="h-4 w-4 fill-current" /> : <PinOff className="h-4 w-4" />}
+                          </button>
+                          <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/automation/${flow.id}/metrics`); }}
                             className="text-muted-foreground hover:text-primary transition-colors"
                             title="Métricas do Funil"
