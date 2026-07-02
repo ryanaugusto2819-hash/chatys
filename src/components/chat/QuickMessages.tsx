@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon } from 'lucide-react';
+import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon, Pin, PinOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -15,6 +15,8 @@ interface QuickMessage {
   tag_id?: string | null;
   add_tag_id?: string | null;
   remove_tag_id?: string | null;
+  category?: string | null;
+  is_pinned_sidebar?: boolean;
 }
 
 interface TagOption {
