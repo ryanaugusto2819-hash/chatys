@@ -844,7 +844,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
           )}
 
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} onDelete={handleDeleteMessage} />
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              onDelete={handleDeleteMessage}
+              senderName={(msg as any).sender_agent_id ? agentNames[(msg as any).sender_agent_id] : null}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>
