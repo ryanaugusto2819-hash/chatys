@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import TopBar from '@/components/layout/TopBar';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { GitBranch, Plus, Play, Pause, Trash2, Loader2, BarChart3, Copy, Tag, Pencil, FolderOpen } from 'lucide-react';
+import { GitBranch, Plus, Play, Pause, Trash2, Loader2, BarChart3, Copy, Tag, Pencil, FolderOpen, Pin, PinOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -18,6 +18,7 @@ interface FlowRow {
   created_at: string;
   updated_at: string;
   category: string | null;
+  is_pinned_sidebar?: boolean;
 }
 
 const UNCATEGORIZED = '__sem_categoria__';
