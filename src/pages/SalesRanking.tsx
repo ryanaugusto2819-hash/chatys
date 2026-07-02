@@ -283,6 +283,18 @@ export default function SalesRanking() {
     kpiFrom, kpiTo, 0, 0, commissionRate, country === 'all' ? null : country,
   );
 
+  // Real-time pending tag counts (endereço / confirmação, por país)
+  const pending = usePendingTagCounts();
+  const enderecoPendente =
+    country === 'brasil'  ? pending.enderecoBrasil :
+    country === 'uruguay' ? pending.enderecoUruguay :
+    pending.enderecoBrasil + pending.enderecoUruguay;
+  const confirmacaoPendente =
+    country === 'brasil'  ? pending.confirmacaoBrasil :
+    country === 'uruguay' ? pending.confirmacaoUruguay :
+    pending.confirmacaoBrasil + pending.confirmacaoUruguay;
+
+
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
   const totalQty    = stats.reduce((s, v) => s + v.totalQuantidade, 0);
