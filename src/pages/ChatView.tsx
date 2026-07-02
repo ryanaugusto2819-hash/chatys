@@ -1462,12 +1462,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               {/* Pinned Flow Shortcuts */}
               <PinnedFlowShortcuts
                 conversationId={id!}
-                preferredCategory={
-                  activeSectorTab === 'cobranca' ? 'Cobrança'
-                  : activeSectorTab === 'pos_venda' ? 'Pós-Venda'
-                  : activeSectorTab === 'comercial' ? 'Comercial'
-                  : null
-                }
+                sector={activeSectorTab}
               />
 
               {/* LibertyPOS pedidos - apenas na aba Cobrança */}
