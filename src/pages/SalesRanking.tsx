@@ -332,10 +332,10 @@ export default function SalesRanking() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-card-foreground">
-              Ranking de Vendas
+              DashVendas
             </h1>
             <p className="text-xs mt-0.5 text-muted-foreground">
-              Desempenho gamificado dos vendedores
+              Vendas, receita, ticket médio e conversão em tempo real
             </p>
           </div>
         </div>
