@@ -318,10 +318,11 @@ export default function SalesRanking() {
     ? Math.round((enderecoConfirmado / totalEnderecos) * 100)
     : 0;
 
-  // "Confirmação confirmada" = pedidos já agendados vs. total no funil de confirmação
-  const totalConfirmacoes = pedidoAgendado + fazerAgendamento + confirmacaoPendente;
+  // "Confirmação feita" = pedidos agendados + fazer agendamento (já confirmados)
+  const confirmacaoFeita = pedidoAgendado + fazerAgendamento;
+  const totalConfirmacoes = confirmacaoFeita + confirmacaoPendente;
   const pctConfirmacaoConfirmada = totalConfirmacoes > 0
-    ? Math.round((pedidoAgendado / totalConfirmacoes) * 100)
+    ? Math.round((confirmacaoFeita / totalConfirmacoes) * 100)
     : 0;
 
 
@@ -570,7 +571,7 @@ export default function SalesRanking() {
           delay={0.55}
           loading={pending.loading}
           hideDelta
-          subtitle={`${pedidoAgendado} agendados de ${totalConfirmacoes}`}
+          subtitle={`${confirmacaoFeita} confirmados de ${totalConfirmacoes}`}
         />
 
       </div>
