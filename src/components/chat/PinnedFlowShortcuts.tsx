@@ -79,10 +79,7 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
   }, [flows]);
 
   useEffect(() => {
-    if (grouped.length === 0) {
-      setActiveCategory(null);
-      return;
-    }
+    if (grouped.length === 0) return;
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
       selectCategory(grouped[0].label);
     }
