@@ -59,8 +59,11 @@ Deno.serve(async (req) => {
 
     // For list/get by phone, fetch ALL and filter locally by normalized digits
     // (upstream stores phones with spaces/dashes and doesn't normalize on filter).
+    // For 'options', we also fetch the full list to derive distinct values.
     const upstreamBody =
-      (body.action === 'list' || body.action === 'get') && normalizedPhone
+      body.action === 'options'
+        ? { action: 'list' }
+        : (body.action === 'list' || body.action === 'get') && normalizedPhone
         ? { action: 'list' }
         : body;
 
