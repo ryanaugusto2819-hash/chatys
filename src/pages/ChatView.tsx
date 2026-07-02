@@ -409,15 +409,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       setConversation(data);
       setSaleRegisteredAt((data as any).sale_registered_at || null);
 
-      const [agentResult, tagsResult, historyResult, ordersResult] = await Promise.all([
+      const [agentResult, tagsResult, historyResult] = await Promise.all([
         data.assigned_agent_id
           ? supabase.from('profiles').select('id, full_name, avatar_url').eq('id', data.assigned_agent_id).single()
           : Promise.resolve({ data: null }),
         supabase.from('contact_tags').select('id, tag_id, tags(id, name, color)').eq('contact_phone', data.contact_phone),
         supabase.from('agent_assignment_history').select('id, assigned_at, unassigned_at, agent_id, profiles(full_name)').eq('conversation_id', id).order('assigned_at', { ascending: false }),
-        supabase.from('sales_orders' as any).select('id', { count: 'exact', head: true }).eq('conversation_id', id),
       ]);
-      setOrderCount((ordersResult as any).count || 0);
 
       setAssignedAgent(agentResult.data || null);
 
