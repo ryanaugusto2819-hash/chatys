@@ -310,8 +310,8 @@ function PedidoCard({
         onOpenChange={(o) => setPagoDialog((p) => ({ ...p, open: o }))}
         newStatus={pagoDialog.newStatus}
         contaOptions={options.conta_bancaria || []}
-        currentComprovante={String(val('comprovante', 'comprovante_pagamento') || '')}
-        currentConta={String(val('conta_bancaria', 'conta', 'banco') || '')}
+        currentComprovante={String(val('comprovante_url', 'comprovante', 'comprovante_pagamento') || '')}
+        currentConta={String(val('conta_usada', 'conta_bancaria', 'conta', 'banco') || '')}
         onConfirm={(payload) => {
           setLocal((prev) => ({ ...prev, status_pagamento: pagoDialog.newStatus, ...payload }));
           onPatch({ status_pagamento: pagoDialog.newStatus, ...payload });
