@@ -509,6 +509,12 @@ export default function SalesRanking() {
           iconBg="rgba(239,68,68,0.15)"
           delay={0.4}
           loading={pending.loading}
+          hideDelta
+          subtitle={
+            country === 'all'
+              ? `BR ${pending.enderecoBrasil} • UY ${pending.enderecoUruguay}`
+              : 'Contatos aguardando endereço'
+          }
         />
         <KpiCard
           title={`Confirmação Pendente${country === 'all' ? '' : country === 'brasil' ? ' • BR' : ' • UY'}`}
@@ -519,7 +525,14 @@ export default function SalesRanking() {
           iconBg="rgba(59,130,246,0.15)"
           delay={0.45}
           loading={pending.loading}
+          hideDelta
+          subtitle={
+            country === 'all'
+              ? `BR ${pending.confirmacaoBrasil} • UY ${pending.confirmacaoUruguay}`
+              : 'Contatos aguardando confirmação'
+          }
         />
+
       </div>
 
 
