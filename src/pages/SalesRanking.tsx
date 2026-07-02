@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
   Package, CalendarDays, TrendingUp, TrendingDown,
-  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck,
+  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck, CheckCircle2, BadgeCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesKPIs, pctChange } from '@/hooks/useSalesKPIs';
@@ -302,6 +302,28 @@ export default function SalesRanking() {
     country === 'uruguay' ? pending.confirmacaoUruguay :
     pending.confirmacaoBrasil + pending.confirmacaoUruguay;
 
+  // "Endereço confirmado" = contatos que já avançaram (fazer agendamento, pedido agendado, confirmação pendente)
+  const fazerAgendamento =
+    country === 'brasil'  ? pending.fazerAgendamentoBrasil :
+    country === 'uruguay' ? pending.fazerAgendamentoUruguay :
+    pending.fazerAgendamentoBrasil + pending.fazerAgendamentoUruguay;
+  const pedidoAgendado =
+    country === 'brasil'  ? pending.pedidoAgendadoBrasil :
+    country === 'uruguay' ? pending.pedidoAgendadoUruguay :
+    pending.pedidoAgendadoBrasil + pending.pedidoAgendadoUruguay;
+
+  const enderecoConfirmado = fazerAgendamento + pedidoAgendado + confirmacaoPendente;
+  const totalEnderecos = enderecoConfirmado + enderecoPendente;
+  const pctEnderecoConfirmado = totalEnderecos > 0
+    ? Math.round((enderecoConfirmado / totalEnderecos) * 100)
+    : 0;
+
+  // "Confirmação confirmada" = pedidos já agendados vs. total no funil de confirmação
+  const totalConfirmacoes = pedidoAgendado + fazerAgendamento + confirmacaoPendente;
+  const pctConfirmacaoConfirmada = totalConfirmacoes > 0
+    ? Math.round((pedidoAgendado / totalConfirmacoes) * 100)
+    : 0;
+
 
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
@@ -526,8 +548,33 @@ export default function SalesRanking() {
               : 'Contatos aguardando confirmação'
           }
         />
+        <KpiCard
+          title="% Endereços Confirmados"
+          value={pending.loading ? '—' : `${pctEnderecoConfirmado}%`}
+          pct={0}
+          icon={CheckCircle2}
+          accentColor="#10B981"
+          iconBg="rgba(16,185,129,0.15)"
+          delay={0.5}
+          loading={pending.loading}
+          hideDelta
+          subtitle={`${enderecoConfirmado} de ${totalEnderecos} enviaram endereço`}
+        />
+        <KpiCard
+          title="% Confirmações Confirmadas"
+          value={pending.loading ? '—' : `${pctConfirmacaoConfirmada}%`}
+          pct={0}
+          icon={BadgeCheck}
+          accentColor="#8B5CF6"
+          iconBg="rgba(139,92,246,0.15)"
+          delay={0.55}
+          loading={pending.loading}
+          hideDelta
+          subtitle={`${pedidoAgendado} agendados de ${totalConfirmacoes}`}
+        />
 
       </div>
+
 
 
       {/* ── Metric cards ── */}
