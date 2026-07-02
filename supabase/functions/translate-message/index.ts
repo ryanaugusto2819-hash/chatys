@@ -37,8 +37,14 @@ Deno.serve(async (req) => {
         model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: text },
+          {
+            role: "user",
+            content: target === "pt-BR"
+              ? `Traduza para PORTUGUÊS BRASILEIRO (pt-BR). Não use inglês.\n\nTexto:\n${text}`
+              : text,
+          },
         ],
+
       }),
     });
 
