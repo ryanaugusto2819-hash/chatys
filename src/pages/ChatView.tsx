@@ -1093,7 +1093,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       {/* Sidebar */}
       <div className="hidden lg:flex w-80 flex-col border-l border-border bg-card overflow-y-auto">
         {conversation ? (
-          <>
+          activeSectorTab === 'cobranca' ? (
+            <div className="flex-1 p-4 overflow-y-auto">
+              <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
+            </div>
+          ) : (
+            <>
             {/* Profile Header */}
             <div className="flex flex-col items-center py-6 px-4 border-b border-border bg-gradient-to-b from-primary/5 to-transparent">
               <div className="relative">
