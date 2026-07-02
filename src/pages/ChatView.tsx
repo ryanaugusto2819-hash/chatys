@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
@@ -68,9 +68,10 @@ const parseProviderError = (providerError?: string | null): ParsedProviderError 
 interface MessageBubbleProps {
   msg: ChatMessage;
   onDelete?: (messageId: string) => void;
+  senderName?: string | null;
 }
 
-const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const providerError = parseProviderError(msg.provider_error);
@@ -232,7 +233,7 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete }: MessageBubb
               : label === 'ia-follow-up' ? 'IA Follow-Up'
               : label === 'fluxo' ? 'Fluxo'
               : label === 'ia-seletora' ? 'IA Seletora'
-              : isHuman ? 'Humano'
+              : isHuman ? (senderName || 'Humano')
               : label ? label
               : 'IA';
             const Icon = isHuman ? UserRound : Bot;
@@ -340,6 +341,31 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [uploading, setUploading] = useState(false);
 
   const { messages, setMessages, loading: msgsLoading, hasMore, loadMore, loadingMore, markAsRead } = useChatMessages(id);
+
+  // Cache: sender_agent_id -> full_name
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  const uniqueSenderIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages) {
+      if (m.sender_type === 'agent' && (m as any).sender_agent_id) s.add((m as any).sender_agent_id);
+    }
+    return Array.from(s);
+  }, [messages]);
+
+  useEffect(() => {
+    const missing = uniqueSenderIds.filter(uid => !(uid in agentNames));
+    if (missing.length === 0) return;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('user_id, full_name').in('user_id', missing);
+      if (data) {
+        setAgentNames(prev => {
+          const next = { ...prev };
+          for (const p of data as any[]) next[p.user_id] = p.full_name || 'Humano';
+          return next;
+        });
+      }
+    })();
+  }, [uniqueSenderIds, agentNames]);
 
   // Only block UI on messages loading — conversation metadata loads in background
   const loading = msgsLoading;
@@ -818,7 +844,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
           )}
 
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} onDelete={handleDeleteMessage} />
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              onDelete={handleDeleteMessage}
+              senderName={(msg as any).sender_agent_id ? agentNames[(msg as any).sender_agent_id] : null}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>
