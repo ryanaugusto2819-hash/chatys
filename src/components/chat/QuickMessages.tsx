@@ -306,8 +306,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                   className="border-b border-border overflow-hidden"
                 >
                   <div className="p-3 space-y-2.5">
-                    {/* Type selector */}
-                    <div className="grid grid-cols-3 gap-1.5">
+                    {/* Type selector — media only. Tag actions coexist below. */}
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         onClick={() => setFormType('text')}
                         className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
@@ -323,14 +323,6 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                         }`}
                       >
                         <Mic className="h-3 w-3" /> Áudio
-                      </button>
-                      <button
-                        onClick={() => setFormType('tag_action')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                          formType === 'tag_action' ? 'bg-emerald-500 text-white' : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        <TagIcon className="h-3 w-3" /> Etiquetas
                       </button>
                     </div>
 
