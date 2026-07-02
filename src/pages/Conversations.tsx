@@ -413,15 +413,14 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     }
   };
 
-  const tabLabels: Record<ConnectionTab, string> = {
+  const SECTOR_TABS: SectorTab[] = ['all', 'comercial', 'pos_venda', 'cobranca'];
+  const tabLabels: Record<SectorTab, string> = {
     all: 'Todos',
-    whatsapp: 'Comercial',
-    zapi: 'Cobrança',
+    comercial: 'Comercial',
+    pos_venda: 'Pós-Venda',
+    cobranca: 'Cobrança',
   };
-
-  const hasWhatsapp = allConnections.some(c => c.connection_id === 'whatsapp');
-  const hasZapi = allConnections.some(c => c.connection_id === 'zapi');
-  const showTabs = hasWhatsapp && hasZapi;
+  const showTabs = true;
 
   return (
     <div className={embedded ? 'flex flex-col h-full overflow-hidden' : ''}>
@@ -433,7 +432,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
               <h2 className="text-sm font-semibold text-foreground">Conversas</h2>
               <p className="text-[11px] text-muted-foreground">{totalCount} conversas</p>
             </div>
-            {activeTab === 'zapi' && (
+            {activeTab === 'cobranca' && (
               <Button
                 size="sm"
                 variant="outline"
@@ -446,12 +445,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
             )}
           </div>
           {showTabs && (
-            <div className="flex gap-0">
-              {(['all', 'whatsapp', 'zapi'] as ConnectionTab[]).map(tab => (
+            <div className="flex gap-0 overflow-x-auto">
+              {SECTOR_TABS.map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative px-4 py-2 text-xs font-medium transition-colors ${
+                  className={`relative shrink-0 px-4 py-2 text-xs font-medium transition-colors ${
                     activeTab === tab
                       ? 'text-primary'
                       : 'text-muted-foreground hover:text-foreground'
@@ -469,12 +468,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
       )}
       {!embedded && showTabs && (
         <div className="px-6 pt-2">
-          <div className="flex items-center gap-0 border-b border-border">
-            {(['all', 'whatsapp', 'zapi'] as ConnectionTab[]).map(tab => (
+          <div className="flex items-center gap-0 border-b border-border overflow-x-auto">
+            {SECTOR_TABS.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`relative px-4 py-2 text-xs font-medium transition-colors ${
+                className={`relative shrink-0 px-4 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab
                     ? 'text-primary'
                     : 'text-muted-foreground hover:text-foreground'
@@ -486,7 +485,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                 )}
               </button>
             ))}
-            {activeTab === 'zapi' && (
+            {activeTab === 'cobranca' && (
               <Button
                 size="sm"
                 variant="outline"
