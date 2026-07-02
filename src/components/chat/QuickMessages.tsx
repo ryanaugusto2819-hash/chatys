@@ -83,32 +83,32 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setShowForm(false);
   };
 
-  // Normalize DB row into a display "kind"
+  // Normalize DB row into a display "kind" for the icon
   const kindOf = (m: QuickMessage): 'text' | 'audio' | 'tag_action' => {
     if (m.type === 'audio') return 'audio';
-    if (m.type === 'add_tag' || m.type === 'remove_tag' || m.type === 'tag_action' || m.add_tag_id || m.remove_tag_id) {
-      return 'tag_action';
-    }
+    const hasTag = !!(m.add_tag_id || m.remove_tag_id || m.type === 'add_tag' || m.type === 'remove_tag' || m.type === 'tag_action');
+    const hasText = !!(m.content && m.content.trim());
+    if (hasTag && !hasText) return 'tag_action';
     return 'text';
   };
 
   const handleSave = async () => {
     if (!formTitle.trim()) return;
-    if (formType === 'text' && !formContent.trim()) return;
-    if (formType === 'audio' && !formContent) return;
-    if (formType === 'tag_action' && !formAddTagId && !formRemoveTagId) {
-      toast.error('Selecione ao menos uma etiqueta (adicionar ou remover)');
+    const hasTagAction = !!formAddTagId || !!formRemoveTagId;
+    if (formType === 'text' && !formContent.trim() && !hasTagAction) {
+      toast.error('Adicione um texto ou uma ação de etiqueta');
       return;
     }
+    if (formType === 'audio' && !formContent) return;
 
-    const isTag = formType === 'tag_action';
+    // Persisted "type" reflects the message media type. Tag actions can coexist with text or audio.
     const payload: any = {
       title: formTitle,
-      content: isTag || formType === 'audio' ? (formType === 'audio' ? formContent : '') : formContent,
-      type: formType,
+      content: formContent || '',
+      type: formType === 'audio' ? 'audio' : 'text',
       shortcut: formShortcut || null,
-      add_tag_id: isTag ? (formAddTagId || null) : null,
-      remove_tag_id: isTag ? (formRemoveTagId || null) : null,
+      add_tag_id: formAddTagId || null,
+      remove_tag_id: formRemoveTagId || null,
       tag_id: null,
     };
 
@@ -141,16 +141,11 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormTitle(msg.title);
     setFormContent(msg.content);
     setFormShortcut(msg.shortcut || '');
-    const k = kindOf(msg);
-    setFormType(k);
-    if (k === 'tag_action') {
-      // Backfill legacy add_tag/remove_tag rows into the unified form
-      setFormAddTagId(msg.add_tag_id || (msg.type === 'add_tag' ? (msg.tag_id || '') : ''));
-      setFormRemoveTagId(msg.remove_tag_id || (msg.type === 'remove_tag' ? (msg.tag_id || '') : ''));
-    } else {
-      setFormAddTagId('');
-      setFormRemoveTagId('');
-    }
+    // Media type is text or audio; tag actions coexist independently
+    setFormType(msg.type === 'audio' ? 'audio' : 'text');
+    // Load tag fields — support legacy add_tag/remove_tag rows
+    setFormAddTagId(msg.add_tag_id || (msg.type === 'add_tag' ? (msg.tag_id || '') : ''));
+    setFormRemoveTagId(msg.remove_tag_id || (msg.type === 'remove_tag' ? (msg.tag_id || '') : ''));
     setShowForm(true);
   };
 
@@ -255,15 +250,15 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
   const previewText = (m: QuickMessage) => {
     const k = kindOf(m);
     if (k === 'audio') return '🎵 Mensagem de áudio';
-    if (k === 'tag_action') {
-      const addId = m.add_tag_id || (m.type === 'add_tag' ? m.tag_id : null);
-      const removeId = m.remove_tag_id || (m.type === 'remove_tag' ? m.tag_id : null);
-      const parts: string[] = [];
-      if (addId) parts.push(`+ ${tags.find(t => t.id === addId)?.name || '—'}`);
-      if (removeId) parts.push(`− ${tags.find(t => t.id === removeId)?.name || '—'}`);
-      return `🏷️ ${parts.join('   ') || 'etiqueta não configurada'}`;
-    }
-    return m.content;
+    const addId = m.add_tag_id || (m.type === 'add_tag' ? m.tag_id : null);
+    const removeId = m.remove_tag_id || (m.type === 'remove_tag' ? m.tag_id : null);
+    const tagParts: string[] = [];
+    if (addId) tagParts.push(`+ ${tags.find(t => t.id === addId)?.name || '—'}`);
+    if (removeId) tagParts.push(`− ${tags.find(t => t.id === removeId)?.name || '—'}`);
+    const tagLabel = tagParts.length ? `🏷️ ${tagParts.join('  ')}` : '';
+    if (k === 'tag_action') return tagLabel || 'etiqueta não configurada';
+    // text (may also carry tag actions)
+    return tagLabel ? `${m.content}  •  ${tagLabel}` : m.content;
   };
 
   return (
@@ -311,8 +306,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                   className="border-b border-border overflow-hidden"
                 >
                   <div className="p-3 space-y-2.5">
-                    {/* Type selector */}
-                    <div className="grid grid-cols-3 gap-1.5">
+                    {/* Type selector — media only. Tag actions coexist below. */}
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         onClick={() => setFormType('text')}
                         className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
@@ -328,14 +323,6 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                         }`}
                       >
                         <Mic className="h-3 w-3" /> Áudio
-                      </button>
-                      <button
-                        onClick={() => setFormType('tag_action')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                          formType === 'tag_action' ? 'bg-emerald-500 text-white' : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        <TagIcon className="h-3 w-3" /> Etiquetas
                       </button>
                     </div>
 
@@ -382,51 +369,56 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       </div>
                     )}
 
-                    {formType === 'tag_action' && (
-                      <div className="space-y-2">
-                        {tags.length === 0 ? (
-                          <p className="text-[11px] text-muted-foreground px-1">
-                            Nenhuma etiqueta cadastrada. Crie uma etiqueta primeiro no gerenciador de etiquetas.
-                          </p>
-                        ) : (
-                          <>
-                            <div>
-                              <label className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1 block">
-                                + Adicionar etiqueta
-                              </label>
-                              <select
-                                value={formAddTagId}
-                                onChange={(e) => setFormAddTagId(e.target.value)}
-                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              >
-                                <option value="">Nenhuma</option>
-                                {tags.filter(t => t.id !== formRemoveTagId).map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1 block">
-                                − Remover etiqueta
-                              </label>
-                              <select
-                                value={formRemoveTagId}
-                                onChange={(e) => setFormRemoveTagId(e.target.value)}
-                                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              >
-                                <option value="">Nenhuma</option>
-                                {tags.filter(t => t.id !== formAddTagId).map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground px-1">
-                              Selecione uma ou ambas. Ao clicar, as duas ações serão aplicadas de uma só vez.
-                            </p>
-                          </>
-                        )}
+                    {/* Tag actions — always available, coexist with text/audio */}
+                    <div className="space-y-2 rounded-lg border border-dashed border-border/60 p-2.5 bg-secondary/30">
+                      <div className="flex items-center gap-1.5">
+                        <TagIcon className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Etiquetas (opcional)
+                        </span>
                       </div>
-                    )}
+                      {tags.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Nenhuma etiqueta cadastrada. Crie uma no gerenciador de etiquetas.
+                        </p>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1 block">
+                              + Adicionar
+                            </label>
+                            <select
+                              value={formAddTagId}
+                              onChange={(e) => setFormAddTagId(e.target.value)}
+                              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">Nenhuma</option>
+                              {tags.filter(t => t.id !== formRemoveTagId).map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1 block">
+                              − Remover
+                            </label>
+                            <select
+                              value={formRemoveTagId}
+                              onChange={(e) => setFormRemoveTagId(e.target.value)}
+                              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">Nenhuma</option>
+                              {tags.filter(t => t.id !== formAddTagId).map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            As etiquetas serão aplicadas junto com o envio da mensagem.
+                          </p>
+                        </>
+                      )}
+                    </div>
 
                     <input
                       value={formShortcut}
@@ -439,9 +431,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       onClick={handleSave}
                       disabled={
                         !formTitle.trim() ||
-                        (formType === 'text' && !formContent.trim()) ||
                         (formType === 'audio' && !formContent) ||
-                        (formType === 'tag_action' && !formAddTagId && !formRemoveTagId)
+                        (formType === 'text' && !formContent.trim() && !formAddTagId && !formRemoveTagId)
                       }
                       className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
@@ -493,12 +484,18 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       key={msg.id}
                       className="group flex items-start gap-2 rounded-lg p-2.5 hover:bg-secondary/60 transition-colors cursor-pointer"
                       onClick={() => {
-                        if (k === 'text') {
+                        const hasTag = !!(msg.add_tag_id || msg.remove_tag_id || msg.type === 'add_tag' || msg.type === 'remove_tag' || msg.type === 'tag_action');
+                        const hasText = !!(msg.content && msg.content.trim() && msg.type !== 'audio');
+                        // Fill the input for review (text) — user will hit send.
+                        if (hasText) {
                           onSelect(msg.content);
-                          setOpen(false);
-                        } else if (k === 'tag_action') {
+                        }
+                        // Apply tag actions immediately, in parallel.
+                        if (hasTag) {
                           handleTagAction(msg);
                         }
+                        // Close panel unless nothing happened.
+                        if (hasText || hasTag) setOpen(false);
                       }}
                     >
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${typeIconBg(k)}`}>
