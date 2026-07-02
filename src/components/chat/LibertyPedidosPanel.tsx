@@ -403,10 +403,10 @@ function TextField({ label, value, onCommit, multiline }: {
 }
 
 const ETIQUETA_KEYS = [
-  'etiqueta_envio', 'etiqueta', 'url_etiqueta', 'etiqueta_url', 'link_etiqueta',
-  'shipping_label', 'label_url', 'etiqueta_pdf', 'pdf_etiqueta',
+  'etiqueta_envio_url', 'etiqueta_envio', 'etiqueta', 'url_etiqueta', 'etiqueta_url',
+  'link_etiqueta', 'shipping_label', 'label_url', 'etiqueta_pdf', 'pdf_etiqueta',
 ];
-const RASTREIO_KEYS = ['codigo_rastreio', 'rastreio', 'tracking_code', 'codigo_envio'];
+const RASTREIO_KEYS = ['codigo_rastreamento', 'codigo_rastreio', 'rastreio', 'tracking_code', 'codigo_envio'];
 
 function pickFirst(obj: Record<string, any>, keys: string[]): string {
   for (const k of keys) {
