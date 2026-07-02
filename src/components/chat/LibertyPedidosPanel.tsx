@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Loader2, Package, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Package, Plus, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -217,13 +212,16 @@ function PedidoCard({
     return p;
   };
 
+  const isUruguay = paisCurrent.toLowerCase().startsWith('uru') || paisCurrent.toLowerCase() === 'uy';
+  const currency = isUruguay ? '$U' : 'R$';
+
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/40">
       <button
         onClick={() => setExpanded((v) => !v)}
         className="w-full p-4 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
       >
-        <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-2 min-w-0">
             <div className="text-sm font-semibold text-foreground truncate">{cliente}</div>
             {paisCurrent && (
@@ -232,25 +230,17 @@ function PedidoCard({
               </span>
             )}
           </div>
-          <div className="text-xs text-muted-foreground truncate">{produto}</div>
 
           {valor != null && (
-            <div className="text-lg font-bold text-primary leading-none">
-              R$ {Number(valor).toFixed(2).replace('.', ',')}
+            <div className="text-xl font-bold text-primary leading-none">
+              {currency} {Number(valor).toFixed(2).replace('.', ',')}
             </div>
           )}
 
-          <div className="flex flex-col gap-0.5 pt-0.5">
-            {telefone && (
-              <span className="text-xs text-foreground/90 font-medium">
-                {fmtPhone(String(telefone), paisCurrent)}
-              </span>
-            )}
-            {entrada && (
-              <span className="text-[10px] text-muted-foreground">
-                {new Date(entrada).toLocaleDateString('pt-BR')}
-              </span>
-            )}
+          <div className="space-y-2 pt-1">
+            <InfoRow label="Produto" value={produto} />
+            {telefone && <InfoRow label="Telefone" value={fmtPhone(String(telefone), paisCurrent)} mono />}
+            {entrada && <InfoRow label="Data" value={new Date(entrada).toLocaleDateString('pt-BR')} />}
           </div>
 
           <div className="flex items-center gap-1 flex-wrap pt-1">
@@ -282,41 +272,26 @@ function PedidoCard({
             <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
           </div>
 
-
-
-
-
-          <div className="flex items-center justify-between pt-1">
-            {saving ? (
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> Salvando…
-              </span>
-            ) : <span />}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                  <Trash2 className="h-3 w-3 mr-1" /> Excluir pedido
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir pedido do LibertyPOS?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Essa ação remove o pedido também no LibertyPOS. Não pode ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">Excluir</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+          {saving && (
+            <div className="text-[10px] text-muted-foreground flex items-center gap-1 pt-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> Salvando…
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">{label}</span>
+      <span className={cn('text-xs text-foreground text-right truncate', mono && 'font-mono')}>{value}</span>
+    </div>
+  );
+}
+
 
 function SelectField({ label, value, options, onChange }: {
   label: string; value?: string; options: string[]; onChange: (v: string) => void;
