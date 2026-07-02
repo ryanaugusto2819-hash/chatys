@@ -342,6 +342,31 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
   const { messages, setMessages, loading: msgsLoading, hasMore, loadMore, loadingMore, markAsRead } = useChatMessages(id);
 
+  // Cache: sender_agent_id -> full_name
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  const uniqueSenderIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages) {
+      if (m.sender_type === 'agent' && (m as any).sender_agent_id) s.add((m as any).sender_agent_id);
+    }
+    return Array.from(s);
+  }, [messages]);
+
+  useEffect(() => {
+    const missing = uniqueSenderIds.filter(uid => !(uid in agentNames));
+    if (missing.length === 0) return;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('user_id, full_name').in('user_id', missing);
+      if (data) {
+        setAgentNames(prev => {
+          const next = { ...prev };
+          for (const p of data as any[]) next[p.user_id] = p.full_name || 'Humano';
+          return next;
+        });
+      }
+    })();
+  }, [uniqueSenderIds, agentNames]);
+
   // Only block UI on messages loading — conversation metadata loads in background
   const loading = msgsLoading;
 
