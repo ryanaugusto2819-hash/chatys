@@ -205,6 +205,7 @@ export type Database = {
           manual_only: boolean
           name: string
           niche_id: string | null
+          pinned_sectors: string[]
           trigger_count: number
           updated_at: string
           workspace_id: string | null
@@ -220,6 +221,7 @@ export type Database = {
           manual_only?: boolean
           name?: string
           niche_id?: string | null
+          pinned_sectors?: string[]
           trigger_count?: number
           updated_at?: string
           workspace_id?: string | null
@@ -235,6 +237,7 @@ export type Database = {
           manual_only?: boolean
           name?: string
           niche_id?: string | null
+          pinned_sectors?: string[]
           trigger_count?: number
           updated_at?: string
           workspace_id?: string | null
