@@ -716,6 +716,26 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         .update({ sale_registered_at: now } as any)
         .eq('id', conversationId!);
 
+      // Register sale in sales_orders for DashVendas
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes?.user?.id;
+      let vendedor = assignedAgent?.full_name || 'Desconhecido';
+      if (!assignedAgent && uid) {
+        const { data: prof } = await supabase.from('profiles').select('full_name').eq('user_id', uid).maybeSingle();
+        if (prof?.full_name) vendedor = prof.full_name;
+      }
+      await supabase.from('sales_orders' as any).insert({
+        vendedor,
+        valor: payload.valor,
+        quantidade: 1,
+        nome: conversation?.contact_name || null,
+        conversation_id: conversationId,
+        workspace_id: currentWorkspace?.id || null,
+        pais: payload.pais,
+        moeda: payload.moeda,
+        campanha: payload.campanha,
+      });
+
       toast.success('Venda registrada com sucesso!');
       setShowSaleDialog(false);
       setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });

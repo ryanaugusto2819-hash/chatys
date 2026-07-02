@@ -40,10 +40,11 @@ function getPrevRange(from: string | null, to: string | null): { from: string | 
   };
 }
 
-async function fetchSalesData(from: string | null, to: string | null) {
+async function fetchSalesData(from: string | null, to: string | null, pais: string | null) {
   let query = supabase.from('sales_orders' as any).select('valor, quantidade');
   if (from) query = (query as any).gte('created_at', from);
   if (to)   query = (query as any).lte('created_at', to);
+  if (pais) query = (query as any).eq('pais', pais);
 
   const { data } = await query;
   const rows = (data as any[]) ?? [];
@@ -82,15 +83,16 @@ export function useSalesKPIs(
   metaDia: number,
   metaMes: number,
   commissionRate: number,
+  pais: string | null = null,
 ) {
   return useQuery<SalesKPIs>({
-    queryKey: ['sales-kpis', from, to, metaDia, metaMes, commissionRate],
+    queryKey: ['sales-kpis', from, to, metaDia, metaMes, commissionRate, pais],
     queryFn: async () => {
       const prev = getPrevRange(from, to);
 
       const [current, previous, convCurrent, convPrevious] = await Promise.all([
-        fetchSalesData(from, to),
-        fetchSalesData(prev.from, prev.to),
+        fetchSalesData(from, to, pais),
+        fetchSalesData(prev.from, prev.to, pais),
         fetchConversationsData(from, to),
         fetchConversationsData(prev.from, prev.to),
       ]);
