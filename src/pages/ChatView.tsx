@@ -1501,6 +1501,26 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     <p className="text-xs text-muted-foreground text-center py-1">Sem etiquetas</p>
                   )}
                 </div>
+                {rmkTag && (
+                  <button
+                    onClick={toggleRmkTag}
+                    disabled={rmkLoading}
+                    className={`mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-medium transition-colors ${
+                      contactTags.some(ct => ct.tag.id === rmkTag.id)
+                        ? 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30'
+                        : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
+                    }`}
+                  >
+                    {rmkLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : contactTags.some(ct => ct.tag.id === rmkTag.id) ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                    RMK
+                  </button>
+                )}
               </div>
 
               {/* Conversation Info */}
