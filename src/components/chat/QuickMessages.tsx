@@ -104,7 +104,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     const isTag = formType === 'tag_action';
     const payload: any = {
       title: formTitle,
-      content: isTag || formType === 'audio' ? (formType === 'audio' ? formContent : '') : formContent,
+      // Preserve text content also for tag_action rows (optional message alongside the tag change)
+      content: formType === 'audio' ? formContent : (formContent || ''),
       type: formType,
       shortcut: formShortcut || null,
       add_tag_id: isTag ? (formAddTagId || null) : null,
