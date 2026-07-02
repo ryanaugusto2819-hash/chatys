@@ -246,6 +246,23 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
           <p className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.status === 'failed' ? 'text-destructive/80' : ''}`}>{msg.content}</p>
         )}
 
+        {/* Inline translation */}
+        {translation !== null && (
+          <div className={`mt-1.5 pt-1.5 border-t text-sm leading-relaxed whitespace-pre-wrap ${
+            msg.sender_type === 'agent'
+              ? 'border-primary-foreground/25 text-primary-foreground/90'
+              : 'border-border text-card-foreground/90'
+          }`}>
+            <div className={`mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${
+              msg.sender_type === 'agent' ? 'text-primary-foreground/60' : 'text-primary/80'
+            }`}>
+              <Languages className="h-2.5 w-2.5" /> PT-BR
+            </div>
+            {translation || <span className="italic opacity-60">Sem tradução</span>}
+          </div>
+        )}
+
+
         {/* Fallback for image/video without URL and no content */}
         {(['image', 'video'].includes(msg.message_type)) && !msg.media_url && !msg.content && (
           <p className="text-sm leading-relaxed italic opacity-70">
