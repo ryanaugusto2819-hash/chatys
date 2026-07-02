@@ -263,20 +263,28 @@ function PedidoCard({
 function SelectField({ label, value, options, onChange }: {
   label: string; value?: string; options: string[]; onChange: (v: string) => void;
 }) {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const raw = (value ?? '').toString();
+  // Match option case-insensitively; if upstream sends a value that isn't in
+  // our option list (e.g. "a enviar"), keep it as-is so it still shows.
+  const matched = options.find((o) => norm(o) === norm(raw));
+  const current = matched ?? (raw ? raw : '');
+  const allOptions = matched || !raw ? options : [raw, ...options];
   return (
     <div>
       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</Label>
-      <Select value={value || ''} onValueChange={onChange}>
+      <Select value={current} onValueChange={onChange}>
         <SelectTrigger className="h-7 text-[11px] mt-1">
           <SelectValue placeholder="Selecionar…" />
         </SelectTrigger>
         <SelectContent>
-          {options.map((o) => <SelectItem key={o} value={o} className="text-[11px]">{o}</SelectItem>)}
+          {allOptions.map((o) => <SelectItem key={o} value={o} className="text-[11px]">{o}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
   );
 }
+
 
 function TextField({ label, value, onCommit, multiline }: {
   label: string; value?: string | number | null; onCommit: (v: string) => void; multiline?: boolean;
