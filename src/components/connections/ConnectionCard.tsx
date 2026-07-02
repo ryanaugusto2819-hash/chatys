@@ -169,6 +169,12 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
         body: { action: 'update', id: connection.id, config: values, label },
       });
       if (error) throw error;
+      // Persist sector directly (edge function does not handle it)
+      const { error: sectorErr } = await supabase
+        .from('connection_configs')
+        .update({ sector: sector || null })
+        .eq('id', connection.id);
+      if (sectorErr) throw sectorErr;
       setDiagnostics((data as { diagnostics?: Record<string, unknown> })?.diagnostics || null);
       toast.success('Conexão atualizada!');
       onUpdated();
