@@ -8,6 +8,7 @@ import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Chec
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
 import PinnedFlowShortcuts from '@/components/chat/PinnedFlowShortcuts';
+import LibertyPedidosPanel from '@/components/chat/LibertyPedidosPanel';
 import PinnedQuickMessageShortcuts from '@/components/chat/PinnedQuickMessageShortcuts';
 
 import TagManager from '@/components/tags/TagManager';
