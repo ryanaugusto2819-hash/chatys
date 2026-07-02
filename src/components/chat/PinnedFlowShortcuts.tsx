@@ -27,14 +27,14 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
 
   const fetchFlows = async () => {
     setLoading(true);
-    let query = supabase
+    let query: any = supabase
       .from('automation_flows')
       .select('id, name, category, is_active')
-      .eq('is_pinned_sidebar' as any, true as any)
+      .eq('is_pinned_sidebar', true)
       .order('name');
 
     if (currentWorkspace) {
-      query = (query as any).eq('workspace_id', currentWorkspace.id);
+      query = query.eq('workspace_id', currentWorkspace.id);
     }
 
     const { data } = await query;
