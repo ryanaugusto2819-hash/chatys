@@ -83,12 +83,12 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setShowForm(false);
   };
 
-  // Normalize DB row into a display "kind"
+  // Normalize DB row into a display "kind" for the icon
   const kindOf = (m: QuickMessage): 'text' | 'audio' | 'tag_action' => {
     if (m.type === 'audio') return 'audio';
-    if (m.type === 'add_tag' || m.type === 'remove_tag' || m.type === 'tag_action' || m.add_tag_id || m.remove_tag_id) {
-      return 'tag_action';
-    }
+    const hasTag = !!(m.add_tag_id || m.remove_tag_id || m.type === 'add_tag' || m.type === 'remove_tag' || m.type === 'tag_action');
+    const hasText = !!(m.content && m.content.trim());
+    if (hasTag && !hasText) return 'tag_action';
     return 'text';
   };
 
