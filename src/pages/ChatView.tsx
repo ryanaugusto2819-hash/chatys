@@ -1187,7 +1187,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <div>
                 <button
                   onClick={() => { setShowMotoboyDialog(true); setMotoboyCity(''); setMotoboyResult(null); }}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white py-1.5 px-3 text-xs font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
                 >
                   🏍️ Verificar Motoboy
                 </button>
