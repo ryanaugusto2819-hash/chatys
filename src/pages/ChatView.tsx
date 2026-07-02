@@ -462,6 +462,46 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
+  // Fetch RMK tag for quick toggle
+  const fetchRmkTag = useCallback(async () => {
+    if (!currentWorkspace) return;
+    const { data } = await supabase
+      .from('tags')
+      .select('id, name, color')
+      .eq('name', 'RMK')
+      .eq('workspace_id', currentWorkspace.id)
+      .maybeSingle();
+    if (data) setRmkTag(data);
+    else setRmkTag(null);
+  }, [currentWorkspace]);
+
+  useEffect(() => {
+    fetchRmkTag();
+  }, [fetchRmkTag]);
+
+  const toggleRmkTag = async () => {
+    if (!rmkTag || !conversation) return;
+    setRmkLoading(true);
+    try {
+      const isAssigned = contactTags.some(ct => ct.tag.id === rmkTag.id);
+      if (isAssigned) {
+        const ct = contactTags.find(ct => ct.tag.id === rmkTag.id);
+        if (ct) {
+          await supabase.from('contact_tags').delete().eq('id', ct.id);
+          toast.success('Etiqueta RMK removida');
+        }
+      } else {
+        await supabase.from('contact_tags').insert({ contact_phone: conversation.contact_phone, tag_id: rmkTag.id });
+        toast.success('Etiqueta RMK adicionada');
+      }
+      fetchConversation();
+    } catch {
+      toast.error('Erro ao alterar etiqueta RMK');
+    } finally {
+      setRmkLoading(false);
+    }
+  };
+
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
