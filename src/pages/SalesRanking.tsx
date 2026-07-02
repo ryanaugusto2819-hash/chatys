@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
   Package, CalendarDays, TrendingUp, TrendingDown,
-  Target, Facebook, Percent, Settings, X, Check,
+  Facebook, Percent, Settings, X, Check, Globe,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesKPIs, pctChange } from '@/hooks/useSalesKPIs';
@@ -142,19 +142,15 @@ function KpiCard({ title, value, pct, icon: Icon, accentColor, iconBg, delay = 0
   );
 }
 
-// ── Goals Config Modal ──────────────────────────────────────
+// ── Commission Config Modal ──────────────────────────────────
 interface GoalsModalProps {
   open: boolean;
   onClose: () => void;
-  metaDia: number;
-  metaMes: number;
   commissionRate: number;
-  onSave: (metaDia: number, metaMes: number, commissionRate: number) => void;
+  onSave: (commissionRate: number) => void;
 }
 
-function GoalsModal({ open, onClose, metaDia, metaMes, commissionRate, onSave }: GoalsModalProps) {
-  const [dia, setDia] = useState(String(metaDia));
-  const [mes, setMes] = useState(String(metaMes));
+function GoalsModal({ open, onClose, commissionRate, onSave }: GoalsModalProps) {
   const [rate, setRate] = useState(String(Math.round(commissionRate * 100)));
 
   if (!open) return null;
@@ -169,48 +165,24 @@ function GoalsModal({ open, onClose, metaDia, metaMes, commissionRate, onSave }:
         style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-card-foreground">Configurar Metas</h3>
+          <h3 className="text-base font-bold text-card-foreground">Configurar Comissão</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-card-foreground transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
-              Meta do Dia (R$)
-            </label>
-            <input
-              type="number"
-              value={dia}
-              onChange={e => setDia(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
-              Meta do Mês (R$)
-            </label>
-            <input
-              type="number"
-              value={mes}
-              onChange={e => setMes(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
-              Taxa de Comissão (%)
-            </label>
-            <input
-              type="number"
-              value={rate}
-              onChange={e => setRate(e.target.value)}
-              min="0"
-              max="100"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
+            Taxa de Comissão (%)
+          </label>
+          <input
+            type="number"
+            value={rate}
+            onChange={e => setRate(e.target.value)}
+            min="0"
+            max="100"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
         </div>
 
         <div className="flex gap-2 pt-1">
@@ -223,7 +195,7 @@ function GoalsModal({ open, onClose, metaDia, metaMes, commissionRate, onSave }:
           </button>
           <button
             onClick={() => {
-              onSave(Number(dia) || 0, Number(mes) || 0, (Number(rate) || 0) / 100);
+              onSave((Number(rate) || 0) / 100);
               onClose();
             }}
             className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
@@ -237,6 +209,13 @@ function GoalsModal({ open, onClose, metaDia, metaMes, commissionRate, onSave }:
     </div>
   );
 }
+
+type CountryKey = 'all' | 'brasil' | 'uruguay';
+const COUNTRIES: { key: CountryKey; label: string; flag: string }[] = [
+  { key: 'all',     label: 'Todos',   flag: '🌎' },
+  { key: 'brasil',  label: 'Brasil',  flag: '🇧🇷' },
+  { key: 'uruguay', label: 'Uruguai', flag: '🇺🇾' },
+];
 
 // ── Main Component ──────────────────────────────────────────
 export default function SalesRanking() {
