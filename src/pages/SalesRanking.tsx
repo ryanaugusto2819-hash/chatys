@@ -302,6 +302,28 @@ export default function SalesRanking() {
     country === 'uruguay' ? pending.confirmacaoUruguay :
     pending.confirmacaoBrasil + pending.confirmacaoUruguay;
 
+  // "Endereço confirmado" = contatos que já avançaram (fazer agendamento, pedido agendado, confirmação pendente)
+  const fazerAgendamento =
+    country === 'brasil'  ? pending.fazerAgendamentoBrasil :
+    country === 'uruguay' ? pending.fazerAgendamentoUruguay :
+    pending.fazerAgendamentoBrasil + pending.fazerAgendamentoUruguay;
+  const pedidoAgendado =
+    country === 'brasil'  ? pending.pedidoAgendadoBrasil :
+    country === 'uruguay' ? pending.pedidoAgendadoUruguay :
+    pending.pedidoAgendadoBrasil + pending.pedidoAgendadoUruguay;
+
+  const enderecoConfirmado = fazerAgendamento + pedidoAgendado + confirmacaoPendente;
+  const totalEnderecos = enderecoConfirmado + enderecoPendente;
+  const pctEnderecoConfirmado = totalEnderecos > 0
+    ? Math.round((enderecoConfirmado / totalEnderecos) * 100)
+    : 0;
+
+  // "Confirmação confirmada" = pedidos já agendados vs. total no funil de confirmação
+  const totalConfirmacoes = pedidoAgendado + fazerAgendamento + confirmacaoPendente;
+  const pctConfirmacaoConfirmada = totalConfirmacoes > 0
+    ? Math.round((pedidoAgendado / totalConfirmacoes) * 100)
+    : 0;
+
 
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
