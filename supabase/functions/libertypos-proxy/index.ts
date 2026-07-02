@@ -6,7 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-type Action = 'list' | 'get' | 'create' | 'update' | 'delete';
+type Action = 'list' | 'get' | 'create' | 'update' | 'delete' | 'options';
+
+const OPTION_FIELDS = [
+  'status_cobranca',
+  'status_pagamento', 'pagamento',
+  'forma_pagamento', 'forma_pgto',
+  'logistica', 'tipo_entrega',
+  'status_envio', 'envio',
+  'wpp_cobranca',
+];
 
 interface Body {
   action: Action;
