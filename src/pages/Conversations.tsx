@@ -227,27 +227,18 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   });
 
 
-  // Compute effective connection IDs based on tab + manual filter
-  const effectiveConnectionIds = useMemo(() => {
-    if (activeTab === 'all') return selectedConnections;
-    const tabConnectionIds = allConnections
-      .filter(c => c.connection_id === activeTab)
-      .map(c => c.id);
-    if (selectedConnections.length > 0) {
-      return selectedConnections.filter(id => tabConnectionIds.includes(id));
-    }
-    return tabConnectionIds;
-  }, [activeTab, selectedConnections, allConnections]);
-
-  // Compute filters for the query
+  // Compute filters for the query — sector comes from the tab; connection filter is manual only
   const inboxFilters = useMemo<InboxFilters>(() => ({
     search: searchByMessage ? '' : debouncedSearch,
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
-    connectionIds: effectiveConnectionIds,
+    connectionIds: selectedConnections,
     tagId: selectedTag !== 'all' ? selectedTag : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
+    sector: activeTab !== 'all' ? activeTab : '',
+  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTag, onlyUnread, searchByMessage, activeTab]);
+
   }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread, searchByMessage]);
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
