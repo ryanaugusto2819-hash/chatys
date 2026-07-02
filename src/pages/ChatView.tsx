@@ -1354,55 +1354,63 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               )}
 
 
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <User className="h-3 w-3" /> Detalhes do Contato
-                </p>
-                <div className="space-y-2.5 rounded-lg border border-border bg-background/50 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Telefone</span>
-                    <span className="text-xs font-medium text-card-foreground">{conversation.contact_phone}</span>
-                  </div>
-                  <div className="h-px bg-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Primeira conversa</span>
-                    <span className="text-xs font-medium text-card-foreground">{format(new Date(conversation.created_at), 'dd/MM/yyyy')}</span>
-                  </div>
-                  <div className="h-px bg-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Última atividade</span>
-                    <span className="text-xs font-medium text-card-foreground">{format(new Date(conversation.updated_at), 'dd/MM HH:mm')}</span>
-                  </div>
-                  {(conversation.ctwa_clid || conversation.source_id || conversation.ad_title) && (
-                    <>
-                      <div className="h-px bg-border" />
-                      {conversation.ad_title && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Anúncio</span>
-                          <span className="text-xs font-medium text-primary max-w-[140px] truncate" title={conversation.ad_title}>{conversation.ad_title}</span>
-                        </div>
-                      )}
-                      {conversation.ctwa_clid && (
-                        <>
-                          {conversation.ad_title && <div className="h-px bg-border" />}
+              <div className="rounded-lg border border-border bg-background/50 overflow-hidden">
+                <button
+                  onClick={() => setContactDetailsOpen(!contactDetailsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider hover:bg-muted/30 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <User className="h-3 w-3" /> Detalhes do Contato
+                  </span>
+                  {contactDetailsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {contactDetailsOpen && (
+                  <div className="space-y-2.5 p-3 pt-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Telefone</span>
+                      <span className="text-xs font-medium text-card-foreground">{conversation.contact_phone}</span>
+                    </div>
+                    <div className="h-px bg-border" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Primeira conversa</span>
+                      <span className="text-xs font-medium text-card-foreground">{format(new Date(conversation.created_at), 'dd/MM/yyyy')}</span>
+                    </div>
+                    <div className="h-px bg-border" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Última atividade</span>
+                      <span className="text-xs font-medium text-card-foreground">{format(new Date(conversation.updated_at), 'dd/MM HH:mm')}</span>
+                    </div>
+                    {(conversation.ctwa_clid || conversation.source_id || conversation.ad_title) && (
+                      <>
+                        <div className="h-px bg-border" />
+                        {conversation.ad_title && (
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">CTWA Click ID</span>
-                            <span className="text-[10px] font-mono text-card-foreground max-w-[120px] truncate" title={conversation.ctwa_clid}>{conversation.ctwa_clid}</span>
+                            <span className="text-xs text-muted-foreground">Anúncio</span>
+                            <span className="text-xs font-medium text-primary max-w-[140px] truncate" title={conversation.ad_title}>{conversation.ad_title}</span>
                           </div>
-                        </>
-                      )}
-                      {conversation.source_id && (
-                        <>
-                          <div className="h-px bg-border" />
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">Source ID</span>
-                            <span className="text-[10px] font-mono text-card-foreground max-w-[120px] truncate" title={conversation.source_id}>{conversation.source_id}</span>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
+                        )}
+                        {conversation.ctwa_clid && (
+                          <>
+                            {conversation.ad_title && <div className="h-px bg-border" />}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">CTWA Click ID</span>
+                              <span className="text-[10px] font-mono text-card-foreground max-w-[120px] truncate" title={conversation.ctwa_clid}>{conversation.ctwa_clid}</span>
+                            </div>
+                          </>
+                        )}
+                        {conversation.source_id && (
+                          <>
+                            <div className="h-px bg-border" />
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Source ID</span>
+                              <span className="text-[10px] font-mono text-card-foreground max-w-[120px] truncate" title={conversation.source_id}>{conversation.source_id}</span>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Assigned Agent */}
