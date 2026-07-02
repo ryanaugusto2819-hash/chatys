@@ -1065,19 +1065,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               </div>
             </div>
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 gap-px bg-border border-b border-border">
-              <div className="flex flex-col items-center py-3 bg-card">
-                <span className="text-lg font-bold text-card-foreground">{messages.length}</span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Mensagens</span>
-              </div>
-              <div className="flex flex-col items-center py-3 bg-card">
-                <span className="text-lg font-bold text-card-foreground">
-                  {formatDistanceToNow(new Date(conversation.created_at), { locale: ptBR, addSuffix: false })}
-                </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Duração</span>
-              </div>
-            </div>
 
             <div className="p-4 space-y-5 flex-1">
               {/* Register Sale */}
