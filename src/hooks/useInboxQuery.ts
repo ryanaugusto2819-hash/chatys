@@ -37,6 +37,7 @@ export interface InboxConversation {
   niche_id: string | null;
   connection_config_id: string | null;
   contact_tags: ContactTagInfo[];
+  sector: string | null;
 }
 
 interface InboxPage {
