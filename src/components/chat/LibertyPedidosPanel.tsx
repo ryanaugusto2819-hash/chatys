@@ -285,9 +285,9 @@ function PedidoCard({
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">{label}</span>
-      <span className={cn('text-xs text-foreground text-right truncate', mono && 'font-mono')}>{value}</span>
+    <div className="grid grid-cols-[80px_1fr] items-center gap-3 py-1 border-b border-border/40 last:border-0">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</span>
+      <span className={cn('text-xs text-foreground font-medium truncate', mono && 'font-mono tracking-tight')}>{value}</span>
     </div>
   );
 }
