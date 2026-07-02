@@ -141,16 +141,11 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormTitle(msg.title);
     setFormContent(msg.content);
     setFormShortcut(msg.shortcut || '');
-    const k = kindOf(msg);
-    setFormType(k);
-    if (k === 'tag_action') {
-      // Backfill legacy add_tag/remove_tag rows into the unified form
-      setFormAddTagId(msg.add_tag_id || (msg.type === 'add_tag' ? (msg.tag_id || '') : ''));
-      setFormRemoveTagId(msg.remove_tag_id || (msg.type === 'remove_tag' ? (msg.tag_id || '') : ''));
-    } else {
-      setFormAddTagId('');
-      setFormRemoveTagId('');
-    }
+    // Media type is text or audio; tag actions coexist independently
+    setFormType(msg.type === 'audio' ? 'audio' : 'text');
+    // Load tag fields — support legacy add_tag/remove_tag rows
+    setFormAddTagId(msg.add_tag_id || (msg.type === 'add_tag' ? (msg.tag_id || '') : ''));
+    setFormRemoveTagId(msg.remove_tag_id || (msg.type === 'remove_tag' ? (msg.tag_id || '') : ''));
     setShowForm(true);
   };
 
