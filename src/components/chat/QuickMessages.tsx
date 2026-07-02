@@ -250,15 +250,15 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
   const previewText = (m: QuickMessage) => {
     const k = kindOf(m);
     if (k === 'audio') return '🎵 Mensagem de áudio';
-    if (k === 'tag_action') {
-      const addId = m.add_tag_id || (m.type === 'add_tag' ? m.tag_id : null);
-      const removeId = m.remove_tag_id || (m.type === 'remove_tag' ? m.tag_id : null);
-      const parts: string[] = [];
-      if (addId) parts.push(`+ ${tags.find(t => t.id === addId)?.name || '—'}`);
-      if (removeId) parts.push(`− ${tags.find(t => t.id === removeId)?.name || '—'}`);
-      return `🏷️ ${parts.join('   ') || 'etiqueta não configurada'}`;
-    }
-    return m.content;
+    const addId = m.add_tag_id || (m.type === 'add_tag' ? m.tag_id : null);
+    const removeId = m.remove_tag_id || (m.type === 'remove_tag' ? m.tag_id : null);
+    const tagParts: string[] = [];
+    if (addId) tagParts.push(`+ ${tags.find(t => t.id === addId)?.name || '—'}`);
+    if (removeId) tagParts.push(`− ${tags.find(t => t.id === removeId)?.name || '—'}`);
+    const tagLabel = tagParts.length ? `🏷️ ${tagParts.join('  ')}` : '';
+    if (k === 'tag_action') return tagLabel || 'etiqueta não configurada';
+    // text (may also carry tag actions)
+    return tagLabel ? `${m.content}  •  ${tagLabel}` : m.content;
   };
 
   return (
