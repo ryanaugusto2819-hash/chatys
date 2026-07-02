@@ -682,59 +682,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
   };
 
-  const handleSendOrder = async () => {
-    if (!orderData.nome || !orderData.produto || sendingOrder) return;
-    setSendingOrder(true);
-    try {
-      const payload = {
-        nome: orderData.nome,
-        cedula: orderData.cedula,
-        cep: orderData.cep,
-        bairro: orderData.bairro,
-        cidade: orderData.cidade,
-        rua: orderData.rua,
-        numero: orderData.numero,
-        complemento: orderData.complemento,
-        produto: orderData.produto,
-        quantidade: parseInt(orderData.quantidade) || 1,
-        valor: parseFloat(orderData.valor) || 0,
-        telefone: orderData.telefone,
-        pais: orderData.pais || 'BR',
-      };
-
-      const res = await fetch('https://gwvhvvmghkpgtiofnivo.supabase.co/functions/v1/receive-order-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error('Webhook failed');
-
-      // Save to local sales_orders table for ranking
-      await supabase.from('sales_orders' as any).insert({
-        vendedor: orderData.vendedor || 'Desconhecido',
-        produto: orderData.produto,
-        quantidade: parseInt(orderData.quantidade) || 1,
-        valor: parseFloat(orderData.valor) || 0,
-        nome: orderData.nome,
-        conversation_id: id || null,
-      });
-
-      setOrderCount(prev => prev + 1);
-      toast.success('Pedido adicionado com sucesso!');
-      setShowOrderDialog(false);
-      setOrderData({
-        nome: '', cedula: '', cep: '', bairro: '', cidade: '', rua: '',
-        numero: '', complemento: '', produto: '', quantidade: '1',
-        valor: '', vendedor: '', telefone: '', pais: 'BR',
-      });
-    } catch (err) {
-      console.error('Order webhook error:', err);
-      toast.error('Erro ao adicionar pedido');
-    } finally {
-      setSendingOrder(false);
-    }
-  };
 
   const handleGenerateTermo = async () => {
     if (!termoData.nomeCliente || !termoData.cpf || !termoData.meses || sendingTermo) return;
