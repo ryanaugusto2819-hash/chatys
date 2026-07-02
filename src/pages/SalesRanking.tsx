@@ -226,26 +226,29 @@ export default function SalesRanking() {
   const [customTo, setCustomTo] = useState('');
   const [showCustom, setShowCustom] = useState(false);
 
-  // Goals & config (persisted in localStorage)
-  const [metaDia, setMetaDia]           = useState(() => Number(localStorage.getItem('ranking_meta_dia')  ?? 30000));
-  const [metaMes, setMetaMes]           = useState(() => Number(localStorage.getItem('ranking_meta_mes')  ?? 1000000));
+  // Commission config (persisted in localStorage)
   const [commissionRate, setCommissionRate] = useState(() => Number(localStorage.getItem('ranking_commission') ?? 0.1315));
   const [showGoals, setShowGoals] = useState(false);
+  const [country, setCountry] = useState<CountryKey>(() => (localStorage.getItem('dashvendas_country') as CountryKey) || 'all');
 
-  function handleSaveGoals(d: number, m: number, r: number) {
-    setMetaDia(d); setMetaMes(m); setCommissionRate(r);
-    localStorage.setItem('ranking_meta_dia',   String(d));
-    localStorage.setItem('ranking_meta_mes',   String(m));
+  function handleSaveGoals(r: number) {
+    setCommissionRate(r);
     localStorage.setItem('ranking_commission', String(r));
+  }
+
+  function handleCountryChange(c: CountryKey) {
+    setCountry(c);
+    localStorage.setItem('dashvendas_country', c);
   }
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const { from, to } = getDateRange(period, customFrom, customTo);
-      let query = supabase.from('sales_orders' as any).select('vendedor, valor, quantidade');
+      let query = supabase.from('sales_orders' as any).select('vendedor, valor, quantidade, pais');
       if (from) query = (query as any).gte('created_at', from);
       if (to)   query = (query as any).lte('created_at', to);
+      if (country !== 'all') query = (query as any).eq('pais', country);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -265,7 +268,7 @@ export default function SalesRanking() {
     } finally {
       setLoading(false);
     }
-  }, [period, customFrom, customTo]);
+  }, [period, customFrom, customTo, country]);
 
   useEffect(() => {
     if (period === 'custom' && (!customFrom || !customTo)) return;
@@ -275,7 +278,7 @@ export default function SalesRanking() {
   // KPIs hook
   const { from: kpiFrom, to: kpiTo } = getDateRange(period, customFrom, customTo);
   const { data: kpis, isLoading: kpiLoading } = useSalesKPIs(
-    kpiFrom, kpiTo, metaDia, metaMes, commissionRate,
+    kpiFrom, kpiTo, 0, 0, commissionRate, country === 'all' ? null : country,
   );
 
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
@@ -285,18 +288,17 @@ export default function SalesRanking() {
   const top3        = stats.slice(0, 3);
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
+  const currencySymbol = country === 'uruguay' ? '$U ' : 'R$ ';
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
 
-      {/* ── Goals Modal ── */}
+      {/* ── Commission Modal ── */}
       <AnimatePresence>
         {showGoals && (
           <GoalsModal
             open={showGoals}
             onClose={() => setShowGoals(false)}
-            metaDia={metaDia}
-            metaMes={metaMes}
             commissionRate={commissionRate}
             onSave={handleSaveGoals}
           />
