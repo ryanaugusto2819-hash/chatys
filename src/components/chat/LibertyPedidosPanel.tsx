@@ -32,10 +32,10 @@ type OptionsMap = Record<string, string[]>;
 
 const badgeColor = (v?: string) => {
   const s = (v || '').toLowerCase();
-  if (['pago', 'quitado', 'entregue', 'concluído', 'enviado'].some((k) => s.includes(k))) return 'bg-emerald-600/20 text-emerald-400 border-emerald-600/40';
-  if (['atraso', 'cancelado', 'estornado', 'reembolsado'].some((k) => s.includes(k))) return 'bg-red-600/20 text-red-400 border-red-600/40';
-  if (['trânsito', 'em transito', 'respondido'].some((k) => s.includes(k))) return 'bg-blue-600/20 text-blue-400 border-blue-600/40';
-  return 'bg-amber-600/20 text-amber-400 border-amber-600/40';
+  if (['pago', 'quitado', 'entregue', 'concluído', 'enviado'].some((k) => s.includes(k))) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+  if (['atraso', 'cancelado', 'estornado', 'reembolsado'].some((k) => s.includes(k))) return 'bg-destructive/10 text-destructive border-destructive/30';
+  if (['trânsito', 'em transito', 'respondido'].some((k) => s.includes(k))) return 'bg-primary/10 text-primary border-primary/30';
+  return 'bg-muted text-muted-foreground border-border';
 };
 
 export default function LibertyPedidosPanel({ contactPhone }: Props) {
@@ -209,16 +209,16 @@ function PedidoCard({
   };
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card/60 overflow-hidden shadow-sm hover:border-primary/40 transition-colors">
+    <div className="rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/40">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full p-3 flex items-start justify-between gap-2 hover:bg-muted/30 transition text-left"
+        className="w-full p-3 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
       >
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="text-[12px] font-semibold text-card-foreground truncate tracking-tight">{cliente}</div>
+            <div className="text-[12px] font-semibold text-foreground truncate">{cliente}</div>
             {paisCurrent && (
-              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 shrink-0">
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 shrink-0 uppercase tracking-wide">
                 {paisCurrent}
               </span>
             )}
@@ -226,12 +226,12 @@ function PedidoCard({
           <div className="text-[11px] text-muted-foreground truncate">{produto}</div>
           <div className="flex items-center gap-2 flex-wrap">
             {valor != null && (
-              <span className="text-[11px] font-mono font-semibold text-emerald-400">
+              <span className="text-[11px] font-semibold text-primary">
                 R$ {Number(valor).toFixed(2).replace('.', ',')}
               </span>
             )}
             {telefone && (
-              <span className="text-[10px] text-muted-foreground font-mono">
+              <span className="text-[10px] text-muted-foreground">
                 {fmtPhone(String(telefone))}
               </span>
             )}
@@ -258,17 +258,8 @@ function PedidoCard({
       </button>
 
       {expanded && (
-        <div className="p-3 pt-2 space-y-3 border-t border-border/60 bg-background/30">
-          <div className="grid grid-cols-2 gap-2">
-            <TextField label="Nome" value={String(val('nome', 'cliente', 'contact_name'))} onCommit={(v) => patch('nome', v)} />
-            <TextField label="Telefone" value={String(val('telefone', 'phone', 'whatsapp'))} onCommit={(v) => patch('telefone', v)} />
-            <TextField label="Produto" value={String(val('produto', 'product'))} onCommit={(v) => patch('produto', v)} />
-            <TextField label="Valor" value={String(val('valor', 'value'))} onCommit={(v) => patch('valor', v)} />
-          </div>
-
+        <div className="p-3 pt-2 space-y-3 border-t border-border">
           <SelectField label="País" value={paisCurrent} options={paisOptions} onChange={(v) => patch('pais', v)} />
-
-          <div className="h-px bg-border/50" />
 
           <div className="grid grid-cols-2 gap-2">
             <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
@@ -280,6 +271,7 @@ function PedidoCard({
           </div>
 
           <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />
+
 
 
 
