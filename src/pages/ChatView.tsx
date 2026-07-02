@@ -29,6 +29,7 @@ interface ConversationData {
   ctwa_clid: string | null;
   source_id: string | null;
   ad_title: string | null;
+  sector: string | null;
 }
 
 interface ContactTag {
@@ -487,7 +488,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (!id) return;
     const { data } = await supabase
       .from('conversations')
-      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id')
+      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id, sector')
       .eq('id', id)
       .single();
     if (data) {
@@ -921,7 +922,34 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <p className="text-[11px] text-muted-foreground">{conversation?.contact_phone || ''}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            {conversation && (
+              <select
+                value={conversation.sector || ''}
+                onChange={async (e) => {
+                  const newSector = e.target.value || null;
+                  const prev = conversation.sector;
+                  setConversation({ ...conversation, sector: newSector });
+                  const { error } = await supabase
+                    .from('conversations')
+                    .update({ sector: newSector })
+                    .eq('id', conversation.id);
+                  if (error) {
+                    setConversation({ ...conversation, sector: prev });
+                    toast.error('Erro ao transferir de setor');
+                  } else {
+                    toast.success(newSector ? `Transferido para ${newSector === 'pos_venda' ? 'Pós-Venda' : newSector === 'cobranca' ? 'Cobrança' : 'Comercial'}` : 'Setor removido');
+                  }
+                }}
+                className="h-8 rounded-lg border border-input bg-background px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                title="Transferir para outro setor"
+              >
+                <option value="">Sem setor</option>
+                <option value="comercial">Comercial</option>
+                <option value="pos_venda">Pós-Venda</option>
+                <option value="cobranca">Cobrança</option>
+              </select>
+            )}
             {conversation && <StatusBadge status={conversation.status as 'new' | 'pending' | 'active' | 'resolved'} />}
             <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
               <MoreVertical className="h-4 w-4" />

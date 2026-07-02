@@ -13,6 +13,7 @@ export interface InboxFilters {
   tagId: string | null;
   onlyUnread: boolean;
   lastCustomer: boolean;
+  sector?: string;
 }
 
 export interface ContactTagInfo {
@@ -36,6 +37,7 @@ export interface InboxConversation {
   niche_id: string | null;
   connection_config_id: string | null;
   contact_tags: ContactTagInfo[];
+  sector: string | null;
 }
 
 interface InboxPage {
@@ -64,6 +66,7 @@ export function useInboxQuery(filters: InboxFilters) {
         p_only_unread: filters.onlyUnread,
         p_last_customer: filters.lastCustomer,
         p_workspace_id: currentWorkspace?.id ?? null,
+        p_sector: filters.sector ?? '',
       });
 
       if (error) throw error;

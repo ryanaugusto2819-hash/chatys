@@ -58,6 +58,7 @@ export default function Connections() {
           status: d.status || 'unknown',
           last_checked_at: d.last_checked_at,
           status_since: d.status_since ?? null,
+          sector: d.sector ?? null,
           workspace_id: d.workspace_id,
         }))
       );

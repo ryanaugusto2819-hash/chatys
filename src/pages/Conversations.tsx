@@ -16,11 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useInboxQuery, type InboxFilters, type InboxConversation, type ContactTagInfo } from '@/hooks/useInboxQuery';
+import { SECTORS, type SectorValue } from '@/lib/sectors';
 
 const CONVERSATIONS_FILTERS_STORAGE_KEY = 'conversations-filters';
 const CONVERSATIONS_TAB_STORAGE_KEY = 'conversations-active-tab';
 
-type ConnectionTab = 'all' | 'whatsapp' | 'zapi';
+type SectorTab = 'all' | SectorValue;
 
 interface PersistedConversationFilters {
   search: string;
@@ -174,9 +175,9 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const [selectedAgent, setSelectedAgent] = useState<string>(storedFilters.selectedAgent);
   const [selectedConnections, setSelectedConnections] = useState<string[]>(storedFilters.selectedConnections);
   const [onlyUnread, setOnlyUnread] = useState(storedFilters.onlyUnread);
-  const [activeTab, setActiveTab] = useState<ConnectionTab>(() => {
+  const [activeTab, setActiveTab] = useState<SectorTab>(() => {
     const stored = localStorage.getItem(CONVERSATIONS_TAB_STORAGE_KEY);
-    return (stored === 'whatsapp' || stored === 'zapi') ? stored : 'all';
+    return (stored === 'comercial' || stored === 'pos_venda' || stored === 'cobranca') ? stored : 'all';
   });
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -226,30 +227,20 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   });
 
 
-  // Compute effective connection IDs based on tab + manual filter
-  const effectiveConnectionIds = useMemo(() => {
-    if (activeTab === 'all') return selectedConnections;
-    const tabConnectionIds = allConnections
-      .filter(c => c.connection_id === activeTab)
-      .map(c => c.id);
-    if (selectedConnections.length > 0) {
-      return selectedConnections.filter(id => tabConnectionIds.includes(id));
-    }
-    return tabConnectionIds;
-  }, [activeTab, selectedConnections, allConnections]);
-
-  // Compute filters for the query
+  // Compute filters for the query — sector comes from the tab; connection filter is manual only
   const inboxFilters = useMemo<InboxFilters>(() => ({
     search: searchByMessage ? '' : debouncedSearch,
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
-    connectionIds: effectiveConnectionIds,
+    connectionIds: selectedConnections,
     tagId: selectedTag !== 'all' ? selectedTag : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
-  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread, searchByMessage]);
+    sector: activeTab !== 'all' ? activeTab : '',
+  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTag, onlyUnread, searchByMessage, activeTab]);
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
+
 
   const { currentWorkspace } = useWorkspace();
 
@@ -422,15 +413,14 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     }
   };
 
-  const tabLabels: Record<ConnectionTab, string> = {
+  const SECTOR_TABS: SectorTab[] = ['all', 'comercial', 'pos_venda', 'cobranca'];
+  const tabLabels: Record<SectorTab, string> = {
     all: 'Todos',
-    whatsapp: 'Comercial',
-    zapi: 'Cobrança',
+    comercial: 'Comercial',
+    pos_venda: 'Pós-Venda',
+    cobranca: 'Cobrança',
   };
-
-  const hasWhatsapp = allConnections.some(c => c.connection_id === 'whatsapp');
-  const hasZapi = allConnections.some(c => c.connection_id === 'zapi');
-  const showTabs = hasWhatsapp && hasZapi;
+  const showTabs = true;
 
   return (
     <div className={embedded ? 'flex flex-col h-full overflow-hidden' : ''}>
@@ -442,7 +432,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
               <h2 className="text-sm font-semibold text-foreground">Conversas</h2>
               <p className="text-[11px] text-muted-foreground">{totalCount} conversas</p>
             </div>
-            {activeTab === 'zapi' && (
+            {activeTab === 'cobranca' && (
               <Button
                 size="sm"
                 variant="outline"
@@ -455,12 +445,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
             )}
           </div>
           {showTabs && (
-            <div className="flex gap-0">
-              {(['all', 'whatsapp', 'zapi'] as ConnectionTab[]).map(tab => (
+            <div className="flex gap-0 overflow-x-auto">
+              {SECTOR_TABS.map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative px-4 py-2 text-xs font-medium transition-colors ${
+                  className={`relative shrink-0 px-4 py-2 text-xs font-medium transition-colors ${
                     activeTab === tab
                       ? 'text-primary'
                       : 'text-muted-foreground hover:text-foreground'
@@ -478,12 +468,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
       )}
       {!embedded && showTabs && (
         <div className="px-6 pt-2">
-          <div className="flex items-center gap-0 border-b border-border">
-            {(['all', 'whatsapp', 'zapi'] as ConnectionTab[]).map(tab => (
+          <div className="flex items-center gap-0 border-b border-border overflow-x-auto">
+            {SECTOR_TABS.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`relative px-4 py-2 text-xs font-medium transition-colors ${
+                className={`relative shrink-0 px-4 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab
                     ? 'text-primary'
                     : 'text-muted-foreground hover:text-foreground'
@@ -495,7 +485,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                 )}
               </button>
             ))}
-            {activeTab === 'zapi' && (
+            {activeTab === 'cobranca' && (
               <Button
                 size="sm"
                 variant="outline"

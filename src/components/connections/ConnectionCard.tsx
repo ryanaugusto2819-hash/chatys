@@ -26,6 +26,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+import { SECTORS } from '@/lib/sectors';
+
 interface ConnectionData {
   id: string;
   connection_id: string;
@@ -35,6 +37,7 @@ interface ConnectionData {
   status: string;
   last_checked_at: string | null;
   status_since?: string | null;
+  sector?: string | null;
 }
 
 interface ConnectionCardProps {
@@ -107,6 +110,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [showQrPanel, setShowQrPanel] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(connection.config || {});
   const [label, setLabel] = useState(connection.label || '');
+  const [sector, setSector] = useState<string>(connection.sector || '');
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -165,6 +169,12 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
         body: { action: 'update', id: connection.id, config: values, label },
       });
       if (error) throw error;
+      // Persist sector directly (edge function does not handle it)
+      const { error: sectorErr } = await supabase
+        .from('connection_configs')
+        .update({ sector: sector || null })
+        .eq('id', connection.id);
+      if (sectorErr) throw sectorErr;
       setDiagnostics((data as { diagnostics?: Record<string, unknown> })?.diagnostics || null);
       toast.success('Conexão atualizada!');
       onUpdated();
@@ -317,6 +327,23 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
               placeholder="Ex: Número Principal, Suporte, Vendas..."
               className="w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Setor padrão</label>
+            <select
+              value={sector}
+              onChange={e => setSector(e.target.value)}
+              className="w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Sem setor</option>
+              {SECTORS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Novas conversas recebidas nesta conexão entram automaticamente neste setor.
+            </p>
           </div>
 
           {webhookUrl && (
