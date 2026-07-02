@@ -170,9 +170,10 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
 }
 
 function PedidoCard({
-  pedido, onPatch, onDelete, saving,
+  pedido, options, onPatch, onDelete, saving,
 }: {
   pedido: Pedido;
+  options: Record<string, string[]>;
   onPatch: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
   saving: boolean;
