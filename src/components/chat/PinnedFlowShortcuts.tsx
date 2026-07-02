@@ -84,7 +84,7 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
       return;
     }
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
-      setActiveCategory(grouped[0].label);
+      selectCategory(grouped[0].label);
     }
   }, [grouped, activeCategory]);
 
