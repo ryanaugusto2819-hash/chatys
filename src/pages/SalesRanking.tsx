@@ -312,7 +312,6 @@ export default function SalesRanking() {
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
   const totalQty    = stats.reduce((s, v) => s + v.totalQuantidade, 0);
   const maxValor    = stats[0]?.totalValor || 1;
-  const top3        = stats.slice(0, 3);
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
   const currencySymbol = country === 'uruguay' ? '$U ' : 'R$ ';
