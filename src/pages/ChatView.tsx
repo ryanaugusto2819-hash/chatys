@@ -1441,6 +1441,11 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               {/* Pinned Flow Shortcuts */}
               <PinnedFlowShortcuts conversationId={id!} />
 
+              {/* LibertyPOS pedidos */}
+              <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
+
+
+
               {/* Pinned Quick Message Shortcuts */}
               <PinnedQuickMessageShortcuts
                 conversationId={id!}
