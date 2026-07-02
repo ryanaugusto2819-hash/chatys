@@ -265,6 +265,15 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
               >
                 <QrCode className="h-3.5 w-3.5" />
               </button>
+            {connection.connection_id === 'evolution' && (
+              <button
+                onClick={handleRestartEvolution}
+                disabled={restarting}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-input bg-background text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-50"
+                title="Reiniciar instância (resolve conexão zumbi)"
+              >
+                {restarting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+              </button>
             )}
             <button
               onClick={handleCheckStatus}
