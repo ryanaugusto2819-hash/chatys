@@ -66,6 +66,7 @@ export function useInboxQuery(filters: InboxFilters) {
         p_only_unread: filters.onlyUnread,
         p_last_customer: filters.lastCustomer,
         p_workspace_id: currentWorkspace?.id ?? null,
+        p_sector: filters.sector ?? '',
       });
 
       if (error) throw error;
