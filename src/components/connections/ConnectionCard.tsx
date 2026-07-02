@@ -329,6 +329,23 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
             />
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Setor padrão</label>
+            <select
+              value={sector}
+              onChange={e => setSector(e.target.value)}
+              className="w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Sem setor</option>
+              {SECTORS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Novas conversas recebidas nesta conexão entram automaticamente neste setor.
+            </p>
+          </div>
+
           {webhookUrl && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Webhook URL esperada</label>
