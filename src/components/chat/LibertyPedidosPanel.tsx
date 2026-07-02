@@ -264,6 +264,8 @@ function PedidoCard({
               </span>
             )}
           </div>
+
+          <EtiquetaButton pedido={local} />
         </div>
         {expanded ? <ChevronDown className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 mt-1 text-muted-foreground" />}
       </div>
