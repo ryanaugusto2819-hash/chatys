@@ -84,11 +84,10 @@ export function useSalesKPIs(
   to: string | null,
   metaDia: number,
   metaMes: number,
-  commissionRate: number,
   pais: string | null = null,
 ) {
   return useQuery<SalesKPIs>({
-    queryKey: ['sales-kpis', from, to, metaDia, metaMes, commissionRate, pais],
+    queryKey: ['sales-kpis', from, to, metaDia, metaMes, pais],
     queryFn: async () => {
       const prev = getPrevRange(from, to);
 
@@ -103,8 +102,8 @@ export function useSalesKPIs(
       const receitaTotalPrev = previous.totalValor;
       const vendas           = current.count;
       const vendasPrev       = previous.count;
-      const comissao         = receitaTotal * commissionRate;
-      const comissaoPrev     = receitaTotalPrev * commissionRate;
+      const comissao         = current.brCount * 2 + current.uyCount * 3;
+      const comissaoPrev     = previous.brCount * 2 + previous.uyCount * 3;
       const ticketMedio      = vendas > 0 ? receitaTotal / vendas : 0;
       const ticketMedioPrev  = vendasPrev > 0 ? receitaTotalPrev / vendasPrev : 0;
 
@@ -123,7 +122,7 @@ export function useSalesKPIs(
         leadsFacebookPrev: convPrevious.total,
         metaDia,
         metaMes,
-        commissionRate,
+        commissionRate: 0,
       };
     },
     staleTime: 1000 * 60 * 2,
