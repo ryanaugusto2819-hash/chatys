@@ -79,8 +79,8 @@ interface ConversationItemProps {
   onClick: (id: string) => void;
 }
 
-const ConversationItem = memo(function ConversationItem({ conversation: c, isSelected, connectionInfo, onClick }: ConversationItemProps) {
-  const cTags = c.contact_tags || [];
+const ConversationItem = memo(function ConversationItem({ conversation: c, isSelected, connectionInfo, hiddenTagIds, onClick }: ConversationItemProps & { hiddenTagIds: Set<string> }) {
+  const cTags = (c.contact_tags || []).filter(t => !hiddenTagIds.has(t.tag_id));
 
   return (
     <button
