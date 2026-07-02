@@ -10,6 +10,7 @@ import {
   Loader2,
   MessageSquare,
   RefreshCw,
+  RotateCw,
   Save,
   Trash2,
   Wifi,
