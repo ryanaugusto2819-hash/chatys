@@ -308,16 +308,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
 
-  // Order state
-  const [showOrderDialog, setShowOrderDialog] = useState(false);
-  const [orderData, setOrderData] = useState({
-    nome: '', cedula: '', cep: '', bairro: '', cidade: '', rua: '',
-    numero: '', complemento: '', produto: '', quantidade: '1',
-    valor: '', vendedor: '', telefone: '', pais: 'BR',
-  });
-  const [sendingOrder, setSendingOrder] = useState(false);
-  const [orderCount, setOrderCount] = useState(0);
-
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
   const [termoData, setTermoData] = useState({ nomeCliente: '', cpf: '', meses: '', valor: '', formaPagamento: 'boleto à vista' });
@@ -419,15 +409,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       setConversation(data);
       setSaleRegisteredAt((data as any).sale_registered_at || null);
 
-      const [agentResult, tagsResult, historyResult, ordersResult] = await Promise.all([
+      const [agentResult, tagsResult, historyResult] = await Promise.all([
         data.assigned_agent_id
           ? supabase.from('profiles').select('id, full_name, avatar_url').eq('id', data.assigned_agent_id).single()
           : Promise.resolve({ data: null }),
         supabase.from('contact_tags').select('id, tag_id, tags(id, name, color)').eq('contact_phone', data.contact_phone),
         supabase.from('agent_assignment_history').select('id, assigned_at, unassigned_at, agent_id, profiles(full_name)').eq('conversation_id', id).order('assigned_at', { ascending: false }),
-        supabase.from('sales_orders' as any).select('id', { count: 'exact', head: true }).eq('conversation_id', id),
       ]);
-      setOrderCount((ordersResult as any).count || 0);
 
       setAssignedAgent(agentResult.data || null);
 
@@ -694,59 +682,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
   };
 
-  const handleSendOrder = async () => {
-    if (!orderData.nome || !orderData.produto || sendingOrder) return;
-    setSendingOrder(true);
-    try {
-      const payload = {
-        nome: orderData.nome,
-        cedula: orderData.cedula,
-        cep: orderData.cep,
-        bairro: orderData.bairro,
-        cidade: orderData.cidade,
-        rua: orderData.rua,
-        numero: orderData.numero,
-        complemento: orderData.complemento,
-        produto: orderData.produto,
-        quantidade: parseInt(orderData.quantidade) || 1,
-        valor: parseFloat(orderData.valor) || 0,
-        telefone: orderData.telefone,
-        pais: orderData.pais || 'BR',
-      };
-
-      const res = await fetch('https://gwvhvvmghkpgtiofnivo.supabase.co/functions/v1/receive-order-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error('Webhook failed');
-
-      // Save to local sales_orders table for ranking
-      await supabase.from('sales_orders' as any).insert({
-        vendedor: orderData.vendedor || 'Desconhecido',
-        produto: orderData.produto,
-        quantidade: parseInt(orderData.quantidade) || 1,
-        valor: parseFloat(orderData.valor) || 0,
-        nome: orderData.nome,
-        conversation_id: id || null,
-      });
-
-      setOrderCount(prev => prev + 1);
-      toast.success('Pedido adicionado com sucesso!');
-      setShowOrderDialog(false);
-      setOrderData({
-        nome: '', cedula: '', cep: '', bairro: '', cidade: '', rua: '',
-        numero: '', complemento: '', produto: '', quantidade: '1',
-        valor: '', vendedor: '', telefone: '', pais: 'BR',
-      });
-    } catch (err) {
-      console.error('Order webhook error:', err);
-      toast.error('Erro ao adicionar pedido');
-    } finally {
-      setSendingOrder(false);
-    }
-  };
 
   const handleGenerateTermo = async () => {
     if (!termoData.nomeCliente || !termoData.cpf || !termoData.meses || sendingTermo) return;
@@ -1064,105 +999,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 </div>
               )}
 
-              {/* Adicionar Pedido */}
-              <div>
-                <button
-                  onClick={() => {
-                    setOrderData(prev => ({
-                      ...prev,
-                      nome: conversation.contact_name || '',
-                      telefone: conversation.contact_phone || '',
-                    }));
-                    setShowOrderDialog(true);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3 text-xs font-medium transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                  Adicionar Pedido
-                </button>
-
-                {orderCount > 0 && (
-                  <div className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-semibold"
-                    style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.35)', color: '#93C5FD' }}>
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    PEDIDO FEITO {orderCount > 1 ? `(${orderCount}x)` : ''}
-                  </div>
-                )}
-
-                {showOrderDialog && (
-                  <div className="mt-2 rounded-lg border border-border bg-background p-3 space-y-2.5">
-                    <p className="text-xs font-semibold text-card-foreground">Dados do Pedido</p>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="col-span-2">
-                        <label className="text-[11px] text-muted-foreground">Nome *</label>
-                        <input type="text" value={orderData.nome} onChange={e => setOrderData(p => ({ ...p, nome: e.target.value }))} placeholder="Nome do cliente" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">CPF / Cédula</label>
-                        <input type="text" value={orderData.cedula} onChange={e => setOrderData(p => ({ ...p, cedula: e.target.value }))} placeholder="000.000.000-00" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Telefone</label>
-                        <input type="text" value={orderData.telefone} onChange={e => setOrderData(p => ({ ...p, telefone: e.target.value }))} placeholder="+55..." className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">CEP</label>
-                        <input type="text" value={orderData.cep} onChange={e => setOrderData(p => ({ ...p, cep: e.target.value }))} placeholder="00000-000" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Bairro</label>
-                        <input type="text" value={orderData.bairro} onChange={e => setOrderData(p => ({ ...p, bairro: e.target.value }))} placeholder="Bairro" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Cidade</label>
-                        <input type="text" value={orderData.cidade} onChange={e => setOrderData(p => ({ ...p, cidade: e.target.value }))} placeholder="Cidade" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Rua / Endereço</label>
-                        <input type="text" value={orderData.rua} onChange={e => setOrderData(p => ({ ...p, rua: e.target.value }))} placeholder="Rua..." className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Número</label>
-                        <input type="text" value={orderData.numero} onChange={e => setOrderData(p => ({ ...p, numero: e.target.value }))} placeholder="123" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[11px] text-muted-foreground">Complemento</label>
-                        <input type="text" value={orderData.complemento} onChange={e => setOrderData(p => ({ ...p, complemento: e.target.value }))} placeholder="Apto, bloco..." className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[11px] text-muted-foreground">Produto *</label>
-                        <input type="text" value={orderData.produto} onChange={e => setOrderData(p => ({ ...p, produto: e.target.value }))} placeholder="Nome do produto" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Quantidade</label>
-                        <input type="number" min="1" value={orderData.quantidade} onChange={e => setOrderData(p => ({ ...p, quantidade: e.target.value }))} placeholder="1" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Valor</label>
-                        <input type="number" step="0.01" value={orderData.valor} onChange={e => setOrderData(p => ({ ...p, valor: e.target.value }))} placeholder="0.00" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">Vendedor</label>
-                        <input type="text" value={orderData.vendedor} onChange={e => setOrderData(p => ({ ...p, vendedor: e.target.value }))} placeholder="Nome do vendedor" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground">País</label>
-                        <input type="text" value={orderData.pais} onChange={e => setOrderData(p => ({ ...p, pais: e.target.value }))} placeholder="BR" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring" />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button onClick={() => setShowOrderDialog(false)} className="flex-1 rounded-lg border border-border py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors">
-                        Cancelar
-                      </button>
-                      <button onClick={handleSendOrder} disabled={!orderData.nome || !orderData.produto || sendingOrder} className="flex-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white py-1.5 text-xs font-medium transition-colors disabled:opacity-50">
-                        {sendingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'Enviar'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* Gerar Termo */}
               <div>
