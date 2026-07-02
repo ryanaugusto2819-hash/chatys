@@ -41,7 +41,7 @@ function getPrevRange(from: string | null, to: string | null): { from: string | 
 }
 
 async function fetchSalesData(from: string | null, to: string | null, pais: string | null) {
-  let query = supabase.from('sales_orders' as any).select('valor, quantidade');
+  let query = supabase.from('sales_orders' as any).select('valor, quantidade, pais');
   if (from) query = (query as any).gte('created_at', from);
   if (to)   query = (query as any).lte('created_at', to);
   if (pais) query = (query as any).eq('pais', pais);
@@ -51,8 +51,10 @@ async function fetchSalesData(from: string | null, to: string | null, pais: stri
 
   const totalValor = rows.reduce((s, r) => s + (Number(r.valor) || 0), 0);
   const count = rows.length;
+  const brCount = rows.filter(r => String(r.pais).toLowerCase() === 'brasil').length;
+  const uyCount = rows.filter(r => String(r.pais).toLowerCase() === 'uruguay').length;
 
-  return { totalValor, count };
+  return { totalValor, count, brCount, uyCount };
 }
 
 async function fetchConversationsData(from: string | null, to: string | null) {
