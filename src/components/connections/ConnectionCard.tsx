@@ -110,6 +110,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [showQrPanel, setShowQrPanel] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(connection.config || {});
   const [label, setLabel] = useState(connection.label || '');
+  const [sector, setSector] = useState<string>(connection.sector || '');
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
