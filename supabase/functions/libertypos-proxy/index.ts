@@ -45,17 +45,27 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as Body;
     if (!body?.action) return json({ ok: false, error: 'action is required' }, 400);
 
+    const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '');
+    const normalizedPhone = digits(body.telefone);
+
+    // For list/get by phone, fetch ALL and filter locally by normalized digits
+    // (upstream stores phones with spaces/dashes and doesn't normalize on filter).
+    const upstreamBody =
+      (body.action === 'list' || body.action === 'get') && normalizedPhone
+        ? { action: 'list' }
+        : body;
+
     const upstream = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Chatys-Token': token,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(upstreamBody),
     });
 
     const text = await upstream.text();
-    let parsed: unknown = text;
+    let parsed: any = text;
     try { parsed = JSON.parse(text); } catch { /* keep raw */ }
 
     if (!upstream.ok) {
@@ -63,6 +73,15 @@ Deno.serve(async (req) => {
         { ok: false, error: `LibertyPOS ${upstream.status}`, detail: parsed },
         upstream.status,
       );
+    }
+
+    // Local phone-suffix filter (match last 8+ digits for BR robustness)
+    if (normalizedPhone && parsed && Array.isArray(parsed.data)) {
+      const needle = normalizedPhone.slice(-8);
+      parsed.data = parsed.data.filter((row: any) => {
+        const cand = digits(row?.telefone ?? row?.phone ?? row?.whatsapp);
+        return cand && (cand.endsWith(needle) || needle.endsWith(cand.slice(-8)));
+      });
     }
 
     return json(parsed as Record<string, unknown>, 200);
