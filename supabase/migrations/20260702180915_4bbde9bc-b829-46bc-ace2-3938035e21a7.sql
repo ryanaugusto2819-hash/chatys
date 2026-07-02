@@ -1,0 +1,1 @@
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS pais text NOT NULL DEFAULT 'brasil'; ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS moeda text NOT NULL DEFAULT 'BRL'; ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS campanha text; CREATE INDEX IF NOT EXISTS idx_sales_orders_pais ON public.sales_orders(pais);

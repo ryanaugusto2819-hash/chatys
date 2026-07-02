@@ -1512,10 +1512,13 @@ export type Database = {
       }
       sales_orders: {
         Row: {
+          campanha: string | null
           conversation_id: string | null
           created_at: string | null
           id: string
+          moeda: string
           nome: string | null
+          pais: string
           produto: string | null
           quantidade: number | null
           valor: number | null
@@ -1523,10 +1526,13 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          campanha?: string | null
           conversation_id?: string | null
           created_at?: string | null
           id?: string
+          moeda?: string
           nome?: string | null
+          pais?: string
           produto?: string | null
           quantidade?: number | null
           valor?: number | null
@@ -1534,10 +1540,13 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          campanha?: string | null
           conversation_id?: string | null
           created_at?: string | null
           id?: string
+          moeda?: string
           nome?: string | null
+          pais?: string
           produto?: string | null
           quantidade?: number | null
           valor?: number | null
