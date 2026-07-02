@@ -312,6 +312,7 @@ export type Database = {
           is_connected: boolean
           label: string
           last_checked_at: string | null
+          sector: string | null
           status: string
           status_since: string | null
           updated_at: string
@@ -325,6 +326,7 @@ export type Database = {
           is_connected?: boolean
           label?: string
           last_checked_at?: string | null
+          sector?: string | null
           status?: string
           status_since?: string | null
           updated_at?: string
@@ -338,6 +340,7 @@ export type Database = {
           is_connected?: boolean
           label?: string
           last_checked_at?: string | null
+          sector?: string | null
           status?: string
           status_since?: string | null
           updated_at?: string
@@ -402,6 +405,7 @@ export type Database = {
           niche_id: string | null
           resolved_at: string | null
           sale_registered_at: string | null
+          sector: string | null
           source_id: string | null
           source_type: string | null
           status: string
@@ -425,6 +429,7 @@ export type Database = {
           niche_id?: string | null
           resolved_at?: string | null
           sale_registered_at?: string | null
+          sector?: string | null
           source_id?: string | null
           source_type?: string | null
           status?: string
@@ -448,6 +453,7 @@ export type Database = {
           niche_id?: string | null
           resolved_at?: string | null
           sale_registered_at?: string | null
+          sector?: string | null
           source_id?: string | null
           source_type?: string | null
           status?: string
@@ -2076,66 +2082,38 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_inbox_page:
-        | {
-            Args: {
-              p_agent_id?: string
-              p_connection_ids?: string[]
-              p_last_customer?: boolean
-              p_limit?: number
-              p_offset?: number
-              p_only_unread?: boolean
-              p_search?: string
-              p_status?: string
-              p_tag_id?: string
-            }
-            Returns: {
-              assigned_agent_id: string
-              connection_config_id: string
-              contact_name: string
-              contact_phone: string
-              contact_tags: Json
-              id: string
-              last_message: string
-              last_message_sender: string
-              niche_id: string
-              status: string
-              tags: string[]
-              total_count: number
-              unread_count: number
-              updated_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_agent_id?: string
-              p_connection_ids?: string[]
-              p_last_customer?: boolean
-              p_limit?: number
-              p_offset?: number
-              p_only_unread?: boolean
-              p_search?: string
-              p_status?: string
-              p_tag_id?: string
-              p_workspace_id?: string
-            }
-            Returns: {
-              assigned_agent_id: string
-              connection_config_id: string
-              contact_name: string
-              contact_phone: string
-              contact_tags: Json
-              id: string
-              last_message: string
-              last_message_sender: string
-              niche_id: string
-              status: string
-              tags: string[]
-              total_count: number
-              unread_count: number
-              updated_at: string
-            }[]
-          }
+      get_inbox_page: {
+        Args: {
+          p_agent_id?: string
+          p_connection_ids?: string[]
+          p_last_customer?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_only_unread?: boolean
+          p_search?: string
+          p_sector?: string
+          p_status?: string
+          p_tag_id?: string
+          p_workspace_id?: string
+        }
+        Returns: {
+          assigned_agent_id: string
+          connection_config_id: string
+          contact_name: string
+          contact_phone: string
+          contact_tags: Json
+          id: string
+          last_message: string
+          last_message_sender: string
+          niche_id: string
+          sector: string
+          status: string
+          tags: string[]
+          total_count: number
+          unread_count: number
+          updated_at: string
+        }[]
+      }
       get_invite_by_token: {
         Args: { p_token: string }
         Returns: {
