@@ -1058,7 +1058,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     setTermoData(prev => ({ ...prev, nomeCliente: conversation.contact_name }));
                     setShowTermoDialog(true);
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground py-1.5 px-3 text-xs font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   Gerar Termo de Compromisso
