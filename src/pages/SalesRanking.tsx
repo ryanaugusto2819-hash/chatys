@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
   Package, CalendarDays, TrendingUp, TrendingDown,
-  Facebook, Percent, Settings, X, Check, Globe,
+  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesKPIs, pctChange } from '@/hooks/useSalesKPIs';
+import { usePendingTagCounts } from '@/hooks/usePendingTagCounts';
+
 
 interface VendorStats {
   vendedor: string;
@@ -90,9 +92,11 @@ interface KpiCardProps {
   iconBg: string;
   delay?: number;
   loading?: boolean;
+  hideDelta?: boolean;
+  subtitle?: string;
 }
 
-function KpiCard({ title, value, pct, icon: Icon, accentColor, iconBg, delay = 0, loading = false }: KpiCardProps) {
+function KpiCard({ title, value, pct, icon: Icon, accentColor, iconBg, delay = 0, loading = false, hideDelta = false, subtitle }: KpiCardProps) {
   const isPositive = pct >= 0;
   const isZero = pct === 0;
   return (
@@ -122,25 +126,36 @@ function KpiCard({ title, value, pct, icon: Icon, accentColor, iconBg, delay = 0
           {loading ? '—' : value}
         </p>
       </div>
-      <div className="flex items-center gap-1.5">
-        {isZero ? (
-          <TrendingUp className="h-3 w-3 text-emerald-400" />
-        ) : isPositive ? (
-          <TrendingUp className="h-3 w-3 text-emerald-400" />
-        ) : (
-          <TrendingDown className="h-3 w-3 text-red-400" />
-        )}
-        <span
-          className="text-[11px] font-semibold tabular-nums"
-          style={{ color: isZero ? '#34d399' : isPositive ? '#34d399' : '#f87171' }}
-        >
-          {isPositive && !isZero ? '+' : ''}{loading ? '0' : pct}%
-        </span>
-        <span className="text-[10px] text-muted-foreground">Vs dia anterior</span>
-      </div>
+      {hideDelta ? (
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-flex h-1.5 w-1.5 rounded-full"
+            style={{ background: accentColor }}
+          />
+          <span className="text-[10px] text-muted-foreground">{subtitle || 'Em tempo real'}</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          {isZero ? (
+            <TrendingUp className="h-3 w-3 text-emerald-400" />
+          ) : isPositive ? (
+            <TrendingUp className="h-3 w-3 text-emerald-400" />
+          ) : (
+            <TrendingDown className="h-3 w-3 text-red-400" />
+          )}
+          <span
+            className="text-[11px] font-semibold tabular-nums"
+            style={{ color: isZero ? '#34d399' : isPositive ? '#34d399' : '#f87171' }}
+          >
+            {isPositive && !isZero ? '+' : ''}{loading ? '0' : pct}%
+          </span>
+          <span className="text-[10px] text-muted-foreground">Vs dia anterior</span>
+        </div>
+      )}
     </motion.div>
   );
 }
+
 
 // ── Commission Config Modal ──────────────────────────────────
 interface GoalsModalProps {
@@ -280,6 +295,18 @@ export default function SalesRanking() {
   const { data: kpis, isLoading: kpiLoading } = useSalesKPIs(
     kpiFrom, kpiTo, 0, 0, commissionRate, country === 'all' ? null : country,
   );
+
+  // Real-time pending tag counts (endereço / confirmação, por país)
+  const pending = usePendingTagCounts();
+  const enderecoPendente =
+    country === 'brasil'  ? pending.enderecoBrasil :
+    country === 'uruguay' ? pending.enderecoUruguay :
+    pending.enderecoBrasil + pending.enderecoUruguay;
+  const confirmacaoPendente =
+    country === 'brasil'  ? pending.confirmacaoBrasil :
+    country === 'uruguay' ? pending.confirmacaoUruguay :
+    pending.confirmacaoBrasil + pending.confirmacaoUruguay;
+
 
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
@@ -473,7 +500,41 @@ export default function SalesRanking() {
           delay={0.35}
           loading={kpiLoading}
         />
+        <KpiCard
+          title={`Endereço Pendente${country === 'all' ? '' : country === 'brasil' ? ' • BR' : ' • UY'}`}
+          value={pending.loading ? '—' : String(enderecoPendente)}
+          pct={0}
+          icon={MapPin}
+          accentColor="#EF4444"
+          iconBg="rgba(239,68,68,0.15)"
+          delay={0.4}
+          loading={pending.loading}
+          hideDelta
+          subtitle={
+            country === 'all'
+              ? `BR ${pending.enderecoBrasil} • UY ${pending.enderecoUruguay}`
+              : 'Contatos aguardando endereço'
+          }
+        />
+        <KpiCard
+          title={`Confirmação Pendente${country === 'all' ? '' : country === 'brasil' ? ' • BR' : ' • UY'}`}
+          value={pending.loading ? '—' : String(confirmacaoPendente)}
+          pct={0}
+          icon={ClipboardCheck}
+          accentColor="#3B82F6"
+          iconBg="rgba(59,130,246,0.15)"
+          delay={0.45}
+          loading={pending.loading}
+          hideDelta
+          subtitle={
+            country === 'all'
+              ? `BR ${pending.confirmacaoBrasil} • UY ${pending.confirmacaoUruguay}`
+              : 'Contatos aguardando confirmação'
+          }
+        />
+
       </div>
+
 
       {/* ── Metric cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
