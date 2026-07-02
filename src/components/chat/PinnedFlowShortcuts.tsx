@@ -17,13 +17,21 @@ interface Props {
 }
 
 const UNCATEGORIZED = 'Sem categoria';
+const LS_KEY = 'pinnedFlows.activeCategory';
 
 export default function PinnedFlowShortcuts({ conversationId }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [flows, setFlows] = useState<PinnedFlow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(() => {
+    try { return localStorage.getItem(LS_KEY); } catch { return null; }
+  });
   const [executing, setExecuting] = useState<string | null>(null);
+
+  const selectCategory = (label: string) => {
+    setActiveCategory(label);
+    try { localStorage.setItem(LS_KEY, label); } catch {}
+  };
 
   const fetchFlows = async () => {
     setLoading(true);
@@ -76,7 +84,7 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
       return;
     }
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
-      setActiveCategory(grouped[0].label);
+      selectCategory(grouped[0].label);
     }
   }, [grouped, activeCategory]);
 
@@ -132,7 +140,7 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
               {grouped.map(g => (
                 <button
                   key={g.label}
-                  onClick={() => setActiveCategory(g.label)}
+                  onClick={() => selectCategory(g.label)}
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     activeCategory === g.label
                       ? 'bg-primary text-primary-foreground'
