@@ -10,6 +10,8 @@ import {
 } from 'recharts';
 import TopBar from '@/components/layout/TopBar';
 import { useLeadMonitor, LeadPeriod } from '@/hooks/useLeadMonitor';
+import { useMessagesByConnection } from '@/hooks/useMessagesByConnection';
+import { MessageSquare, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import FunnelReport from '@/components/reports/FunnelReport';
 
 const PERIODS: { key: LeadPeriod; label: string }[] = [
@@ -379,7 +381,11 @@ export default function Reports() {
             )}
           </motion.div>
         </div>
+
+        {/* ── Messages by connection ── */}
+        <MessagesByConnectionCard period={period} />
         </>}
+
 
       </div>
     </div>
