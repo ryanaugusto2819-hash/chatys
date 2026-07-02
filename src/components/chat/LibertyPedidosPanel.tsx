@@ -53,6 +53,20 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
     staleTime: 15_000,
   });
 
+  const { data: optionsMap } = useQuery({
+    queryKey: ['libertypos-options'],
+    queryFn: async () => {
+      const res = await call({ action: 'options' });
+      return ((res as any)?.options || {}) as OptionsMap;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const opts = optionsMap || {};
+  const pick = (...keys: string[]) => {
+    for (const k of keys) if (opts[k]?.length) return opts[k];
+    return [] as string[];
+  };
+
   const upsert = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
       call({ action: 'update', id, data: patch }),
