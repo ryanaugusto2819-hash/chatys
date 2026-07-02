@@ -277,7 +277,19 @@ function PedidoCard({
 
           <div className="grid grid-cols-2 gap-2">
             <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
-            <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={options.status_pagamento} onChange={(v) => patch('status_pagamento', v)} />
+            <SelectField
+              label="Pagamento"
+              value={String(val('status_pagamento', 'pagamento'))}
+              options={options.status_pagamento}
+              onChange={(v) => {
+                const isPago = v.trim().toLowerCase() === 'pago';
+                if (isPago && isUruguay) {
+                  setPagoDialog({ open: true, newStatus: v });
+                } else {
+                  patch('status_pagamento', v);
+                }
+              }}
+            />
             <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={options.forma_pagamento} onChange={(v) => patch('forma_pagamento', v)} />
             <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={options.logistica} onChange={(v) => patch('logistica', v)} />
             <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={options.status_envio} onChange={(v) => patch('status_envio', v)} />
