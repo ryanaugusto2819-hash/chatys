@@ -1447,41 +1447,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 </div>
               </div>
 
-              {/* Assignment History */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <History className="h-3 w-3" /> Histórico de Atendimento
-                </p>
-                <div className="rounded-lg border border-border bg-background/50 p-3">
-                  {assignmentHistory.length > 0 ? (
-                    <div className="space-y-3">
-                      {assignmentHistory.map((h, i) => (
-                        <div key={h.id} className="relative flex gap-3">
-                          {i < assignmentHistory.length - 1 && (
-                            <div className="absolute left-[11px] top-6 bottom-0 w-px bg-border" />
-                          )}
-                          <div className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${
-                            !h.unassigned_at ? 'bg-primary/20 ring-2 ring-primary/30' : 'bg-muted'
-                          }`}>
-                            <div className={`h-2 w-2 rounded-full ${!h.unassigned_at ? 'bg-primary' : 'bg-muted-foreground/40'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0 pb-3">
-                            <p className="text-xs font-medium text-card-foreground truncate">{h.agent_name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {format(new Date(h.assigned_at), 'dd/MM/yyyy HH:mm')}
-                              {h.unassigned_at
-                                ? ` → ${format(new Date(h.unassigned_at), 'dd/MM HH:mm')}`
-                                : ' — atual'}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-center py-1">Sem histórico</p>
-                  )}
-                </div>
-              </div>
 
               {/* Tags */}
               <div>
