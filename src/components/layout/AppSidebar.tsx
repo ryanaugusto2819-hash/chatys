@@ -36,7 +36,6 @@ const menuItems = [
 
 
 const adminItems = [
-  { to: '/agents', icon: Users, label: 'Atendentes' },
   { to: '/automation', icon: GitBranch, label: 'Automação' },
   { to: '/webhook-mappings', icon: Webhook, label: 'Webhooks' },
   { to: '/ai', icon: Bot, label: 'Nichos & IA' },
