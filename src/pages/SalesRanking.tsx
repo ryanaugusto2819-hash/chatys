@@ -76,11 +76,6 @@ function formatCompact(v: number) {
   return formatCurrency(v);
 }
 
-const RANK_STYLES = [
-  { badge: '🥇', barColor: '#F59E0B', nameColor: '#FDE68A', border: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.07)', label: '1º' },
-  { badge: '🥈', barColor: '#94A3B8', nameColor: '#E2E8F0', border: 'rgba(148,163,184,0.25)', bg: 'rgba(148,163,184,0.06)', label: '2º' },
-  { badge: '🥉', barColor: '#CD7F32', nameColor: '#FED7AA', border: 'rgba(205,127,50,0.25)', bg: 'rgba(205,127,50,0.06)', label: '3º' },
-];
 
 // ── KPI Card Component ──────────────────────────────────────
 interface KpiCardProps {
