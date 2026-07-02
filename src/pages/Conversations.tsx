@@ -742,6 +742,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   conversation={c}
                   isSelected={selectedId === c.id}
                   connectionInfo={c.connection_config_id ? connectionMap[c.connection_config_id] || null : null}
+                  hiddenTagIds={hiddenTagIds}
                   onClick={handleConversationClick}
                 />
               ))}
