@@ -15,7 +15,7 @@ const OPTION_FIELDS = [
   'logistica', 'tipo_entrega',
   'status_envio', 'envio',
   'wpp_cobranca',
-  'conta_bancaria', 'conta', 'banco',
+  'conta_bancaria', 'conta', 'banco', 'conta_usada',
 ];
 
 interface Body {

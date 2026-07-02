@@ -153,7 +153,7 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
                 logistica: pick('logistica', 'tipo_entrega'),
                 status_envio: pick('status_envio', 'envio'),
                 wpp_cobranca: pick('wpp_cobranca'),
-                conta_bancaria: pick('conta_bancaria', 'conta', 'banco'),
+                conta_bancaria: pick('conta_usada', 'conta_bancaria', 'conta', 'banco'),
               }}
               onPatch={(patch) => upsert.mutate({ id: p.id, patch })}
               onDelete={() => remove.mutate(p.id)}
@@ -310,11 +310,16 @@ function PedidoCard({
         onOpenChange={(o) => setPagoDialog((p) => ({ ...p, open: o }))}
         newStatus={pagoDialog.newStatus}
         contaOptions={options.conta_bancaria || []}
-        currentComprovante={String(val('comprovante', 'comprovante_pagamento') || '')}
-        currentConta={String(val('conta_bancaria', 'conta', 'banco') || '')}
+        currentComprovante={String(val('comprovante_url', 'comprovante', 'comprovante_pagamento') || '')}
+        currentConta={String(val('conta_usada', 'conta_bancaria', 'conta', 'banco') || '')}
         onConfirm={(payload) => {
-          setLocal((prev) => ({ ...prev, status_pagamento: pagoDialog.newStatus, ...payload }));
-          onPatch({ status_pagamento: pagoDialog.newStatus, ...payload });
+          const apiPatch = {
+            status_pagamento: pagoDialog.newStatus,
+            comprovante_url: payload.comprovante,
+            conta_usada: payload.conta_bancaria,
+          };
+          setLocal((prev) => ({ ...prev, ...apiPatch }));
+          onPatch(apiPatch);
           setPagoDialog({ open: false, newStatus: '' });
         }}
       />
@@ -403,10 +408,10 @@ function TextField({ label, value, onCommit, multiline }: {
 }
 
 const ETIQUETA_KEYS = [
-  'etiqueta_envio', 'etiqueta', 'url_etiqueta', 'etiqueta_url', 'link_etiqueta',
-  'shipping_label', 'label_url', 'etiqueta_pdf', 'pdf_etiqueta',
+  'etiqueta_envio_url', 'etiqueta_envio', 'etiqueta', 'url_etiqueta', 'etiqueta_url',
+  'link_etiqueta', 'shipping_label', 'label_url', 'etiqueta_pdf', 'pdf_etiqueta',
 ];
-const RASTREIO_KEYS = ['codigo_rastreio', 'rastreio', 'tracking_code', 'codigo_envio'];
+const RASTREIO_KEYS = ['codigo_rastreamento', 'codigo_rastreio', 'rastreio', 'tracking_code', 'codigo_envio'];
 
 function pickFirst(obj: Record<string, any>, keys: string[]): string {
   for (const k of keys) {
