@@ -373,3 +373,70 @@ function TextField({ label, value, onCommit, multiline }: {
     </div>
   );
 }
+
+const ETIQUETA_KEYS = [
+  'etiqueta_envio', 'etiqueta', 'url_etiqueta', 'etiqueta_url', 'link_etiqueta',
+  'shipping_label', 'label_url', 'etiqueta_pdf', 'pdf_etiqueta',
+];
+const RASTREIO_KEYS = ['codigo_rastreio', 'rastreio', 'tracking_code', 'codigo_envio'];
+
+function pickFirst(obj: Record<string, any>, keys: string[]): string {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
+function EtiquetaButton({ pedido }: { pedido: Record<string, any> }) {
+  const [openView, setOpenView] = useState(false);
+  const etiqueta = pickFirst(pedido, ETIQUETA_KEYS);
+  const rastreio = pickFirst(pedido, RASTREIO_KEYS);
+  if (!etiqueta && !rastreio) return null;
+
+  const isUrl = /^https?:\/\//i.test(etiqueta);
+  const isPdf = isUrl && /\.pdf(\?|$)/i.test(etiqueta);
+  const isImg = isUrl && /\.(png|jpe?g|webp|gif)(\?|$)/i.test(etiqueta);
+
+  return (
+    <div className="pt-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {etiqueta && (
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-[11px] gap-1.5"
+            onClick={() => (isUrl ? window.open(etiqueta, '_blank', 'noopener,noreferrer') : setOpenView(true))}
+          >
+            <FileText className="h-3 w-3" /> Ver etiqueta
+            {isUrl && <ExternalLink className="h-3 w-3 opacity-60" />}
+          </Button>
+        )}
+        {etiqueta && <CopyBtn value={etiqueta} label="Etiqueta" />}
+        {rastreio && (
+          <span className="text-[10px] font-mono px-2 py-1 rounded-md bg-muted text-foreground border border-border">
+            {rastreio}
+          </span>
+        )}
+        {rastreio && <CopyBtn value={rastreio} label="Rastreio" />}
+      </div>
+
+      <Dialog open={openView} onOpenChange={setOpenView}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Etiqueta de Envio</DialogTitle>
+          </DialogHeader>
+          {isImg ? (
+            <img src={etiqueta} alt="Etiqueta de envio" className="max-h-[70vh] mx-auto rounded-md border border-border" />
+          ) : isPdf ? (
+            <iframe src={etiqueta} title="Etiqueta" className="w-full h-[70vh] rounded-md border border-border bg-background" />
+          ) : (
+            <pre className="text-xs whitespace-pre-wrap break-all p-3 rounded-md bg-muted text-foreground border border-border">
+              {etiqueta}
+            </pre>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
