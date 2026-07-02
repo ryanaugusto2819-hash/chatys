@@ -32,10 +32,10 @@ type OptionsMap = Record<string, string[]>;
 
 const badgeColor = (v?: string) => {
   const s = (v || '').toLowerCase();
-  if (['pago', 'quitado', 'entregue', 'concluído', 'enviado'].some((k) => s.includes(k))) return 'bg-emerald-600/20 text-emerald-400 border-emerald-600/40';
-  if (['atraso', 'cancelado', 'estornado', 'reembolsado'].some((k) => s.includes(k))) return 'bg-red-600/20 text-red-400 border-red-600/40';
-  if (['trânsito', 'em transito', 'respondido'].some((k) => s.includes(k))) return 'bg-blue-600/20 text-blue-400 border-blue-600/40';
-  return 'bg-amber-600/20 text-amber-400 border-amber-600/40';
+  if (['pago', 'quitado', 'entregue', 'concluído', 'enviado'].some((k) => s.includes(k))) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+  if (['atraso', 'cancelado', 'estornado', 'reembolsado'].some((k) => s.includes(k))) return 'bg-destructive/10 text-destructive border-destructive/30';
+  if (['trânsito', 'em transito', 'respondido'].some((k) => s.includes(k))) return 'bg-primary/10 text-primary border-primary/30';
+  return 'bg-muted text-muted-foreground border-border';
 };
 
 export default function LibertyPedidosPanel({ contactPhone }: Props) {
