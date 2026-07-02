@@ -7,6 +7,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Check, Loader2, Phone, MessageSquare, Tag, Calendar, Hash, History, AlertTriangle, RefreshCw, Bot, UserRound, DollarSign, Image, X, Trash2, FileText, Languages, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
+import PinnedFlowShortcuts from '@/components/chat/PinnedFlowShortcuts';
 
 import TagManager from '@/components/tags/TagManager';
 import { format, formatDistanceToNow } from 'date-fns';
