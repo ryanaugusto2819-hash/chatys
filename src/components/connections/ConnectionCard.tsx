@@ -26,6 +26,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+import { SECTORS } from '@/lib/sectors';
+
 interface ConnectionData {
   id: string;
   connection_id: string;
@@ -35,6 +37,7 @@ interface ConnectionData {
   status: string;
   last_checked_at: string | null;
   status_since?: string | null;
+  sector?: string | null;
 }
 
 interface ConnectionCardProps {
