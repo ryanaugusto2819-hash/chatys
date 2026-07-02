@@ -13,6 +13,7 @@ export interface InboxFilters {
   tagId: string | null;
   onlyUnread: boolean;
   lastCustomer: boolean;
+  sector?: string;
 }
 
 export interface ContactTagInfo {
