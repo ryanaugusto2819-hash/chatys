@@ -168,10 +168,15 @@ function PedidoCard({
     onPatch({ [k]: v });
   };
 
-  const cliente = pedido.cliente || pedido.contact_name || pedido.nome || '—';
+  const cliente = pedido.nome || pedido.cliente || pedido.contact_name || '—';
   const produto = pedido.produto || pedido.product || '—';
   const valor = pedido.valor ?? pedido.value;
-  const entrada = pedido.entrada || pedido.created_at;
+  const entrada = pedido.data_entrada || pedido.entrada || pedido.created_at;
+
+  const val = (...keys: string[]) => {
+    for (const k of keys) if (local[k] != null && local[k] !== '') return local[k];
+    return '';
+  };
 
   return (
     <div className="rounded-lg border border-border bg-background/50 overflow-hidden">
@@ -193,14 +198,14 @@ function PedidoCard({
                 {new Date(entrada).toLocaleDateString('pt-BR')}
               </span>
             )}
-            {local.status_cobranca && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(local.status_cobranca))}>
-                {local.status_cobranca}
+            {val('status_cobranca') && (
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(String(val('status_cobranca'))))}>
+                {String(val('status_cobranca'))}
               </span>
             )}
-            {local.envio && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(local.envio))}>
-                {local.envio}
+            {val('status_envio', 'envio') && (
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(String(val('status_envio', 'envio'))))}>
+                {String(val('status_envio', 'envio'))}
               </span>
             )}
           </div>
@@ -210,17 +215,18 @@ function PedidoCard({
 
       {expanded && (
         <div className="p-2.5 pt-0 space-y-2 border-t border-border/60">
-          <SelectField label="Status Cobrança" value={local.status_cobranca} options={STATUS_COBRANCA_OPTS} onChange={(v) => patch('status_cobranca', v)} />
-          <SelectField label="Pagamento" value={local.pagamento} options={PAGAMENTO_OPTS} onChange={(v) => patch('pagamento', v)} />
-          <SelectField label="Forma Pgto" value={local.forma_pgto || local.forma_pagamento} options={FORMA_PGTO_OPTS} onChange={(v) => patch('forma_pgto', v)} />
-          <SelectField label="Logística" value={local.logistica} options={LOGISTICA_OPTS} onChange={(v) => patch('logistica', v)} />
-          <SelectField label="Envio" value={local.envio} options={ENVIO_OPTS} onChange={(v) => patch('envio', v)} />
-          <SelectField label="WPP Cobrança" value={local.wpp_cobranca} options={WPP_COBRANCA_OPTS} onChange={(v) => patch('wpp_cobranca', v)} />
+          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={STATUS_COBRANCA_OPTS} onChange={(v) => patch('status_cobranca', v)} />
+          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={PAGAMENTO_OPTS} onChange={(v) => patch('status_pagamento', v)} />
+          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={FORMA_PGTO_OPTS} onChange={(v) => patch('forma_pagamento', v)} />
+          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={LOGISTICA_OPTS} onChange={(v) => patch('logistica', v)} />
+          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={ENVIO_OPTS} onChange={(v) => patch('status_envio', v)} />
+          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={WPP_COBRANCA_OPTS} onChange={(v) => patch('wpp_cobranca', v)} />
 
-          <TextField label="Rastreamento" value={local.rastreamento} onCommit={(v) => patch('rastreamento', v)} />
-          <TextField label="Cód. Conta" value={local.cod_conta} onCommit={(v) => patch('cod_conta', v)} />
-          <TextField label="Frete" value={local.frete} onCommit={(v) => patch('frete', v)} />
-          <TextField label="Notas" value={local.notas} onCommit={(v) => patch('notas', v)} multiline />
+          <TextField label="Rastreamento" value={String(val('codigo_rastreamento', 'rastreamento'))} onCommit={(v) => patch('codigo_rastreamento', v)} />
+          <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />
+          <TextField label="Frete" value={String(val('valor_frete', 'frete'))} onCommit={(v) => patch('valor_frete', v)} />
+          <TextField label="Notas" value={String(val('observacoes', 'notas'))} onCommit={(v) => patch('observacoes', v)} multiline />
+
 
           <div className="flex items-center justify-between pt-1">
             {saving ? (
