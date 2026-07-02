@@ -14,6 +14,7 @@ interface PinnedFlow {
 
 interface Props {
   conversationId: string;
+  preferredCategory?: string | null;
 }
 
 const UNCATEGORIZED = 'Sem categoria';
