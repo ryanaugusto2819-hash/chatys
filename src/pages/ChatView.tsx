@@ -123,15 +123,33 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => setConfirming(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-card/80 border border-border shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground backdrop-blur-sm"
-            title="Excluir mensagem"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          <div className="flex items-center gap-1">
+            {msg.content?.trim() && (
+              <button
+                onClick={handleTranslate}
+                disabled={translating}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border border-border shadow-sm transition-colors backdrop-blur-sm ${
+                  translation
+                    ? 'bg-primary/15 text-primary hover:bg-primary/25'
+                    : 'bg-card/80 text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                }`}
+                title={translation ? 'Ocultar tradução' : 'Traduzir para português'}
+              >
+                {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Languages className="h-3 w-3" />}
+              </button>
+            )}
+            <button
+              onClick={() => setConfirming(true)}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-card/80 border border-border shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground backdrop-blur-sm"
+              title="Excluir mensagem"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         )}
       </div>
+
+
 
       <div
         className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 ${
