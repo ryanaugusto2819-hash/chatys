@@ -153,7 +153,7 @@ export default function LibertyPedidosPanel({ contactPhone }: Props) {
                 logistica: pick('logistica', 'tipo_entrega'),
                 status_envio: pick('status_envio', 'envio'),
                 wpp_cobranca: pick('wpp_cobranca'),
-                conta_bancaria: pick('conta_bancaria', 'conta', 'banco'),
+                conta_bancaria: pick('conta_usada', 'conta_bancaria', 'conta', 'banco'),
               }}
               onPatch={(patch) => upsert.mutate({ id: p.id, patch })}
               onDelete={() => remove.mutate(p.id)}
