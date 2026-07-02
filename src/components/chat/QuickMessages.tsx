@@ -505,6 +505,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                           onSelect(msg.content);
                           setOpen(false);
                         } else if (k === 'tag_action') {
+                          if (msg.content && msg.content.trim()) onSelect(msg.content);
                           handleTagAction(msg);
                         }
                       }}
