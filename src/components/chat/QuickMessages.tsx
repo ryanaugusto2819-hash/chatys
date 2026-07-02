@@ -130,6 +130,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
       add_tag_id: isTag ? (formAddTagId || null) : null,
       remove_tag_id: isTag ? (formRemoveTagId || null) : null,
       tag_id: null,
+      category: formCategory.trim() || null,
     };
 
     if (editingId) {
