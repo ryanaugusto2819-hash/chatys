@@ -76,11 +76,6 @@ function formatCompact(v: number) {
   return formatCurrency(v);
 }
 
-const RANK_STYLES = [
-  { badge: '🥇', barColor: '#F59E0B', nameColor: '#FDE68A', border: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.07)', label: '1º' },
-  { badge: '🥈', barColor: '#94A3B8', nameColor: '#E2E8F0', border: 'rgba(148,163,184,0.25)', bg: 'rgba(148,163,184,0.06)', label: '2º' },
-  { badge: '🥉', barColor: '#CD7F32', nameColor: '#FED7AA', border: 'rgba(205,127,50,0.25)', bg: 'rgba(205,127,50,0.06)', label: '3º' },
-];
 
 // ── KPI Card Component ──────────────────────────────────────
 interface KpiCardProps {
@@ -311,7 +306,7 @@ export default function SalesRanking() {
   const totalValue  = stats.reduce((s, v) => s + v.totalValor, 0);
   const totalOrders = stats.reduce((s, v) => s + v.totalPedidos, 0);
   const totalQty    = stats.reduce((s, v) => s + v.totalQuantidade, 0);
-  const maxValor    = stats[0]?.totalValor || 1;
+  
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
   const currencySymbol = country === 'uruguay' ? '$U ' : 'R$ ';
@@ -614,107 +609,6 @@ export default function SalesRanking() {
       )}
 
 
-      {/* ── Full ranking table ── */}
-      {!loading && stats.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider mb-3 text-muted-foreground">
-            Classificação Geral
-          </p>
-          <div className="cfo-card accent-purple overflow-hidden">
-            {/* Header */}
-            <div
-              className="grid grid-cols-12 gap-2 px-4 py-2.5 border-b text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-              style={{ borderColor: 'hsl(var(--border))' }}
-            >
-              <div className="col-span-1 text-center">#</div>
-              <div className="col-span-4">Vendedor</div>
-              <div className="col-span-3 text-right">Valor Total</div>
-              <div className="col-span-2 text-right">Pedidos</div>
-              <div className="col-span-2 text-right">Unidades</div>
-            </div>
-
-            <AnimatePresence>
-              {stats.map((vendor, i) => {
-                const barPct = Math.round((vendor.totalValor / maxValor) * 100);
-                const rs = i < 3 ? RANK_STYLES[i] : null;
-
-                return (
-                  <motion.div
-                    key={vendor.vendedor}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.28, delay: i * 0.035 }}
-                    className="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b last:border-b-0 transition-colors duration-100 hover:bg-muted/40"
-                    style={{ borderColor: 'hsl(var(--border) / 0.5)' }}
-                  >
-                    <div className="col-span-1 flex justify-center">
-                      {rs ? (
-                        <span className="text-base">{rs.badge}</span>
-                      ) : (
-                        <span className="text-xs font-bold tabular-nums text-muted-foreground">{i + 1}</span>
-                      )}
-                    </div>
-
-                    <div className="col-span-4">
-                      <p className="text-sm font-semibold truncate text-card-foreground"
-                        style={rs ? { color: rs.nameColor } : {}}>
-                        {vendor.vendedor}
-                      </p>
-                      <div className="mt-1.5 h-1 w-full rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted))' }}>
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{
-                            background: rs
-                              ? `linear-gradient(90deg, ${rs.barColor}, ${rs.barColor}66)`
-                              : 'linear-gradient(90deg, #7C3AED, #7C3AED55)',
-                          }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${barPct}%` }}
-                          transition={{ duration: 0.65, delay: i * 0.035 + 0.15, ease: 'easeOut' }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="col-span-3 text-right">
-                      <span className="text-sm font-bold tabular-nums text-card-foreground">
-                        {formatCurrency(vendor.totalValor)}
-                      </span>
-                    </div>
-                    <div className="col-span-2 text-right">
-                      <span className="text-xs tabular-nums text-muted-foreground">{vendor.totalPedidos}</span>
-                    </div>
-                    <div className="col-span-2 text-right">
-                      <span className="text-xs tabular-nums text-muted-foreground">{vendor.totalQuantidade}</span>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-
-            {/* Footer total */}
-            <div
-              className="grid grid-cols-12 gap-2 px-4 py-3 border-t"
-              style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--muted) / 0.4)' }}
-            >
-              <div className="col-span-1" />
-              <div className="col-span-4">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
-              </div>
-              <div className="col-span-3 text-right">
-                <span className="text-sm font-bold tabular-nums" style={{ color: '#A78BFA' }}>
-                  {formatCurrency(totalValue)}
-                </span>
-              </div>
-              <div className="col-span-2 text-right">
-                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>{totalOrders}</span>
-              </div>
-              <div className="col-span-2 text-right">
-                <span className="text-xs font-bold tabular-nums" style={{ color: '#A78BFA' }}>{totalQty}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
