@@ -14,12 +14,13 @@ interface PinnedFlow {
 
 interface Props {
   conversationId: string;
+  preferredCategory?: string | null;
 }
 
 const UNCATEGORIZED = 'Sem categoria';
 const LS_KEY = 'pinnedFlows.activeCategory';
 
-export default function PinnedFlowShortcuts({ conversationId }: Props) {
+export default function PinnedFlowShortcuts({ conversationId, preferredCategory }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [flows, setFlows] = useState<PinnedFlow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,10 +81,18 @@ export default function PinnedFlowShortcuts({ conversationId }: Props) {
 
   useEffect(() => {
     if (grouped.length === 0) return;
+    // If a preferred category matches an existing group, force-select it (e.g. Cobrança tab)
+    if (preferredCategory) {
+      const match = grouped.find(g => g.label.toLowerCase() === preferredCategory.toLowerCase());
+      if (match && activeCategory !== match.label) {
+        selectCategory(match.label);
+        return;
+      }
+    }
     if (!activeCategory || !grouped.some(g => g.label === activeCategory)) {
       selectCategory(grouped[0].label);
     }
-  }, [grouped, activeCategory]);
+  }, [grouped, activeCategory, preferredCategory]);
 
   const runFlow = async (flow: PinnedFlow) => {
     if (executing) return;
