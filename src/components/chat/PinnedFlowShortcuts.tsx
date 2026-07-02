@@ -17,13 +17,21 @@ interface Props {
 }
 
 const UNCATEGORIZED = 'Sem categoria';
+const LS_KEY = 'pinnedFlows.activeCategory';
 
 export default function PinnedFlowShortcuts({ conversationId }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [flows, setFlows] = useState<PinnedFlow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(() => {
+    try { return localStorage.getItem(LS_KEY); } catch { return null; }
+  });
   const [executing, setExecuting] = useState<string | null>(null);
+
+  const selectCategory = (label: string) => {
+    setActiveCategory(label);
+    try { localStorage.setItem(LS_KEY, label); } catch {}
+  };
 
   const fetchFlows = async () => {
     setLoading(true);
