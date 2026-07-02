@@ -10,6 +10,7 @@ import {
   Loader2,
   MessageSquare,
   RefreshCw,
+  RotateCw,
   Save,
   Trash2,
   Wifi,
@@ -111,6 +112,26 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [deleting, setDeleting] = useState(false);
   const [checking, setChecking] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [restarting, setRestarting] = useState(false);
+
+  const handleRestartEvolution = async () => {
+    const instanceName = connection.config?.instance_name;
+    if (!instanceName) { toast.error('instance_name não configurado'); return; }
+    setRestarting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'restart', instanceName },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Instância reiniciada. Aguarde alguns segundos e verifique o status.');
+      setTimeout(() => onUpdated(), 3000);
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao reiniciar a instância.');
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   const provider = PROVIDER_CONFIG[connection.connection_id];
 
@@ -243,6 +264,16 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
                 title="Conectar via QR Code"
               >
                 <QrCode className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {connection.connection_id === 'evolution' && (
+              <button
+                onClick={handleRestartEvolution}
+                disabled={restarting}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-input bg-background text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-50"
+                title="Reiniciar instância (resolve conexão zumbi)"
+              >
+                {restarting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
               </button>
             )}
             <button
