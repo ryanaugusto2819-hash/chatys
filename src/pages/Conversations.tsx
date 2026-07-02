@@ -16,11 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useInboxQuery, type InboxFilters, type InboxConversation, type ContactTagInfo } from '@/hooks/useInboxQuery';
+import { SECTORS, type SectorValue } from '@/lib/sectors';
 
 const CONVERSATIONS_FILTERS_STORAGE_KEY = 'conversations-filters';
 const CONVERSATIONS_TAB_STORAGE_KEY = 'conversations-active-tab';
 
-type ConnectionTab = 'all' | 'whatsapp' | 'zapi';
+type SectorTab = 'all' | SectorValue;
 
 interface PersistedConversationFilters {
   search: string;
