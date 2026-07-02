@@ -328,6 +328,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [motoboyCity, setMotoboyCity] = useState('');
   const [motoboyResult, setMotoboyResult] = useState<string | null>(null);
   const [blockedConnections, setBlockedConnections] = useState<{ id: string; label: string; status: string }[]>([]);
+  const { currentWorkspace } = useWorkspace();
+  const [rmkTag, setRmkTag] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [rmkLoading, setRmkLoading] = useState(false);
 
   // Reset termo state when conversation changes
   useEffect(() => {
