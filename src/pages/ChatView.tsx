@@ -390,6 +390,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   }, [id]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isLoadingOlderRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -605,6 +606,41 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (file.type.startsWith('video/')) return 'video';
     return 'document';
   };
+
+  const focusMessageInput = useCallback((cursorPosition?: number) => {
+    window.setTimeout(() => {
+      const textarea = messageInputRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const position = Math.min(cursorPosition ?? textarea.value.length, textarea.value.length);
+      textarea.setSelectionRange(position, position);
+      textarea.scrollTop = textarea.scrollHeight;
+    }, 0);
+  }, []);
+
+  const handleQuickMessageSelect = useCallback((content: string) => {
+    const quickText = content.trim();
+    if (!quickText) return;
+
+    let nextCursorPosition: number | undefined;
+
+    setInput(prev => {
+      const current = prev ?? '';
+      const textarea = messageInputRef.current;
+      const start = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : current.length;
+      const end = typeof textarea?.selectionEnd === 'number' ? textarea.selectionEnd : start;
+      const before = current.slice(0, start);
+      const after = current.slice(end);
+      const separatorBefore = before && !/[\s\n]$/.test(before) ? '\n' : '';
+      const separatorAfter = after && !/^[\s\n]/.test(after) ? '\n' : '';
+
+      const next = `${before}${separatorBefore}${quickText}${separatorAfter}${after}`;
+      nextCursorPosition = before.length + separatorBefore.length + quickText.length;
+      return next;
+    });
+
+    focusMessageInput(nextCursorPosition);
+  }, [focusMessageInput]);
 
   const handleSend = async () => {
     if ((!input.trim() && !selectedFile) || !id || sending) return;
@@ -969,22 +1005,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <Paperclip className="h-4 w-4" />
             </button>
             <QuickMessages
-              onSelect={(content) => {
-                setInput(prev => {
-                  const trimmed = (prev ?? '').trim();
-                  const next = trimmed ? `${trimmed} ${content}` : content;
-                  return next;
-                });
-                setTimeout(() => {
-                  const ta = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input]');
-                  if (ta) {
-                    ta.focus();
-                    const len = ta.value.length;
-                    ta.setSelectionRange(len, len);
-                    ta.scrollLeft = ta.scrollWidth;
-                  }
-                }, 30);
-              }}
+              onSelect={handleQuickMessageSelect}
               contactPhone={conversation?.contact_phone}
               onTagChanged={fetchConversation}
             />
@@ -992,6 +1013,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
             <FlowTrigger conversationId={id!} nicheId={(conversation as any)?.niche_id || null} />
             <div className="flex-1 relative">
               <textarea
+                ref={messageInputRef}
                 data-chat-input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
