@@ -265,6 +265,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
               >
                 <QrCode className="h-3.5 w-3.5" />
               </button>
+            )}
             {connection.connection_id === 'evolution' && (
               <button
                 onClick={handleRestartEvolution}
