@@ -468,3 +468,123 @@ function EtiquetaButton({ pedido }: { pedido: Record<string, any> }) {
   );
 }
 
+function PagoUruguayDialog({
+  open, onOpenChange, newStatus, contaOptions, currentComprovante, currentConta, onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  newStatus: string;
+  contaOptions: string[];
+  currentComprovante: string;
+  currentConta: string;
+  onConfirm: (payload: { comprovante: string; conta_bancaria: string }) => void;
+}) {
+  const [comprovante, setComprovante] = useState(currentComprovante);
+  const [conta, setConta] = useState(currentConta);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setComprovante(currentComprovante);
+      setConta(currentConta);
+    }
+  }, [open, currentComprovante, currentConta]);
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const path = `libertypos-comprovantes/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await supabase.storage.from('automation-media').upload(path, file, {
+        cacheControl: '3600', upsert: false, contentType: file.type,
+      });
+      if (error) throw error;
+      const { data } = supabase.storage.from('automation-media').getPublicUrl(path);
+      setComprovante(data.publicUrl);
+      toast.success('Comprovante enviado');
+    } catch (e) {
+      toast.error(`Falha no upload: ${(e as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const canConfirm = comprovante.trim() !== '' && conta.trim() !== '' && !uploading;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirmar Pagamento — Uruguay</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="text-xs text-muted-foreground">
+            Status será alterado para <span className="font-semibold text-foreground">{newStatus}</span>. Informe os dados abaixo para confirmar.
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Conta Bancária</Label>
+            <Select value={conta} onValueChange={setConta}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar conta…" />
+              </SelectTrigger>
+              <SelectContent>
+                {contaOptions.length === 0 && (
+                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground">Nenhuma conta cadastrada</div>
+                )}
+                {contaOptions.map((o) => (
+                  <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={conta}
+              onChange={(e) => setConta(e.target.value)}
+              placeholder="Ou digite manualmente"
+              className="h-8 text-xs"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Comprovante de Pagamento</Label>
+            <Input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              disabled={uploading}
+              className="h-9 text-xs file:mr-2 file:text-xs file:bg-muted file:border-0 file:rounded-md file:px-2 file:py-1"
+            />
+            <Input
+              value={comprovante}
+              onChange={(e) => setComprovante(e.target.value)}
+              placeholder="Ou cole uma URL do comprovante"
+              className="h-8 text-xs"
+            />
+            {uploading && (
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" /> Enviando arquivo…
+              </div>
+            )}
+            {comprovante && !uploading && (
+              <div className="text-[10px] text-muted-foreground truncate">
+                {comprovante}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button
+              size="sm"
+              disabled={!canConfirm}
+              onClick={() => onConfirm({ comprovante: comprovante.trim(), conta_bancaria: conta.trim() })}
+            >
+              Confirmar Pagamento
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
