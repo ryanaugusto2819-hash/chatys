@@ -234,12 +234,13 @@ function PedidoCard({
 
       {expanded && (
         <div className="p-2.5 pt-0 space-y-2 border-t border-border/60">
-          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={STATUS_COBRANCA_OPTS} onChange={(v) => patch('status_cobranca', v)} />
-          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={PAGAMENTO_OPTS} onChange={(v) => patch('status_pagamento', v)} />
-          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={FORMA_PGTO_OPTS} onChange={(v) => patch('forma_pagamento', v)} />
-          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={LOGISTICA_OPTS} onChange={(v) => patch('logistica', v)} />
-          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={ENVIO_OPTS} onChange={(v) => patch('status_envio', v)} />
-          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={WPP_COBRANCA_OPTS} onChange={(v) => patch('wpp_cobranca', v)} />
+          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
+          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={options.status_pagamento} onChange={(v) => patch('status_pagamento', v)} />
+          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={options.forma_pagamento} onChange={(v) => patch('forma_pagamento', v)} />
+          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={options.logistica} onChange={(v) => patch('logistica', v)} />
+          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={options.status_envio} onChange={(v) => patch('status_envio', v)} />
+          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
+
 
           <TextField label="Rastreamento" value={String(val('codigo_rastreamento', 'rastreamento'))} onCommit={(v) => patch('codigo_rastreamento', v)} />
           <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />
