@@ -129,18 +129,28 @@ export default function Automation() {
     if (error) toast.error('Erro ao atualizar fluxo');
   };
 
-  const togglePinned = async (flow: FlowRow, e: React.MouseEvent) => {
+  const togglePinnedSector = async (flow: FlowRow, sector: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!flow.category || !flow.category.trim()) {
       toast.error('Defina uma categoria/nicho antes de fixar');
       return;
     }
+    const current = flow.pinned_sectors || [];
+    const next = current.includes(sector)
+      ? current.filter((s) => s !== sector)
+      : [...current, sector];
     const { error } = await supabase
       .from('automation_flows')
-      .update({ is_pinned_sidebar: !flow.is_pinned_sidebar } as any)
+      .update({
+        pinned_sectors: next,
+        is_pinned_sidebar: next.length > 0,
+      } as any)
       .eq('id', flow.id);
     if (error) toast.error('Erro ao fixar fluxo');
-    else toast.success(flow.is_pinned_sidebar ? 'Fluxo desafixado' : 'Fluxo fixado na barra lateral do chat');
+    else {
+      const label = SECTOR_OPTIONS.find((s) => s.value === sector)?.label ?? sector;
+      toast.success(current.includes(sector) ? `Desafixado de ${label}` : `Fixado em ${label}`);
+    }
   };
 
   const saveCategory = async (flowId: string) => {
