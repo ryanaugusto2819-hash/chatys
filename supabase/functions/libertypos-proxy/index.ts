@@ -96,6 +96,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Derive distinct option values per field from all upstream rows
+    if (body.action === 'options' && parsed && Array.isArray(parsed.data)) {
+      const options: Record<string, string[]> = {};
+      for (const field of OPTION_FIELDS) {
+        const set = new Set<string>();
+        for (const row of parsed.data) {
+          const v = row?.[field];
+          if (v != null && String(v).trim() !== '') set.add(String(v).trim());
+        }
+        if (set.size > 0) options[field] = Array.from(set).sort();
+      }
+      return json({ ok: true, options }, 200);
+    }
+
     return json(parsed as Record<string, unknown>, 200);
   } catch (err) {
     console.error('libertypos-proxy error', err);
