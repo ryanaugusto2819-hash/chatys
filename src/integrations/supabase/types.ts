@@ -201,6 +201,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_pinned_sidebar: boolean
           manual_only: boolean
           name: string
           niche_id: string | null
@@ -215,6 +216,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_pinned_sidebar?: boolean
           manual_only?: boolean
           name?: string
           niche_id?: string | null
@@ -229,6 +231,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_pinned_sidebar?: boolean
           manual_only?: boolean
           name?: string
           niche_id?: string | null

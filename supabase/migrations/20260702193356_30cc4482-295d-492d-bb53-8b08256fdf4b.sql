@@ -1,0 +1,2 @@
+ALTER TABLE public.automation_flows ADD COLUMN IF NOT EXISTS is_pinned_sidebar boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_automation_flows_pinned ON public.automation_flows (workspace_id, is_pinned_sidebar) WHERE is_pinned_sidebar = true;
