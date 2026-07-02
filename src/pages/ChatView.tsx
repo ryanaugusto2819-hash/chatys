@@ -974,7 +974,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                       setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL' });
                       setShowSaleDialog(true);
                     }}
-                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 text-xs font-medium transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
                   >
                     <DollarSign className="h-3.5 w-3.5" />
                     Registrar Venda
@@ -1058,7 +1058,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     setTermoData(prev => ({ ...prev, nomeCliente: conversation.contact_name }));
                     setShowTermoDialog(true);
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground py-1.5 px-3 text-xs font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   Gerar Termo de Compromisso
@@ -1187,7 +1187,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <div>
                 <button
                   onClick={() => { setShowMotoboyDialog(true); setMotoboyCity(''); setMotoboyResult(null); }}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white py-1.5 px-3 text-xs font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
                 >
                   🏍️ Verificar Motoboy
                 </button>
