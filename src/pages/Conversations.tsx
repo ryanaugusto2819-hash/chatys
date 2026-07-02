@@ -195,11 +195,13 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const { data: tags = [] } = useQuery({
     queryKey: ['filter-tags'],
     queryFn: async () => {
-      const { data } = await supabase.from('tags').select('id, name, color');
-      return data || [];
+      const { data } = await supabase.from('tags').select('id, name, color, is_hidden');
+      return (data || []) as Array<{ id: string; name: string; color: string; is_hidden: boolean }>;
     },
     staleTime: 300_000,
   });
+
+  const hiddenTagIds = useMemo(() => new Set(tags.filter(t => t.is_hidden).map(t => t.id)), [tags]);
 
   const { data: agents = [] } = useQuery({
     queryKey: ['filter-agents'],
