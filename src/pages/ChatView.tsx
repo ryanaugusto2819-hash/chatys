@@ -8,6 +8,7 @@ import { ArrowLeft, Send, Paperclip, MoreVertical, User, Clock, CheckCheck, Chec
 import FlowTrigger from '@/components/automation/FlowTrigger';
 import QuickMessages from '@/components/chat/QuickMessages';
 import PinnedFlowShortcuts from '@/components/chat/PinnedFlowShortcuts';
+import PinnedQuickMessageShortcuts from '@/components/chat/PinnedQuickMessageShortcuts';
 
 import TagManager from '@/components/tags/TagManager';
 import { format, formatDistanceToNow } from 'date-fns';
