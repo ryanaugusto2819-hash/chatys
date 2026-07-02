@@ -79,8 +79,8 @@ interface ConversationItemProps {
   onClick: (id: string) => void;
 }
 
-const ConversationItem = memo(function ConversationItem({ conversation: c, isSelected, connectionInfo, onClick }: ConversationItemProps) {
-  const cTags = c.contact_tags || [];
+const ConversationItem = memo(function ConversationItem({ conversation: c, isSelected, connectionInfo, hiddenTagIds, onClick }: ConversationItemProps & { hiddenTagIds: Set<string> }) {
+  const cTags = (c.contact_tags || []).filter(t => !hiddenTagIds.has(t.tag_id));
 
   return (
     <button
@@ -195,11 +195,13 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const { data: tags = [] } = useQuery({
     queryKey: ['filter-tags'],
     queryFn: async () => {
-      const { data } = await supabase.from('tags').select('id, name, color');
-      return data || [];
+      const { data } = await supabase.from('tags').select('id, name, color, is_hidden');
+      return (data || []) as Array<{ id: string; name: string; color: string; is_hidden: boolean }>;
     },
     staleTime: 300_000,
   });
+
+  const hiddenTagIds = useMemo(() => new Set(tags.filter(t => t.is_hidden).map(t => t.id)), [tags]);
 
   const { data: agents = [] } = useQuery({
     queryKey: ['filter-agents'],
@@ -740,6 +742,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   conversation={c}
                   isSelected={selectedId === c.id}
                   connectionInfo={c.connection_config_id ? connectionMap[c.connection_config_id] || null : null}
+                  hiddenTagIds={hiddenTagIds}
                   onClick={handleConversationClick}
                 />
               ))}

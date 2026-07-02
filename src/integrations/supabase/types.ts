@@ -1566,6 +1566,7 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          is_hidden: boolean
           name: string
           workspace_id: string
         }
@@ -1573,6 +1574,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          is_hidden?: boolean
           name: string
           workspace_id?: string
         }
@@ -1580,6 +1582,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          is_hidden?: boolean
           name?: string
           workspace_id?: string
         }
