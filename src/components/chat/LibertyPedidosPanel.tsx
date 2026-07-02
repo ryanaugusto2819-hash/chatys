@@ -291,14 +291,39 @@ function PedidoCard({
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, value, mono, copyValue }: { label: string; value: string; mono?: boolean; copyValue?: string }) {
   return (
-    <div className="grid grid-cols-[80px_1fr] items-center gap-3 py-1 border-b border-border/40 last:border-0">
+    <div className="grid grid-cols-[80px_1fr_auto] items-center gap-2 py-1 border-b border-border/40 last:border-0">
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</span>
       <span className={cn('text-xs text-foreground font-medium truncate', mono && 'font-mono tracking-tight')}>{value}</span>
+      {copyValue ? <CopyBtn value={copyValue} label={label} /> : <span />}
     </div>
   );
 }
+
+function CopyBtn({ value, label, className }: { value: string; label: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(value).then(
+          () => toast.success(`${label} copiado`),
+          () => toast.error('Falha ao copiar'),
+        );
+      }}
+      className={cn(
+        'inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition',
+        className,
+      )}
+      title={`Copiar ${label}`}
+      aria-label={`Copiar ${label}`}
+    >
+      <Copy className="h-3 w-3" />
+    </button>
+  );
+}
+
 
 
 function SelectField({ label, value, options, onChange }: {
