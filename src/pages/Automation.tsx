@@ -122,6 +122,20 @@ export default function Automation() {
     if (error) toast.error('Erro ao atualizar fluxo');
   };
 
+  const togglePinned = async (flow: FlowRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!flow.category || !flow.category.trim()) {
+      toast.error('Defina uma categoria/nicho antes de fixar');
+      return;
+    }
+    const { error } = await supabase
+      .from('automation_flows')
+      .update({ is_pinned_sidebar: !flow.is_pinned_sidebar } as any)
+      .eq('id', flow.id);
+    if (error) toast.error('Erro ao fixar fluxo');
+    else toast.success(flow.is_pinned_sidebar ? 'Fluxo desafixado' : 'Fluxo fixado na barra lateral do chat');
+  };
+
   const saveCategory = async (flowId: string) => {
     const value = categoryInput.trim();
     const { error } = await supabase
