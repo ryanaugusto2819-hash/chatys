@@ -1065,19 +1065,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               </div>
             </div>
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 gap-px bg-border border-b border-border">
-              <div className="flex flex-col items-center py-3 bg-card">
-                <span className="text-lg font-bold text-card-foreground">{messages.length}</span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Mensagens</span>
-              </div>
-              <div className="flex flex-col items-center py-3 bg-card">
-                <span className="text-lg font-bold text-card-foreground">
-                  {formatDistanceToNow(new Date(conversation.created_at), { locale: ptBR, addSuffix: false })}
-                </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Duração</span>
-              </div>
-            </div>
 
             <div className="p-4 space-y-5 flex-1">
               {/* Register Sale */}
@@ -1420,68 +1407,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 )}
               </div>
 
-              {/* Assigned Agent */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <User className="h-3 w-3" /> Agente Responsável
-                </p>
-                <div className="rounded-lg border border-border bg-background/50 p-3">
-                  {assignedAgent ? (
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {assignedAgent.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-card-foreground">{assignedAgent.full_name}</p>
-                        <p className="text-[10px] text-muted-foreground">Atribuído</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
-                        <User className="h-3.5 w-3.5" />
-                      </div>
-                      <p className="text-xs text-muted-foreground">Nenhum agente atribuído</p>
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Assignment History */}
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <History className="h-3 w-3" /> Histórico de Atendimento
-                </p>
-                <div className="rounded-lg border border-border bg-background/50 p-3">
-                  {assignmentHistory.length > 0 ? (
-                    <div className="space-y-3">
-                      {assignmentHistory.map((h, i) => (
-                        <div key={h.id} className="relative flex gap-3">
-                          {i < assignmentHistory.length - 1 && (
-                            <div className="absolute left-[11px] top-6 bottom-0 w-px bg-border" />
-                          )}
-                          <div className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${
-                            !h.unassigned_at ? 'bg-primary/20 ring-2 ring-primary/30' : 'bg-muted'
-                          }`}>
-                            <div className={`h-2 w-2 rounded-full ${!h.unassigned_at ? 'bg-primary' : 'bg-muted-foreground/40'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0 pb-3">
-                            <p className="text-xs font-medium text-card-foreground truncate">{h.agent_name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {format(new Date(h.assigned_at), 'dd/MM/yyyy HH:mm')}
-                              {h.unassigned_at
-                                ? ` → ${format(new Date(h.unassigned_at), 'dd/MM HH:mm')}`
-                                : ' — atual'}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-center py-1">Sem histórico</p>
-                  )}
-                </div>
-              </div>
 
               {/* Tags */}
               <div>
