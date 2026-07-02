@@ -1408,7 +1408,8 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 )}
               </div>
 
-
+              {/* Pinned Flow Shortcuts */}
+              <PinnedFlowShortcuts conversationId={id!} />
 
               {/* Tags */}
               <div>
