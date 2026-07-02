@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon } from 'lucide-react';
+import { Zap, Plus, X, Type, Mic, Search, Trash2, Edit2, Save, Volume2, Tag as TagIcon, Pin, PinOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -15,6 +15,8 @@ interface QuickMessage {
   tag_id?: string | null;
   add_tag_id?: string | null;
   remove_tag_id?: string | null;
+  category?: string | null;
+  is_pinned_sidebar?: boolean;
 }
 
 interface TagOption {
@@ -44,6 +46,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
   const [formShortcut, setFormShortcut] = useState('');
   const [formAddTagId, setFormAddTagId] = useState<string>('');
   const [formRemoveTagId, setFormRemoveTagId] = useState<string>('');
+  const [formCategory, setFormCategory] = useState('');
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -72,6 +75,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
+  const existingCategories = Array.from(new Set(messages.map(m => (m.category || '').trim()).filter(Boolean))).sort();
+
   const resetForm = () => {
     setFormTitle('');
     setFormContent('');
@@ -79,8 +84,22 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormShortcut('');
     setFormAddTagId('');
     setFormRemoveTagId('');
+    setFormCategory('');
     setEditingId(null);
     setShowForm(false);
+  };
+
+  const togglePinned = async (msg: QuickMessage, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!msg.category || !msg.category.trim()) {
+      toast.error('Defina uma categoria antes de fixar (edite a mensagem)');
+      return;
+    }
+    await (supabase.from('quick_messages') as any)
+      .update({ is_pinned_sidebar: !msg.is_pinned_sidebar })
+      .eq('id', msg.id);
+    toast.success(msg.is_pinned_sidebar ? 'Desafixada' : 'Fixada na barra lateral do chat');
+    fetchMessages();
   };
 
   // Normalize DB row into a display "kind"
@@ -111,6 +130,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
       add_tag_id: isTag ? (formAddTagId || null) : null,
       remove_tag_id: isTag ? (formRemoveTagId || null) : null,
       tag_id: null,
+      category: formCategory.trim() || null,
     };
 
     if (editingId) {
@@ -142,6 +162,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     setFormTitle(msg.title);
     setFormContent(msg.content);
     setFormShortcut(msg.shortcut || '');
+    setFormCategory(msg.category || '');
     const k = kindOf(msg);
     setFormType(k);
     if (k === 'tag_action') {
@@ -443,6 +464,17 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
 
+                    <input
+                      list="qm-cats"
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value)}
+                      placeholder="Categoria/Nicho (ex: Adulto Uruguay) — necessário para fixar"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <datalist id="qm-cats">
+                      {existingCategories.map(c => <option key={c} value={c} />)}
+                    </datalist>
+
                     <button
                       onClick={handleSave}
                       disabled={
@@ -521,21 +553,37 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                               {msg.shortcut}
                             </span>
                           )}
+                          {msg.category && (
+                            <span className="shrink-0 rounded bg-primary/10 text-primary px-1.5 py-0.5 text-[9px] font-medium truncate max-w-[80px]" title={msg.category}>
+                              {msg.category}
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                           {previewText(msg)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          onClick={(e) => togglePinned(msg, e)}
+                          className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                            msg.is_pinned_sidebar
+                              ? 'text-primary hover:bg-primary/10'
+                              : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-secondary'
+                          }`}
+                          title={msg.is_pinned_sidebar ? 'Desafixar da barra lateral' : 'Fixar na barra lateral do chat'}
+                        >
+                          {msg.is_pinned_sidebar ? <Pin className="h-3 w-3 fill-current" /> : <PinOff className="h-3 w-3" />}
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEdit(msg); }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-card-foreground hover:bg-secondary"
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-card-foreground hover:bg-secondary"
                         >
                           <Edit2 className="h-3 w-3" />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
