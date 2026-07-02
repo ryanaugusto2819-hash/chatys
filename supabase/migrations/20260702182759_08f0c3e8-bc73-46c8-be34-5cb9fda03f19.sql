@@ -1,0 +1,1 @@
+ALTER TABLE public.quick_messages ADD COLUMN IF NOT EXISTS tag_id uuid REFERENCES public.tags(id) ON DELETE SET NULL;

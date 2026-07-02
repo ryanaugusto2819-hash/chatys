@@ -1479,6 +1479,7 @@ export type Database = {
           id: string
           shortcut: string | null
           sort_order: number
+          tag_id: string | null
           title: string
           type: string
           updated_at: string
@@ -1491,6 +1492,7 @@ export type Database = {
           id?: string
           shortcut?: string | null
           sort_order?: number
+          tag_id?: string | null
           title: string
           type?: string
           updated_at?: string
@@ -1503,12 +1505,21 @@ export type Database = {
           id?: string
           shortcut?: string | null
           sort_order?: number
+          tag_id?: string | null
           title?: string
           type?: string
           updated_at?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quick_messages_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales_orders: {
         Row: {
