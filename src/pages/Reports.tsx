@@ -116,9 +116,106 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+function MessagesByConnectionCard({ period }: { period: LeadPeriod }) {
+  const { data, isLoading } = useMessagesByConnection(period);
+  const items = data ?? [];
+  const maxIncoming = Math.max(1, ...items.map(i => i.incoming));
+  const totalIn = items.reduce((s, i) => s + i.incoming, 0);
+  const totalOut = items.reduce((s, i) => s + i.outgoing, 0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.5 }}
+      className="cfo-card accent-blue p-5"
+    >
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="icon-box icon-box-blue h-9 w-9 rounded-xl">
+            <MessageSquare className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-card-foreground">Mensagens por Conexão</h3>
+            <p className="text-xs text-muted-foreground">Volume de mensagens recebidas e enviadas por canal</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD' }}>
+            <ArrowDownLeft className="h-3 w-3" /> {totalIn} recebidas
+          </span>
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'rgba(124,58,237,0.15)', color: '#C4B5FD' }}>
+            <ArrowUpRight className="h-3 w-3" /> {totalOut} enviadas
+          </span>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="h-6 w-6 rounded-full border-2 border-border border-t-primary animate-spin" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+          Nenhuma mensagem no período
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((it, i) => {
+            const pct = Math.round((it.incoming / maxIncoming) * 100);
+            return (
+              <motion.div
+                key={it.connectionId}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.28, delay: i * 0.04 }}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                      style={{ background: '#3B82F6' }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-sm font-medium text-card-foreground truncate">{it.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-blue-300 tabular-nums">
+                      <ArrowDownLeft className="h-3 w-3" /> {it.incoming}
+                    </span>
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 tabular-nums">
+                      <ArrowUpRight className="h-3 w-3" /> {it.outgoing}
+                    </span>
+                    <span
+                      className="text-sm font-bold tabular-nums px-2 py-0.5 rounded-lg"
+                      style={{ background: 'rgba(59,130,246,0.18)', color: '#93C5FD' }}
+                    >
+                      {it.total}
+                    </span>
+                  </div>
+                </div>
+                <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted))' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg, #3B82F6, #3B82F688)' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.6, delay: i * 0.05 }}
+                  />
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export default function Reports() {
   const [period, setPeriod] = useState<LeadPeriod>('hoje');
   const [tab, setTab] = useState<'leads' | 'funil'>('leads');
+
   const { data, isLoading, refetch, isFetching } = useLeadMonitor(period);
 
   const activePeriodLabel = PERIODS.find(p => p.key === period)?.label ?? '';
