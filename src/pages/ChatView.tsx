@@ -337,6 +337,22 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const id = conversationId || paramId;
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [activeSectorTab, setActiveSectorTab] = useState<string>(() =>
+    (typeof window !== 'undefined' && localStorage.getItem('conversations-active-tab')) || 'all'
+  );
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'string') setActiveSectorTab(detail);
+      else setActiveSectorTab(localStorage.getItem('conversations-active-tab') || 'all');
+    };
+    window.addEventListener('conversations-tab-change', handler);
+    window.addEventListener('storage', handler);
+    return () => {
+      window.removeEventListener('conversations-tab-change', handler);
+      window.removeEventListener('storage', handler);
+    };
+  }, []);
   const [translating, setTranslating] = useState(false);
 
   const translateToUruguayan = async () => {
@@ -1442,10 +1458,10 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <PinnedFlowShortcuts conversationId={id!} />
 
               {/* LibertyPOS pedidos - apenas na aba Cobrança */}
-              {(typeof window !== 'undefined' &&
-                localStorage.getItem('conversations-active-tab') === 'cobranca') && (
+              {activeSectorTab === 'cobranca' && (
                 <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
               )}
+
 
 
 

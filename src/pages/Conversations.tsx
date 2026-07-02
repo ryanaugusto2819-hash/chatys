@@ -190,7 +190,9 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   // Persist active tab
   useEffect(() => {
     localStorage.setItem(CONVERSATIONS_TAB_STORAGE_KEY, activeTab);
+    window.dispatchEvent(new CustomEvent('conversations-tab-change', { detail: activeTab }));
   }, [activeTab]);
+
 
   // Filter dropdown options (moved up so allConnections is available for tab filtering)
   const { data: tags = [] } = useQuery({
