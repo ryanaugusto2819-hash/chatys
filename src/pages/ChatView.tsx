@@ -308,16 +308,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
 
-  // Order state
-  const [showOrderDialog, setShowOrderDialog] = useState(false);
-  const [orderData, setOrderData] = useState({
-    nome: '', cedula: '', cep: '', bairro: '', cidade: '', rua: '',
-    numero: '', complemento: '', produto: '', quantidade: '1',
-    valor: '', vendedor: '', telefone: '', pais: 'BR',
-  });
-  const [sendingOrder, setSendingOrder] = useState(false);
-  const [orderCount, setOrderCount] = useState(0);
-
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
   const [termoData, setTermoData] = useState({ nomeCliente: '', cpf: '', meses: '', valor: '', formaPagamento: 'boleto à vista' });
