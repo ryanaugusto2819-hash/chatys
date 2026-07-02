@@ -104,7 +104,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
     const isTag = formType === 'tag_action';
     const payload: any = {
       title: formTitle,
-      content: isTag || formType === 'audio' ? (formType === 'audio' ? formContent : '') : formContent,
+      // Preserve text content also for tag_action rows (optional message alongside the tag change)
+      content: formType === 'audio' ? formContent : (formContent || ''),
       type: formType,
       shortcut: formShortcut || null,
       add_tag_id: isTag ? (formAddTagId || null) : null,
@@ -384,6 +385,13 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
 
                     {formType === 'tag_action' && (
                       <div className="space-y-2">
+                        <textarea
+                          value={formContent}
+                          onChange={(e) => setFormContent(e.target.value)}
+                          placeholder="Mensagem opcional (será inserida no campo de texto)..."
+                          rows={2}
+                          className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
                         {tags.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground px-1">
                             Nenhuma etiqueta cadastrada. Crie uma etiqueta primeiro no gerenciador de etiquetas.
@@ -497,6 +505,7 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                           onSelect(msg.content);
                           setOpen(false);
                         } else if (k === 'tag_action') {
+                          if (msg.content && msg.content.trim()) onSelect(msg.content);
                           handleTagAction(msg);
                         }
                       }}
