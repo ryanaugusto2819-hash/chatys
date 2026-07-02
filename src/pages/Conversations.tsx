@@ -239,9 +239,8 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     sector: activeTab !== 'all' ? activeTab : '',
   }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTag, onlyUnread, searchByMessage, activeTab]);
 
-  }), [debouncedSearch, activeFilter, selectedAgent, effectiveConnectionIds, selectedTag, onlyUnread, searchByMessage]);
-
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
+
 
   const { currentWorkspace } = useWorkspace();
 
