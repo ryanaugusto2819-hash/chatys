@@ -969,7 +969,22 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               <Paperclip className="h-4 w-4" />
             </button>
             <QuickMessages
-              onSelect={(content) => setInput(content)}
+              onSelect={(content) => {
+                setInput(prev => {
+                  const trimmed = (prev ?? '').trim();
+                  const next = trimmed ? `${trimmed} ${content}` : content;
+                  return next;
+                });
+                setTimeout(() => {
+                  const ta = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input]');
+                  if (ta) {
+                    ta.focus();
+                    const len = ta.value.length;
+                    ta.setSelectionRange(len, len);
+                    ta.scrollLeft = ta.scrollWidth;
+                  }
+                }, 30);
+              }}
               contactPhone={conversation?.contact_phone}
               onTagChanged={fetchConversation}
             />
@@ -977,6 +992,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
             <FlowTrigger conversationId={id!} nicheId={(conversation as any)?.niche_id || null} />
             <div className="flex-1 relative">
               <textarea
+                data-chat-input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
@@ -985,6 +1001,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 className="w-full resize-none rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+
             <button
               onClick={translateToUruguayan}
               disabled={translating || !input.trim()}
