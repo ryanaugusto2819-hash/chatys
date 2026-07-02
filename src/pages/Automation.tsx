@@ -19,7 +19,14 @@ interface FlowRow {
   updated_at: string;
   category: string | null;
   is_pinned_sidebar?: boolean;
+  pinned_sectors?: string[] | null;
 }
+
+const SECTOR_OPTIONS: { value: string; label: string }[] = [
+  { value: 'comercial', label: 'Comercial' },
+  { value: 'cobranca', label: 'Cobrança' },
+  { value: 'pos_venda', label: 'Pós-Venda' },
+];
 
 const UNCATEGORIZED = '__sem_categoria__';
 
