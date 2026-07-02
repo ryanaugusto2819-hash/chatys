@@ -187,65 +187,100 @@ function PedidoCard({
     onPatch({ [k]: v });
   };
 
-  const cliente = pedido.nome || pedido.cliente || pedido.contact_name || '—';
-  const produto = pedido.produto || pedido.product || '—';
-  const valor = pedido.valor ?? pedido.value;
-  const entrada = pedido.data_entrada || pedido.entrada || pedido.created_at;
+  const cliente = local.nome || local.cliente || local.contact_name || '—';
+  const produto = local.produto || local.product || '—';
+  const telefone = local.telefone || local.phone || local.whatsapp || '';
+  const valor = local.valor ?? local.value;
+  const entrada = local.data_entrada || local.entrada || local.created_at;
 
   const val = (...keys: string[]) => {
     for (const k of keys) if (local[k] != null && local[k] !== '') return local[k];
     return '';
   };
 
+  const paisOptions = ['Brasil', 'Uruguay'];
+  const paisCurrent = String(val('pais', 'country') || '');
+
+  const fmtPhone = (p: string) => {
+    const d = p.replace(/\D/g, '');
+    if (d.length >= 12) return `+${d.slice(0, d.length - 10)} (${d.slice(-10, -8)}) ${d.slice(-8, -4)}-${d.slice(-4)}`;
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    return p;
+  };
+
   return (
-    <div className="rounded-lg border border-border bg-background/50 overflow-hidden">
+    <div className="rounded-xl border border-border/70 bg-card/60 overflow-hidden shadow-sm hover:border-primary/40 transition-colors">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full p-2.5 flex items-start justify-between gap-2 hover:bg-muted/40 transition text-left"
+        className="w-full p-3 flex items-start justify-between gap-2 hover:bg-muted/30 transition text-left"
       >
-        <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-semibold text-card-foreground truncate">{cliente}</div>
-          <div className="text-[10px] text-muted-foreground truncate">{produto}</div>
-          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-[12px] font-semibold text-card-foreground truncate tracking-tight">{cliente}</div>
+            {paisCurrent && (
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 shrink-0">
+                {paisCurrent}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate">{produto}</div>
+          <div className="flex items-center gap-2 flex-wrap">
             {valor != null && (
-              <span className="text-[10px] font-mono text-emerald-400">
+              <span className="text-[11px] font-mono font-semibold text-emerald-400">
                 R$ {Number(valor).toFixed(2).replace('.', ',')}
               </span>
             )}
+            {telefone && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {fmtPhone(String(telefone))}
+              </span>
+            )}
             {entrada && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground/70">
                 {new Date(entrada).toLocaleDateString('pt-BR')}
               </span>
             )}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap pt-0.5">
             {val('status_cobranca') && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(String(val('status_cobranca'))))}>
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_cobranca'))))}>
                 {String(val('status_cobranca'))}
               </span>
             )}
             {val('status_envio', 'envio') && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded border', badgeColor(String(val('status_envio', 'envio'))))}>
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-md border font-medium', badgeColor(String(val('status_envio', 'envio'))))}>
                 {String(val('status_envio', 'envio'))}
               </span>
             )}
           </div>
         </div>
-        {expanded ? <ChevronDown className="h-3 w-3 shrink-0 mt-1" /> : <ChevronRight className="h-3 w-3 shrink-0 mt-1" />}
+        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" />}
       </button>
 
       {expanded && (
-        <div className="p-2.5 pt-0 space-y-2 border-t border-border/60">
-          <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
-          <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={options.status_pagamento} onChange={(v) => patch('status_pagamento', v)} />
-          <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={options.forma_pagamento} onChange={(v) => patch('forma_pagamento', v)} />
-          <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={options.logistica} onChange={(v) => patch('logistica', v)} />
-          <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={options.status_envio} onChange={(v) => patch('status_envio', v)} />
-          <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
+        <div className="p-3 pt-2 space-y-3 border-t border-border/60 bg-background/30">
+          <div className="grid grid-cols-2 gap-2">
+            <TextField label="Nome" value={String(val('nome', 'cliente', 'contact_name'))} onCommit={(v) => patch('nome', v)} />
+            <TextField label="Telefone" value={String(val('telefone', 'phone', 'whatsapp'))} onCommit={(v) => patch('telefone', v)} />
+            <TextField label="Produto" value={String(val('produto', 'product'))} onCommit={(v) => patch('produto', v)} />
+            <TextField label="Valor" value={String(val('valor', 'value'))} onCommit={(v) => patch('valor', v)} />
+          </div>
 
+          <SelectField label="País" value={paisCurrent} options={paisOptions} onChange={(v) => patch('pais', v)} />
 
-          <TextField label="Rastreamento" value={String(val('codigo_rastreamento', 'rastreamento'))} onCommit={(v) => patch('codigo_rastreamento', v)} />
+          <div className="h-px bg-border/50" />
+
+          <div className="grid grid-cols-2 gap-2">
+            <SelectField label="Status Cobrança" value={String(val('status_cobranca'))} options={options.status_cobranca} onChange={(v) => patch('status_cobranca', v)} />
+            <SelectField label="Pagamento" value={String(val('status_pagamento', 'pagamento'))} options={options.status_pagamento} onChange={(v) => patch('status_pagamento', v)} />
+            <SelectField label="Forma Pgto" value={String(val('forma_pagamento', 'forma_pgto'))} options={options.forma_pagamento} onChange={(v) => patch('forma_pagamento', v)} />
+            <SelectField label="Logística" value={String(val('logistica', 'tipo_entrega'))} options={options.logistica} onChange={(v) => patch('logistica', v)} />
+            <SelectField label="Envio" value={String(val('status_envio', 'envio'))} options={options.status_envio} onChange={(v) => patch('status_envio', v)} />
+            <SelectField label="WPP Cobrança" value={String(val('wpp_cobranca'))} options={options.wpp_cobranca} onChange={(v) => patch('wpp_cobranca', v)} />
+          </div>
+
           <TextField label="Cód. Conta" value={String(val('codigo_conta', 'cod_conta'))} onCommit={(v) => patch('codigo_conta', v)} />
-          <TextField label="Frete" value={String(val('valor_frete', 'frete'))} onCommit={(v) => patch('valor_frete', v)} />
-          <TextField label="Notas" value={String(val('observacoes', 'notas'))} onCommit={(v) => patch('observacoes', v)} multiline />
+
 
 
           <div className="flex items-center justify-between pt-1">
