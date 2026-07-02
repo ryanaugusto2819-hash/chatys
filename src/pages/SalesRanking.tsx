@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, RefreshCw, ShoppingBag, DollarSign, Users,
   Package, CalendarDays, TrendingUp, TrendingDown,
-  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck,
+  Facebook, Percent, Settings, X, Check, Globe, MapPin, ClipboardCheck, CheckCircle2, BadgeCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesKPIs, pctChange } from '@/hooks/useSalesKPIs';
