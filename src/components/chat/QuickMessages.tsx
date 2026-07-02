@@ -431,9 +431,8 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                       onClick={handleSave}
                       disabled={
                         !formTitle.trim() ||
-                        (formType === 'text' && !formContent.trim()) ||
                         (formType === 'audio' && !formContent) ||
-                        (formType === 'tag_action' && !formAddTagId && !formRemoveTagId)
+                        (formType === 'text' && !formContent.trim() && !formAddTagId && !formRemoveTagId)
                       }
                       className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
