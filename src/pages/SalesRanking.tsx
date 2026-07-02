@@ -571,7 +571,7 @@ export default function SalesRanking() {
           delay={0.55}
           loading={pending.loading}
           hideDelta
-          subtitle={`${pedidoAgendado} agendados de ${totalConfirmacoes}`}
+          subtitle={`${confirmacaoFeita} confirmados de ${totalConfirmacoes}`}
         />
 
       </div>
