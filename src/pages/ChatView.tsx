@@ -579,6 +579,26 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         });
         if (savedMsg.status === 'failed') {
           toast.error('Erro ao enviar mensagem. Verifique a conexão do WhatsApp.');
+        } else {
+          // Auto-atribuir a conversa ao usuário que enviou a mensagem
+          try {
+            const { data: userData } = await supabase.auth.getUser();
+            const uid = userData?.user?.id;
+            if (uid && !assignedAgent) {
+              const { error: assignErr } = await supabase
+                .from('conversations')
+                .update({ assigned_agent_id: uid })
+                .eq('id', id);
+              if (!assignErr) {
+                const { data: prof } = await supabase
+                  .from('profiles')
+                  .select('id, full_name, avatar_url')
+                  .eq('id', uid)
+                  .single();
+                if (prof) setAssignedAgent(prof as AgentProfile);
+              }
+            }
+          } catch (e) { console.warn('auto-assign failed', e); }
         }
       } else {
         setMessages(prev => prev.filter(m => m.id !== optimisticId));
