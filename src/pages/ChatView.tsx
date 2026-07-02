@@ -1441,10 +1441,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               {/* Pinned Flow Shortcuts */}
               <PinnedFlowShortcuts conversationId={id!} />
 
-              {/* LibertyPOS pedidos - apenas no setor de Cobrança */}
-              {conversation.sector === 'cobranca' && (
+              {/* LibertyPOS pedidos - apenas na aba Cobrança */}
+              {(typeof window !== 'undefined' &&
+                localStorage.getItem('conversations-active-tab') === 'cobranca') && (
                 <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
               )}
+
 
 
 
