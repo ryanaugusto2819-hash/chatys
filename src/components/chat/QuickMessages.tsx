@@ -553,21 +553,37 @@ export default function QuickMessages({ onSelect, contactPhone, onTagChanged }: 
                               {msg.shortcut}
                             </span>
                           )}
+                          {msg.category && (
+                            <span className="shrink-0 rounded bg-primary/10 text-primary px-1.5 py-0.5 text-[9px] font-medium truncate max-w-[80px]" title={msg.category}>
+                              {msg.category}
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                           {previewText(msg)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          onClick={(e) => togglePinned(msg, e)}
+                          className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                            msg.is_pinned_sidebar
+                              ? 'text-primary hover:bg-primary/10'
+                              : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-secondary'
+                          }`}
+                          title={msg.is_pinned_sidebar ? 'Desafixar da barra lateral' : 'Fixar na barra lateral do chat'}
+                        >
+                          {msg.is_pinned_sidebar ? <Pin className="h-3 w-3 fill-current" /> : <PinOff className="h-3 w-3" />}
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEdit(msg); }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-card-foreground hover:bg-secondary"
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-card-foreground hover:bg-secondary"
                         >
                           <Edit2 className="h-3 w-3" />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
