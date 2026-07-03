@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_sessions: {
+        Row: {
+          actions_count: number
+          first_seen: string
+          id: string
+          ip: string | null
+          last_seen: string
+          route: string | null
+          session_id: string
+          user_agent: string | null
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          actions_count?: number
+          first_seen?: string
+          id?: string
+          ip?: string | null
+          last_seen?: string
+          route?: string | null
+          session_id: string
+          user_agent?: string | null
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          actions_count?: number
+          first_seen?: string
+          id?: string
+          ip?: string | null
+          last_seen?: string
+          route?: string | null
+          session_id?: string
+          user_agent?: string | null
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       agent_assignment_history: {
         Row: {
           agent_id: string
