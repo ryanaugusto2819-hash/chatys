@@ -898,7 +898,10 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (!termoPdfUrl || sendingTermoWhatsApp) return;
     setSendingTermoWhatsApp(true);
     try {
-      await sendWhatsAppMessage(id!, 'TERMO DE COMPROMISSO', { mediaUrl: termoPdfUrl, messageType: 'document' });
+      const result = await sendWhatsAppMessage(id!, 'TERMO DE COMPROMISSO', { mediaUrl: termoPdfUrl, messageType: 'document' });
+      if (result?.success === false || result?.savedMessage?.status === 'failed') {
+        throw new Error(result?.error || 'Falha ao enviar termo');
+      }
       toast.success('Termo enviado com sucesso!');
       setShowTermoDialog(false);
       setTermoPdfUrl(null);
