@@ -179,7 +179,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const [debouncedSearch, setDebouncedSearch] = useState(storedFilters.search);
   const [searchByMessage, setSearchByMessage] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>(storedFilters.activeFilter);
-  const [selectedTag, setSelectedTag] = useState<string>(storedFilters.selectedTag);
+  const [selectedTags, setSelectedTags] = useState<string[]>(storedFilters.selectedTags);
   const [selectedAgent, setSelectedAgent] = useState<string>(storedFilters.selectedAgent);
   const [selectedConnections, setSelectedConnections] = useState<string[]>(storedFilters.selectedConnections);
   const [onlyUnread, setOnlyUnread] = useState(storedFilters.onlyUnread);
