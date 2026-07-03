@@ -780,7 +780,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {conversations.map((c) => (
+              {displayedConversations.map((c) => (
                 <ConversationItem
                   key={c.id}
                   conversation={c}
@@ -795,11 +795,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 </div>
               )}
-              {conversations.length === 0 && (
+              {displayedConversations.length === 0 && (
                 <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
                   Nenhuma conversa encontrada
                 </div>
               )}
+
             </div>
           )}
         </div>
