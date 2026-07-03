@@ -236,8 +236,14 @@ Deno.serve(async (req) => {
 
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
-    const pdfUrl = urlData.publicUrl;
+    const { data: signedData, error: signedErr } = await supabase.storage
+      .from("chat-media")
+      .createSignedUrl(fileName, 60 * 60 * 24 * 7); // 7 dias
+    if (signedErr || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signedErr?.message || "unknown"}`);
+    }
+    const pdfUrl = signedData.signedUrl;
+
 
     if (enviar) {
       const { data: conv } = await supabase
