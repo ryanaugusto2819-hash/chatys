@@ -45,6 +45,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const EvolutionLogs = lazy(() => import("./pages/EvolutionLogs"));
 const AdsConversions = lazy(() => import("./pages/AdsConversions"));
+const ActivityReport = lazy(() => import("./pages/ActivityReport"));
 
 
 const queryClient = new QueryClient({
@@ -107,6 +108,7 @@ const App = () => (
                   <Route path="/webhook-mappings" element={<AdminRoute><WebhookMappings /></AdminRoute>} />
                   <Route path="/ai" element={<AdminRoute><AiSettings /></AdminRoute>} />
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+                  <Route path="/activity" element={<AdminRoute><ActivityReport /></AdminRoute>} />
                   <Route path="/manager-ai" element={<AdminRoute><ManagerAI /></AdminRoute>} />
                   
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
