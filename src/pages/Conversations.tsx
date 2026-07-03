@@ -313,14 +313,15 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     const serialized = JSON.stringify({
       search: searchInput,
       activeFilter,
-      selectedTag,
+      selectedTags,
       selectedAgent,
       selectedConnections,
       onlyUnread,
     } satisfies PersistedConversationFilters);
     window.localStorage.setItem(CONVERSATIONS_FILTERS_STORAGE_KEY, serialized);
     window.sessionStorage.setItem(CONVERSATIONS_FILTERS_STORAGE_KEY, serialized);
-  }, [searchInput, activeFilter, selectedTag, selectedAgent, selectedConnections, onlyUnread]);
+  }, [searchInput, activeFilter, selectedTags, selectedAgent, selectedConnections, onlyUnread]);
+
 
   // Infinite scroll observer
   useEffect(() => {
