@@ -26,7 +26,7 @@ type SectorTab = 'all' | SectorValue;
 interface PersistedConversationFilters {
   search: string;
   activeFilter: string;
-  selectedTag: string;
+  selectedTags: string[];
   selectedAgent: string;
   selectedConnections: string[];
   onlyUnread: boolean;
@@ -35,7 +35,7 @@ interface PersistedConversationFilters {
 const defaultConversationFilters: PersistedConversationFilters = {
   search: '',
   activeFilter: 'all',
-  selectedTag: 'all',
+  selectedTags: [],
   selectedAgent: 'all',
   selectedConnections: [],
   onlyUnread: false,
@@ -48,10 +48,17 @@ const getStoredConversationFilters = (): PersistedConversationFilters => {
   if (!stored) return defaultConversationFilters;
   try {
     const parsed = JSON.parse(stored);
+    // Back-compat: previously stored `selectedTag` as string
+    let selectedTags: string[] = defaultConversationFilters.selectedTags;
+    if (Array.isArray(parsed.selectedTags)) {
+      selectedTags = parsed.selectedTags.filter((v: unknown): v is string => typeof v === 'string');
+    } else if (typeof parsed.selectedTag === 'string' && parsed.selectedTag !== 'all') {
+      selectedTags = [parsed.selectedTag];
+    }
     return {
       search: typeof parsed.search === 'string' ? parsed.search : defaultConversationFilters.search,
       activeFilter: typeof parsed.activeFilter === 'string' ? parsed.activeFilter : defaultConversationFilters.activeFilter,
-      selectedTag: typeof parsed.selectedTag === 'string' ? parsed.selectedTag : defaultConversationFilters.selectedTag,
+      selectedTags,
       selectedAgent: typeof parsed.selectedAgent === 'string' ? parsed.selectedAgent : defaultConversationFilters.selectedAgent,
       selectedConnections: Array.isArray(parsed.selectedConnections)
         ? parsed.selectedConnections.filter((v: unknown): v is string => typeof v === 'string')
@@ -62,6 +69,7 @@ const getStoredConversationFilters = (): PersistedConversationFilters => {
     return defaultConversationFilters;
   }
 };
+
 
 interface ConnectionInfo {
   id: string;
