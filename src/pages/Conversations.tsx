@@ -243,11 +243,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
     connectionIds: selectedConnections,
-    tagId: selectedTag !== 'all' ? selectedTag : null,
+    tagId: selectedTags.length === 1 ? selectedTags[0] : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
     sector: activeTab !== 'all' ? activeTab : '',
-  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTag, onlyUnread, searchByMessage, activeTab]);
+  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTags, onlyUnread, searchByMessage, activeTab]);
+
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
 
