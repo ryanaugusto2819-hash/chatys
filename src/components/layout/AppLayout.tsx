@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useActivityHeartbeat } from '@/hooks/useActivityHeartbeat';
 import AppSidebar from './AppSidebar';
 import logoImg from '@/assets/logo-group-liberty.jpg';
 
 export default function AppLayout() {
   const { session, loading, isApproved } = useAuth();
+  useActivityHeartbeat();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 

@@ -21,6 +21,7 @@ import {
   Crown,
   Radio,
   Megaphone,
+  Activity,
 } from 'lucide-react';
 
 
@@ -40,6 +41,7 @@ const adminItems = [
   { to: '/webhook-mappings', icon: Webhook, label: 'Webhooks' },
   { to: '/ai', icon: Bot, label: 'Nichos & IA' },
   { to: '/reports', icon: BarChart3, label: 'Relatórios' },
+  { to: '/activity', icon: Activity, label: 'Atividade (IP)' },
   { to: '/manager-ai', icon: ShieldCheck, label: 'IA Gerente' },
   { to: '/connections', icon: Plug, label: 'Conexões' },
   { to: '/users', icon: Users, label: 'Usuários' },
