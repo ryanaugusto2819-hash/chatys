@@ -700,8 +700,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
           throw new Error('Falha ao fazer upload do arquivo');
         }
 
-        const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
-        mediaUrl = urlData.publicUrl;
+        const { data: signed, error: signErr } = await supabase.storage
+          .from('chat-media')
+          .createSignedUrl(path, 60 * 60 * 24 * 7);
+        if (signErr || !signed?.signedUrl) {
+          throw new Error('Falha ao gerar URL do arquivo');
+        }
+        mediaUrl = signed.signedUrl;
         setUploading(false);
       }
 
