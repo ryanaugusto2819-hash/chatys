@@ -67,6 +67,33 @@ async function callEvolution(endpoint: string, apiKey: string, body: Record<stri
   return { res, data };
 }
 
+async function ensureDownloadableMediaUrl(supabase: ReturnType<typeof createClient>, mediaUrl: string | null) {
+  if (!mediaUrl) return null;
+
+  const publicMarker = "/storage/v1/object/public/chat-media/";
+  try {
+    const url = new URL(mediaUrl);
+    const markerIndex = url.pathname.indexOf(publicMarker);
+    if (markerIndex === -1) return mediaUrl;
+
+    const filePath = decodeURIComponent(url.pathname.slice(markerIndex + publicMarker.length));
+    if (!filePath) return mediaUrl;
+
+    const { data, error } = await supabase.storage
+      .from("chat-media")
+      .createSignedUrl(filePath, 60 * 60 * 24 * 7);
+
+    if (error || !data?.signedUrl) {
+      console.error("[evolution-send] failed to sign media URL:", error?.message || "unknown");
+      return mediaUrl;
+    }
+
+    return data.signedUrl;
+  } catch {
+    return mediaUrl;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -148,13 +175,15 @@ Deno.serve(async (req) => {
     let endpoint = `${serverUrl}/message/sendText/${encodeURIComponent(instanceName)}`;
     let body: Record<string, unknown> = { number: phone, text: message };
 
-    if (mediaUrl) {
+    const downloadableMediaUrl = await ensureDownloadableMediaUrl(supabase, mediaUrl);
+
+    if (downloadableMediaUrl) {
       endpoint = `${serverUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`;
       const mediatype = type === "video" ? "video" : type === "document" ? "document" : type === "audio" ? "audio" : "image";
       body = {
         number: phone,
         mediatype,
-        media: mediaUrl,
+        media: downloadableMediaUrl,
         caption: message || "",
       };
     }
@@ -198,7 +227,7 @@ Deno.serve(async (req) => {
       content: message ?? "",
       sender_type: "agent",
       message_type: normalizedType,
-      media_url: mediaUrl,
+      media_url: downloadableMediaUrl || mediaUrl,
       status: apiRes.ok ? "sent" : "failed",
       provider_message_id: providerMsgId,
       provider_status: apiRes.ok ? null : String(apiRes.status),
