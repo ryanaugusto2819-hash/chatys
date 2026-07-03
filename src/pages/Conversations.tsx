@@ -307,6 +307,17 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     return map;
   }, [allConnections]);
 
+  // Client-side filter when multiple tags are selected (OR semantics).
+  // The RPC only accepts a single tag; single-tag is filtered server-side.
+  const displayedConversations = useMemo(() => {
+    if (selectedTags.length <= 1) return conversations;
+    const wanted = new Set(selectedTags);
+    return conversations.filter((c) =>
+      (c.contact_tags || []).some((t) => wanted.has(t.tag_id))
+    );
+  }, [conversations, selectedTags]);
+
+
   // Persist filters
   useEffect(() => {
     if (typeof window === 'undefined') return;
