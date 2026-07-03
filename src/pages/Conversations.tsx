@@ -338,10 +338,11 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const activeFiltersCount = (selectedTag !== 'all' ? 1 : 0) + (selectedAgent !== 'all' ? 1 : 0) + (selectedConnections.length > 0 ? 1 : 0) + (!['all', 'last_customer'].includes(activeFilter) ? 1 : 0);
+  const activeFiltersCount = (selectedTags.length > 0 ? 1 : 0) + (selectedAgent !== 'all' ? 1 : 0) + (selectedConnections.length > 0 ? 1 : 0) + (!['all', 'last_customer'].includes(activeFilter) ? 1 : 0);
 
   const clearFilters = () => {
-    setSelectedTag('all');
+    setSelectedTags([]);
+
     setSelectedAgent('all');
     setSelectedConnections([]);
     if (!['all', 'last_customer'].includes(activeFilter)) setActiveFilter('all');
