@@ -26,7 +26,7 @@ type SectorTab = 'all' | SectorValue;
 interface PersistedConversationFilters {
   search: string;
   activeFilter: string;
-  selectedTag: string;
+  selectedTags: string[];
   selectedAgent: string;
   selectedConnections: string[];
   onlyUnread: boolean;
@@ -35,7 +35,7 @@ interface PersistedConversationFilters {
 const defaultConversationFilters: PersistedConversationFilters = {
   search: '',
   activeFilter: 'all',
-  selectedTag: 'all',
+  selectedTags: [],
   selectedAgent: 'all',
   selectedConnections: [],
   onlyUnread: false,
@@ -48,10 +48,17 @@ const getStoredConversationFilters = (): PersistedConversationFilters => {
   if (!stored) return defaultConversationFilters;
   try {
     const parsed = JSON.parse(stored);
+    // Back-compat: previously stored `selectedTag` as string
+    let selectedTags: string[] = defaultConversationFilters.selectedTags;
+    if (Array.isArray(parsed.selectedTags)) {
+      selectedTags = parsed.selectedTags.filter((v: unknown): v is string => typeof v === 'string');
+    } else if (typeof parsed.selectedTag === 'string' && parsed.selectedTag !== 'all') {
+      selectedTags = [parsed.selectedTag];
+    }
     return {
       search: typeof parsed.search === 'string' ? parsed.search : defaultConversationFilters.search,
       activeFilter: typeof parsed.activeFilter === 'string' ? parsed.activeFilter : defaultConversationFilters.activeFilter,
-      selectedTag: typeof parsed.selectedTag === 'string' ? parsed.selectedTag : defaultConversationFilters.selectedTag,
+      selectedTags,
       selectedAgent: typeof parsed.selectedAgent === 'string' ? parsed.selectedAgent : defaultConversationFilters.selectedAgent,
       selectedConnections: Array.isArray(parsed.selectedConnections)
         ? parsed.selectedConnections.filter((v: unknown): v is string => typeof v === 'string')
@@ -62,6 +69,7 @@ const getStoredConversationFilters = (): PersistedConversationFilters => {
     return defaultConversationFilters;
   }
 };
+
 
 interface ConnectionInfo {
   id: string;
@@ -171,7 +179,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
   const [debouncedSearch, setDebouncedSearch] = useState(storedFilters.search);
   const [searchByMessage, setSearchByMessage] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>(storedFilters.activeFilter);
-  const [selectedTag, setSelectedTag] = useState<string>(storedFilters.selectedTag);
+  const [selectedTags, setSelectedTags] = useState<string[]>(storedFilters.selectedTags);
   const [selectedAgent, setSelectedAgent] = useState<string>(storedFilters.selectedAgent);
   const [selectedConnections, setSelectedConnections] = useState<string[]>(storedFilters.selectedConnections);
   const [onlyUnread, setOnlyUnread] = useState(storedFilters.onlyUnread);
@@ -235,11 +243,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     status: !['all', 'last_customer'].includes(activeFilter) ? activeFilter : '',
     agentId: selectedAgent !== 'all' ? selectedAgent : null,
     connectionIds: selectedConnections,
-    tagId: selectedTag !== 'all' ? selectedTag : null,
+    tagId: selectedTags.length === 1 ? selectedTags[0] : null,
     onlyUnread,
     lastCustomer: activeFilter === 'last_customer',
     sector: activeTab !== 'all' ? activeTab : '',
-  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTag, onlyUnread, searchByMessage, activeTab]);
+  }), [debouncedSearch, activeFilter, selectedAgent, selectedConnections, selectedTags, onlyUnread, searchByMessage, activeTab]);
+
 
   const { conversations, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInboxQuery(inboxFilters);
 
@@ -298,20 +307,32 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     return map;
   }, [allConnections]);
 
+  // Client-side filter when multiple tags are selected (OR semantics).
+  // The RPC only accepts a single tag; single-tag is filtered server-side.
+  const displayedConversations = useMemo(() => {
+    if (selectedTags.length <= 1) return conversations;
+    const wanted = new Set(selectedTags);
+    return conversations.filter((c) =>
+      (c.contact_tags || []).some((t) => wanted.has(t.tag_id))
+    );
+  }, [conversations, selectedTags]);
+
+
   // Persist filters
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const serialized = JSON.stringify({
       search: searchInput,
       activeFilter,
-      selectedTag,
+      selectedTags,
       selectedAgent,
       selectedConnections,
       onlyUnread,
     } satisfies PersistedConversationFilters);
     window.localStorage.setItem(CONVERSATIONS_FILTERS_STORAGE_KEY, serialized);
     window.sessionStorage.setItem(CONVERSATIONS_FILTERS_STORAGE_KEY, serialized);
-  }, [searchInput, activeFilter, selectedTag, selectedAgent, selectedConnections, onlyUnread]);
+  }, [searchInput, activeFilter, selectedTags, selectedAgent, selectedConnections, onlyUnread]);
+
 
   // Infinite scroll observer
   useEffect(() => {
@@ -328,10 +349,11 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const activeFiltersCount = (selectedTag !== 'all' ? 1 : 0) + (selectedAgent !== 'all' ? 1 : 0) + (selectedConnections.length > 0 ? 1 : 0) + (!['all', 'last_customer'].includes(activeFilter) ? 1 : 0);
+  const activeFiltersCount = (selectedTags.length > 0 ? 1 : 0) + (selectedAgent !== 'all' ? 1 : 0) + (selectedConnections.length > 0 ? 1 : 0) + (!['all', 'last_customer'].includes(activeFilter) ? 1 : 0);
 
   const clearFilters = () => {
-    setSelectedTag('all');
+    setSelectedTags([]);
+
     setSelectedAgent('all');
     setSelectedConnections([]);
     if (!['all', 'last_customer'].includes(activeFilter)) setActiveFilter('all');
@@ -611,24 +633,54 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   </select>
                 </div>
 
-                {/* Tag */}
+                {/* Tags (multi-select) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Etiqueta</label>
-                  <select
-                    value={selectedTag}
-                    onChange={(e) => setSelectedTag(e.target.value)}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-xs font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
-                      selectedTag !== 'all'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-input bg-background text-foreground'
-                    }`}
-                  >
-                    <option value="all">Todas as etiquetas</option>
-                    {tags.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Etiquetas {selectedTags.length > 0 && (
+                        <span className="text-primary font-semibold">({selectedTags.length})</span>
+                      )}
+                    </label>
+                    {selectedTags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTags([])}
+                        className="text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto rounded-lg border border-input bg-background p-1">
+                    {tags.filter(t => !t.is_hidden).length > 0 ? tags.filter(t => !t.is_hidden).map((t) => {
+                      const isChecked = selectedTags.includes(t.id);
+                      return (
+                        <label key={t.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-secondary/60 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              setSelectedTags((prev) => {
+                                if (e.target.checked) return [...prev, t.id];
+                                return prev.filter((id) => id !== t.id);
+                              });
+                            }}
+                            className="rounded border-input text-primary focus:ring-ring h-3.5 w-3.5"
+                          />
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: t.color }}
+                          />
+                          <span className="text-xs text-foreground truncate">{t.name}</span>
+                        </label>
+                      );
+                    }) : (
+                      <p className="text-xs text-muted-foreground px-2 py-1">Nenhuma etiqueta</p>
+                    )}
+                  </div>
                 </div>
+
+
 
                 {/* Agent */}
                 <div className="space-y-1.5">
@@ -728,7 +780,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {conversations.map((c) => (
+              {displayedConversations.map((c) => (
                 <ConversationItem
                   key={c.id}
                   conversation={c}
@@ -743,11 +795,12 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 </div>
               )}
-              {conversations.length === 0 && (
+              {displayedConversations.length === 0 && (
                 <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
                   Nenhuma conversa encontrada
                 </div>
               )}
+
             </div>
           )}
         </div>
