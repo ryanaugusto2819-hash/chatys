@@ -622,24 +622,54 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                   </select>
                 </div>
 
-                {/* Tag */}
+                {/* Tags (multi-select) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Etiqueta</label>
-                  <select
-                    value={selectedTag}
-                    onChange={(e) => setSelectedTag(e.target.value)}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-xs font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
-                      selectedTag !== 'all'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-input bg-background text-foreground'
-                    }`}
-                  >
-                    <option value="all">Todas as etiquetas</option>
-                    {tags.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Etiquetas {selectedTags.length > 0 && (
+                        <span className="text-primary font-semibold">({selectedTags.length})</span>
+                      )}
+                    </label>
+                    {selectedTags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTags([])}
+                        className="text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto rounded-lg border border-input bg-background p-1">
+                    {tags.filter(t => !t.is_hidden).length > 0 ? tags.filter(t => !t.is_hidden).map((t) => {
+                      const isChecked = selectedTags.includes(t.id);
+                      return (
+                        <label key={t.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-secondary/60 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              setSelectedTags((prev) => {
+                                if (e.target.checked) return [...prev, t.id];
+                                return prev.filter((id) => id !== t.id);
+                              });
+                            }}
+                            className="rounded border-input text-primary focus:ring-ring h-3.5 w-3.5"
+                          />
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: t.color }}
+                          />
+                          <span className="text-xs text-foreground truncate">{t.name}</span>
+                        </label>
+                      );
+                    }) : (
+                      <p className="text-xs text-muted-foreground px-2 py-1">Nenhuma etiqueta</p>
+                    )}
+                  </div>
                 </div>
+
+
 
                 {/* Agent */}
                 <div className="space-y-1.5">
