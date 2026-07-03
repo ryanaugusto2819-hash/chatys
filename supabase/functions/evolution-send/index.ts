@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
       content: message ?? "",
       sender_type: "agent",
       message_type: normalizedType,
-      media_url: mediaUrl,
+      media_url: downloadableMediaUrl || mediaUrl,
       status: apiRes.ok ? "sent" : "failed",
       provider_message_id: providerMsgId,
       provider_status: apiRes.ok ? null : String(apiRes.status),
