@@ -8,7 +8,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { text, target = "es-UY" } = await req.json();
+    const body = await req.json();
+    const text = body?.text;
+    const requestedTarget = String(body?.target || "es-UY").trim().toLowerCase();
+    const target = requestedTarget.startsWith("pt") || requestedTarget.includes("portugu") ? "pt-BR" : "es-UY";
     if (!text || typeof text !== "string" || !text.trim()) {
       return new Response(JSON.stringify({ error: "Texto vazio" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -22,24 +25,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    const systemPrompt = target === "es-UY"
-      ? "Eres un traductor profesional. Traduce el texto del usuario al español rioplatense usado en Uruguay (voseo cuando sea natural, vocabulario uruguayo). Mantén emojis, saltos de línea, formato de WhatsApp (*negrita*, _itálica_) y el tono original (informal o formal). Responde SOLO con la traducción al ESPAÑOL, NUNCA en inglés ni en portugués, sin comillas, sin comentarios, sin explicaciones."
-      : target === "pt-BR"
-        ? "Traduza QUALQUER texto recebido para PORTUGUÊS BRASILEIRO (pt-BR). NUNCA responda em inglês, espanhol ou qualquer outro idioma. Se o texto já estiver em português, devolva-o inalterado. Mantenha emojis, quebras de linha e formatação do WhatsApp (*negrito*, _itálico_). Responda SOMENTE com a tradução em português brasileiro, sem aspas, sem comentários, sem explicações."
-        : "You are a professional translator. Translate the user's text. Respond ONLY with the translation.";
+    const systemPrompt = target === "pt-BR"
+      ? "Você é um tradutor profissional nativo do Brasil. Sua única tarefa é traduzir qualquer texto recebido para PORTUGUÊS BRASILEIRO. É proibido responder em inglês ou espanhol. Se o texto já estiver em português brasileiro, devolva-o inalterado. Preserve emojis, quebras de linha, links, números e formatação de WhatsApp. Responda somente com a tradução final, sem aspas e sem explicações."
+      : "Sos un traductor profesional nativo de Uruguay. Tu única tarea es traducir cualquier texto recibido al ESPAÑOL rioplatense usado en Uruguay. Está prohibido responder en inglés o portugués. Si el texto ya está en español rioplatense, devolvelo sin cambios. Mantené emojis, saltos de línea, links, números y formato de WhatsApp. Respondé solamente con la traducción final, sin comillas ni explicaciones.";
 
     const userContent = target === "pt-BR"
-      ? `Traduza para PORTUGUÊS BRASILEIRO (pt-BR). Não use inglês.\n\nTexto:\n${text}`
-      : target === "es-UY"
-        ? `Traducí al ESPAÑOL rioplatense de Uruguay. NO uses inglés ni portugués.\n\nTexto:\n${text}`
-        : text;
+      ? `IDIOMA OBRIGATÓRIO DE SAÍDA: português brasileiro (pt-BR).\nNÃO escreva em inglês. NÃO escreva em espanhol.\n\nTexto original:\n${text}`
+      : `IDIOMA OBLIGATORIO DE SALIDA: español rioplatense de Uruguay.\nNO escribas en inglés. NO escribas en portugués.\n\nTexto original:\n${text}`;
 
     async function callGateway(sys: string, usr: string) {
       return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        headers: { "Lovable-API-Key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
+          temperature: 0,
           messages: [
             { role: "system", content: sys },
             { role: "user", content: usr },
@@ -72,17 +72,19 @@ Deno.serve(async (req) => {
 
     // Detecta idioma errado e refaz
     function looksEnglish(t: string) {
-      const lower = ` ${t.toLowerCase()} `;
-      const hits = [" the ", " you ", " are ", " is ", " and ", " with ", " going ", " not ", " for ", " about ", " think ", " easy "].filter(w => lower.includes(w)).length;
+      const lower = ` ${t.toLowerCase().replace(/[’']/g, "'")} `;
+      const hits = [" the ", " you ", " your ", " they ", " we ", " are ", " is ", " and ", " with ", " not ", " for ", " about ", " what ", " kind ", " guarantee ", " nothing ", " i'm ", " telling ", " product ", " expensive ", " charge "].filter(w => lower.includes(w)).length;
       return hits >= 2;
     }
     function looksPortuguese(t: string) {
       const lower = ` ${t.toLowerCase()} `;
-      return /[ãõçâê]/.test(lower) || [" você ", " não ", " está ", " então ", " também ", " aceitar ", " depois "].some(w => lower.includes(w));
+      const hits = [" você ", " vocês ", " não ", " está ", " estão ", " então ", " também ", " depois ", " caro ", " cobram ", " fosse ", " garantia ", " dão ", " nada ", " produto "].filter(w => lower.includes(w)).length;
+      return /[ãõçâêáéíóúà]/.test(lower) || hits >= 2;
     }
     function looksSpanish(t: string) {
       const lower = ` ${t.toLowerCase()} `;
-      return /[ñ¿¡]/.test(lower) || [" usted ", " vos ", " está ", " después ", " propuesta ", " pensar ", " fácil "].some(w => lower.includes(w));
+      const hits = [" usted ", " vos ", " está ", " están ", " después ", " propuesta ", " pensar ", " fácil ", " caro ", " cobran ", " fuera ", " garantía ", " dan ", " nada ", " producto "].filter(w => lower.includes(w)).length;
+      return /[ñ¿¡]/.test(lower) || hits >= 2;
     }
 
     const wrongLang =
@@ -91,10 +93,10 @@ Deno.serve(async (req) => {
 
     if (wrongLang) {
       const retrySys = target === "pt-BR"
-        ? "Você é um tradutor. Responda APENAS em PORTUGUÊS BRASILEIRO. Proibido inglês e espanhol."
+        ? "Você é um tradutor nativo do Brasil. Responda APENAS em PORTUGUÊS BRASILEIRO. Proibido inglês e espanhol."
         : "Sos un traductor. Respondé SOLO en ESPAÑOL rioplatense. Prohibido inglés y portugués.";
       const retryUsr = target === "pt-BR"
-        ? `Traduza este texto para PORTUGUÊS BRASILEIRO. Devolva SOMENTE a tradução em português, sem inglês:\n\n${text}`
+        ? `Corrija o idioma. A resposta anterior saiu no idioma errado. Traduza este texto para PORTUGUÊS BRASILEIRO. Devolva SOMENTE a tradução em português brasileiro, sem inglês e sem espanhol:\n\n${text}`
         : `Traducí este texto al ESPAÑOL rioplatense de Uruguay. Devolvé SOLO la traducción en español, sin inglés:\n\n${text}`;
       const res2 = await callGateway(retrySys, retryUsr);
       if (res2.ok) {
