@@ -189,6 +189,44 @@ Deno.serve(async (req) => {
         return json({ success: true, alreadyGone: !r.ok, remoteStatus: r.status, remoteDetail: r.ok ? null : r.data });
       }
 
+      case "logout": {
+        if (!instanceName) return json({ error: "instanceName required" }, 400);
+        const r = await evo(`/instance/logout/${instanceName}`, "DELETE");
+        await supabase
+          .from("connection_configs")
+          .update({
+            is_connected: false,
+            status: "close",
+            last_checked_at: new Date().toISOString(),
+          })
+          .eq("connection_id", "evolution")
+          .eq("config->>instance_name", instanceName);
+        const bodyStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
+        const notFound = r.status === 404 || /not.*connected|logged.?out|not found/i.test(bodyStr);
+        return json({ success: r.ok || notFound, raw: r.data });
+      }
+
+      case "reconnect": {
+        if (!instanceName) return json({ error: "instanceName required" }, 400);
+        // Logout first (ignore failures), then request new QR via connect
+        await evo(`/instance/logout/${instanceName}`, "DELETE").catch(() => {});
+        // Small delay to let Evolution reset state
+        await new Promise((res) => setTimeout(res, 800));
+        const r = await evo(`/instance/connect/${instanceName}`, "GET");
+        if (!r.ok) return json({ error: "Failed to reconnect", detail: r.data }, r.status);
+        const qrcode = r.data?.base64 || r.data?.qrcode?.base64 || r.data?.code || null;
+        await supabase
+          .from("connection_configs")
+          .update({
+            is_connected: false,
+            status: "qr_required",
+            last_checked_at: new Date().toISOString(),
+          })
+          .eq("connection_id", "evolution")
+          .eq("config->>instance_name", instanceName);
+        return json({ success: true, qrcode, raw: r.data });
+      }
+
       case "restart": {
         if (!instanceName) return json({ error: "instanceName required" }, 400);
         const r = await evo(`/instance/restart/${instanceName}`, "PUT");

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Loader2, Plus, RefreshCw, Trash2, QrCode, Zap, X, CheckCircle2, AlertCircle, Webhook } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, Trash2, QrCode, Zap, X, CheckCircle2, AlertCircle, Webhook, Power } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -154,6 +154,34 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const reconnect = async (name: string) => {
+    if (!confirm(`Desconectar "${name}" e gerar novo QR Code?`)) return;
+    setBusy(b => ({ ...b, [name]: true }));
+    setQrInstance(name);
+    setQrImage(null);
+    setQrOpen(true);
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'reconnect', instanceName: name },
+      });
+      if (error) throw error;
+      const qr = data?.qrcode;
+      if (qr) {
+        setQrImage(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr.replace(/^data:image\/png;base64,/, '')}`);
+        toast.success('Desconectado. Escaneie o novo QR Code.');
+      } else {
+        toast.info('QR ainda não disponível. Clique em "Atualizar QR".');
+      }
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao reconectar');
+    } finally {
+      setQrLoading(false);
+      setBusy(b => ({ ...b, [name]: false }));
+    }
+  };
+
   const getName = (i: EvoInstance) =>
     i.name || i.instanceName || i.instance?.instanceName || '';
   const getState = (i: EvoInstance) =>
@@ -254,6 +282,14 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
                       className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                     >
                       <Webhook className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => reconnect(name)}
+                      disabled={isBusy}
+                      title="Reconectar (desconecta e gera novo QR)"
+                      className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-colors disabled:opacity-50"
+                    >
+                      <Power className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => checkStatus(name)}
