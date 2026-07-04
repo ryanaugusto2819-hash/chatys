@@ -37,14 +37,26 @@ export function useLeadMonitor(period: LeadPeriod) {
     queryFn: async () => {
       const now = new Date();
 
-      const [convsRes, todayRes, activeRes, resolvedRes] = await Promise.all([
-        supabase
+      // Paginate to bypass Supabase default 1000-row cap
+      const PAGE = 1000;
+      const convs: any[] = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await supabase
           .from('conversations')
           .select(`id, created_at, status, assigned_agent_id, connection_config_id,
             profiles!assigned_agent_id(full_name),
             connection_configs!connection_config_id(connection_id, config)`)
           .gte('created_at', from)
-          .lte('created_at', to),
+          .lte('created_at', to)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) { console.error('useLeadMonitor page error:', error); break; }
+        const rows = data ?? [];
+        convs.push(...rows);
+        if (rows.length < PAGE) break;
+      }
+
+      const [todayRes, activeRes, resolvedRes] = await Promise.all([
         supabase
           .from('conversations')
           .select('id', { count: 'exact', head: true })
@@ -64,8 +76,8 @@ export function useLeadMonitor(period: LeadPeriod) {
           .lte('created_at', to),
       ]);
 
-      const convs = (convsRes.data ?? []) as any[];
       const total = convs.length;
+
 
       // ── Chart: by hour (hoje/ontem) or by day (other periods) ──
       let chart: ChartPoint[] = [];
