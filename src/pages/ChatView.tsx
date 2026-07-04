@@ -17,6 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useChatMessages, type ChatMessage } from '@/hooks/useChatMessages';
 import { AudioPlayer } from '@/components/chat/AudioPlayer';
+import { MediaImage, MediaVideo, useMediaOpener } from '@/components/chat/MediaUrl';
 
 interface ConversationData {
   id: string;
@@ -186,12 +187,11 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
         {/* Image */}
         {msg.message_type === 'image' && msg.media_url && (
           <div className="mb-1.5">
-            <img
+            <MediaImage
               src={msg.media_url}
               alt="Imagem"
               className={`rounded-lg max-w-full max-h-64 object-cover cursor-pointer ${msg.status === 'failed' ? 'opacity-50' : ''}`}
-              onClick={() => window.open(msg.media_url!, '_blank')}
-              loading="lazy"
+              onClick={(url) => window.open(url, '_blank')}
             />
           </div>
         )}
@@ -216,24 +216,13 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
         {/* Video */}
         {msg.message_type === 'video' && msg.media_url && (
           <div className={`mb-1.5 ${msg.status === 'failed' ? 'opacity-50' : ''}`}>
-            <video controls preload="metadata" className="rounded-lg max-w-full max-h-64">
-              <source src={msg.media_url} />
-            </video>
+            <MediaVideo src={msg.media_url} className="rounded-lg max-w-full max-h-64" />
           </div>
         )}
 
         {/* Document / PDF */}
         {msg.message_type === 'document' && msg.media_url && (
-          <div
-            className={`mb-1.5 flex items-center gap-2 p-2.5 rounded-lg cursor-pointer border ${msg.sender_type === 'agent' ? 'border-primary-foreground/20 bg-primary-foreground/10' : 'border-border bg-muted/50'} ${msg.status === 'failed' ? 'opacity-50' : ''}`}
-            onClick={() => window.open(msg.media_url!, '_blank')}
-          >
-            <span className="text-2xl">📄</span>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-medium truncate">{msg.content || 'Documento'}</span>
-              <span className="text-[10px] opacity-60">Clique para abrir</span>
-            </div>
-          </div>
+          <DocumentBubble msg={msg} />
         )}
 
         {/* Document without media_url */}
