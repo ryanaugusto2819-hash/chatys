@@ -32,15 +32,24 @@ export function useFunnelMetrics(days: number = 30) {
   const journeyQuery = useQuery({
     queryKey: ['lead-journey', days],
     queryFn: async () => {
-      // 1. All conversations in period
-      const { data: conversations } = await supabase
-        .from('conversations')
-        .select('id, status, created_at, contact_phone')
-        .gte('created_at', since);
-
-      const convos = conversations ?? [];
+      // Paginate to bypass Supabase default 1000-row cap
+      const PAGE = 1000;
+      const convos: Array<{ id: string; status: string; created_at: string; contact_phone: string }> = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('id, status, created_at, contact_phone')
+          .gte('created_at', since)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) { console.error('useFunnelMetrics page error:', error); break; }
+        const rows = data ?? [];
+        convos.push(...rows);
+        if (rows.length < PAGE) break;
+      }
       const convIds = convos.map(c => c.id);
       if (convIds.length === 0) return { stages: [] as LeadJourneyStage[], responseMetrics: null };
+
 
       // 2. Fetch messages for these conversations (batch)
       const allMessages: Array<{ conversation_id: string; sender_type: string; created_at: string }> = [];
