@@ -17,7 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useChatMessages, type ChatMessage } from '@/hooks/useChatMessages';
 import { AudioPlayer } from '@/components/chat/AudioPlayer';
-import { MediaImage, MediaVideo, useMediaOpener } from '@/components/chat/MediaUrl';
+import { MediaImage, MediaVideo, DocumentBubble } from '@/components/chat/MediaUrl';
 
 interface ConversationData {
   id: string;

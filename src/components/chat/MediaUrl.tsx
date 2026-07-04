@@ -65,3 +65,19 @@ export function useMediaOpener() {
     window.open(src, "_blank");
   };
 }
+
+export function DocumentBubble({ url, content, isAgent, failed }: { url: string; content?: string; isAgent: boolean; failed?: boolean }) {
+  const open = useMediaOpener();
+  return (
+    <div
+      className={`mb-1.5 flex items-center gap-2 p-2.5 rounded-lg cursor-pointer border ${isAgent ? 'border-primary-foreground/20 bg-primary-foreground/10' : 'border-border bg-muted/50'} ${failed ? 'opacity-50' : ''}`}
+      onClick={() => open(url)}
+    >
+      <span className="text-2xl">📄</span>
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm font-medium truncate">{content || 'Documento'}</span>
+        <span className="text-[10px] opacity-60">Clique para abrir</span>
+      </div>
+    </div>
+  );
+}
