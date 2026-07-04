@@ -284,6 +284,14 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
                       <Webhook className="h-4 w-4" />
                     </button>
                     <button
+                      onClick={() => reconnect(name)}
+                      disabled={isBusy}
+                      title="Reconectar (desconecta e gera novo QR)"
+                      className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-colors disabled:opacity-50"
+                    >
+                      <Power className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => checkStatus(name)}
                       disabled={isBusy}
                       title="Verificar status"
