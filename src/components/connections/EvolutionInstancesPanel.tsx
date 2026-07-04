@@ -154,6 +154,34 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const reconnect = async (name: string) => {
+    if (!confirm(`Desconectar "${name}" e gerar novo QR Code?`)) return;
+    setBusy(b => ({ ...b, [name]: true }));
+    setQrInstance(name);
+    setQrImage(null);
+    setQrOpen(true);
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-manager', {
+        body: { action: 'reconnect', instanceName: name },
+      });
+      if (error) throw error;
+      const qr = data?.qrcode;
+      if (qr) {
+        setQrImage(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr.replace(/^data:image\/png;base64,/, '')}`);
+        toast.success('Desconectado. Escaneie o novo QR Code.');
+      } else {
+        toast.info('QR ainda não disponível. Clique em "Atualizar QR".');
+      }
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao reconectar');
+    } finally {
+      setQrLoading(false);
+      setBusy(b => ({ ...b, [name]: false }));
+    }
+  };
+
   const getName = (i: EvoInstance) =>
     i.name || i.instanceName || i.instance?.instanceName || '';
   const getState = (i: EvoInstance) =>
