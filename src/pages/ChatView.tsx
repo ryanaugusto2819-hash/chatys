@@ -222,7 +222,7 @@ const MessageBubble = memo(function MessageBubble({ msg, onDelete, senderName }:
 
         {/* Document / PDF */}
         {msg.message_type === 'document' && msg.media_url && (
-          <DocumentBubble msg={msg} />
+          <DocumentBubble url={msg.media_url} content={msg.content} isAgent={msg.sender_type === 'agent'} failed={msg.status === 'failed'} />
         )}
 
         {/* Document without media_url */}
