@@ -462,10 +462,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     return () => clearInterval(interval);
   }, []);
 
-  // Scroll to bottom on new messages (but not when loading older)
+  // Scroll to bottom on new messages (but not when loading older). Use 'auto'
+  // — 'smooth' introduces a 300-500ms animation per update that feels laggy
+  // when many messages arrive in a burst or on initial load.
   useEffect(() => {
     if (!isLoadingOlderRef.current && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
   }, [messages.length]);
 
