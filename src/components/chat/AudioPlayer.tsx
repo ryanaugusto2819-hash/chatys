@@ -26,33 +26,59 @@ function parseStorageUrl(url: string): { bucket: string; path: string } | null {
 // Buckets that are actually public — anything else needs a signed URL.
 const PUBLIC_BUCKETS = new Set(["automation-media", "knowledge-base", "follow-up-images"]);
 
+// Cache signed URLs across mounts so scrolling/re-render doesn't re-fetch them.
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+const inflight = new Map<string, Promise<string | null>>();
+
+async function getSignedUrl(bucket: string, path: string): Promise<string | null> {
+  const key = `${bucket}/${path}`;
+  const cached = signedUrlCache.get(key);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url;
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const p = supabase.storage
+    .from(bucket)
+    .createSignedUrl(path, 60 * 60)
+    .then(({ data, error }) => {
+      inflight.delete(key);
+      if (error || !data?.signedUrl) {
+        if (error) console.error("AudioPlayer signed URL error", error);
+        return null;
+      }
+      signedUrlCache.set(key, { url: data.signedUrl, expiresAt: Date.now() + 60 * 60 * 1000 });
+      return data.signedUrl;
+    });
+  inflight.set(key, p);
+  return p;
+}
+
 export function AudioPlayer({ src, inverted, failed }: Props) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const [speed, setSpeed] = useState<number>(1);
-  const [resolved, setResolved] = useState<string>(src);
-
   const parsed = useMemo(() => parseStorageUrl(src), [src]);
+  const needsSigned = !!(parsed && !PUBLIC_BUCKETS.has(parsed.bucket));
+  const cachedInitial = needsSigned && parsed ? signedUrlCache.get(`${parsed.bucket}/${parsed.path}`)?.url : null;
+  const [resolved, setResolved] = useState<string>(cachedInitial || (needsSigned ? "" : src));
 
   useEffect(() => {
     let cancelled = false;
-    setResolved(src);
-    if (parsed && !PUBLIC_BUCKETS.has(parsed.bucket)) {
-      supabase.storage
-        .from(parsed.bucket)
-        .createSignedUrl(parsed.path, 60 * 60)
-        .then(({ data, error }) => {
-          if (cancelled) return;
-          if (error) {
-            console.error("AudioPlayer signed URL error", error);
-            return;
-          }
-          if (data?.signedUrl) setResolved(data.signedUrl);
-        });
+    if (!needsSigned) {
+      setResolved(src);
+      return;
     }
+    if (!parsed) return;
+    const cached = signedUrlCache.get(`${parsed.bucket}/${parsed.path}`);
+    if (cached && cached.expiresAt > Date.now() + 60_000) {
+      setResolved(cached.url);
+      return;
+    }
+    getSignedUrl(parsed.bucket, parsed.path).then((url) => {
+      if (!cancelled && url) setResolved(url);
+    });
     return () => {
       cancelled = true;
     };
-  }, [src, parsed]);
+  }, [src, parsed, needsSigned]);
 
   useEffect(() => {
     if (ref.current) ref.current.playbackRate = speed;
@@ -68,14 +94,15 @@ export function AudioPlayer({ src, inverted, failed }: Props) {
       <audio
         ref={ref}
         controls
-        preload="metadata"
+        preload="auto"
         className="w-full h-10 rounded-lg"
         style={{ filter: inverted ? "invert(1) hue-rotate(180deg)" : "none" }}
         onLoadedMetadata={(e) => {
           (e.currentTarget as HTMLAudioElement).playbackRate = speed;
         }}
-        src={resolved}
+        src={resolved || undefined}
       />
+
       <button
         type="button"
         onClick={cycleSpeed}
