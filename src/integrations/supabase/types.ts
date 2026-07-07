@@ -2124,6 +2124,14 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_current_user_meta: {
+        Args: never
+        Returns: {
+          is_approved: boolean
+          is_platform_admin: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       get_inbox_page: {
         Args: {
           p_agent_id?: string
@@ -2167,6 +2175,10 @@ export type Database = {
           workspace_id: string
           workspace_name: string
         }[]
+      }
+      get_unread_conversations_count: {
+        Args: { p_workspace_id?: string }
+        Returns: number
       }
       get_user_workspaces: {
         Args: never
