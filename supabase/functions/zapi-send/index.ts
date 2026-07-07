@@ -111,6 +111,9 @@ Deno.serve(async (req) => {
     } else if (mediaUrl && type === "video") {
       zapiEndpoint = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-video`;
       zapiBody = { phone, video: mediaUrl, caption: message || "" };
+    } else if (mediaUrl && type === "audio") {
+      zapiEndpoint = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-audio`;
+      zapiBody = { phone, audio: mediaUrl };
     } else if (mediaUrl && type === "document") {
       const docName = message || "Documento";
       zapiEndpoint = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-document/${encodeURIComponent(docName)}`;
@@ -126,13 +129,17 @@ Deno.serve(async (req) => {
       body: JSON.stringify(zapiBody),
     });
 
-    const zapiResult = await zapiResponse.json();
+    const zapiResult = await zapiResponse.json().catch(() => ({}));
     const providerMessageId = zapiResult?.messageId || zapiResult?.zaapId || null;
-    const providerError = zapiResult?.error
-      ? JSON.stringify(zapiResult.error).slice(0, 500)
-      : !providerMessageId
-        ? null
-        : null;
+    const rawErr = zapiResult?.error || (!zapiResponse.ok ? (zapiResult?.message || `HTTP ${zapiResponse.status}`) : null);
+    const providerError = rawErr
+      ? JSON.stringify({
+          code: zapiResponse.status,
+          title: "Z-API",
+          message: typeof rawErr === "string" ? rawErr : (rawErr?.message || JSON.stringify(rawErr)),
+          error_data: { details: typeof zapiResult === "string" ? zapiResult : JSON.stringify(zapiResult).slice(0, 400) },
+        }).slice(0, 800)
+      : null;
 
     if (!zapiResponse.ok || providerError) {
       console.error("Z-API send error:", zapiResult);
