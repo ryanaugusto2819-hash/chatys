@@ -740,6 +740,15 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     } catch (err: any) {
       console.error('Send error:', err);
       setUploading(false);
+
+      // Build a structured error the failed bubble can render
+      const rawMsg = err?.message || err?.error?.message || err?.details || String(err || 'Erro desconhecido');
+      const syntheticProviderError = JSON.stringify({
+        title: 'Falha no envio',
+        message: rawMsg,
+        error_data: { details: err?.context?.status ? `HTTP ${err.context.status}` : undefined },
+      });
+
       try {
         const { data: recentMsgs } = await supabase
           .from('messages')
@@ -751,20 +760,28 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
         const recentMsg = recentMsgs?.[0];
         if (recentMsg && (Date.now() - new Date(recentMsg.created_at).getTime()) < 15000) {
+          const enriched = {
+            ...recentMsg,
+            provider_error: recentMsg.provider_error || syntheticProviderError,
+          } as ChatMessage;
           setMessages(prev => {
             const withoutOptimistic = prev.filter(m => m.id !== optimisticId);
-            if (withoutOptimistic.some(m => m.id === recentMsg.id)) return withoutOptimistic;
-            return [...withoutOptimistic, recentMsg as ChatMessage];
+            if (withoutOptimistic.some(m => m.id === recentMsg.id)) {
+              return withoutOptimistic.map(m => m.id === recentMsg.id ? enriched : m);
+            }
+            return [...withoutOptimistic, enriched];
           });
           if (recentMsg.status === 'failed') {
-            toast.error('Erro ao enviar mensagem. Verifique a conexão do WhatsApp.');
+            toast.error(rawMsg);
           }
           return;
         }
       } catch { /* ignore fallback check errors */ }
 
-      setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
-      toast.error('Erro ao enviar mensagem. Verifique a conexão do WhatsApp.');
+      setMessages(prev => prev.map(m => m.id === optimisticId
+        ? { ...m, status: 'failed', provider_error: syntheticProviderError }
+        : m));
+      toast.error(rawMsg);
     } finally {
       setSending(false);
     }
