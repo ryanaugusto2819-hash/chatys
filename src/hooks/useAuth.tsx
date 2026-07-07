@@ -104,9 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const metaRes = await fetchWithRetry(
+        const metaRes = await fetchWithRetry<any>(
           () => (supabase.rpc as any)('get_current_user_meta'),
-          { retries: 1, timeoutMs: 3500 }
+          { retries: 0, timeoutMs: 3000 }
         );
 
         if (!mounted || currentRequestId !== requestId) return;
@@ -135,8 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsApproved(metaCacheRef.current.isApproved);
           setIsPlatformAdmin(metaCacheRef.current.isPlatformAdmin);
         } else {
-          setRole('agent');
-          setIsApproved(true);
+          setRole(null);
+          setIsApproved(false);
           setIsPlatformAdmin(false);
         }
       } finally {
