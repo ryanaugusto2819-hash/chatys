@@ -798,6 +798,15 @@ Deno.serve(async (req) => {
           failedContent = `${cbContent}\n\n📞 ${cbPhone}`;
         }
 
+        const providerErrorPayload = JSON.stringify({
+          code: waResponse.status,
+          title: useEvolution ? "Evolution API" : useZapi ? "Z-API" : "WhatsApp",
+          message: errorDetail,
+          error_data: {
+            details: typeof waResult === "string" ? waResult : JSON.stringify(waResult).slice(0, 500),
+          },
+        }).slice(0, 800);
+
         // Insert message with status 'failed' so it appears in chat with error indicator
         await supabase.from("messages").insert({
           conversation_id: conversationId,
@@ -806,6 +815,8 @@ Deno.serve(async (req) => {
           message_type: failedType,
           media_url: failedMediaUrl,
           status: "failed",
+          provider_status: String(waResponse.status),
+          provider_error: providerErrorPayload,
           sender_label: requestedLabel || "fluxo",
         });
 
