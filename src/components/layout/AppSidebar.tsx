@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher';
 import logoImg from '@/assets/logo-group-liberty.jpg';
@@ -117,7 +118,8 @@ interface AppSidebarProps {
 }
 
 export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProps = {}) {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, signOut, isAdmin, isPlatformAdmin } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
   const initials = displayName
@@ -127,44 +129,47 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
     .toUpperCase()
     .slice(0, 2);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    supabase
-      .from('profiles' as any)
-      .select('is_platform_admin')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setIsPlatformAdmin((data as any)?.is_platform_admin === true);
-      });
-  }, [user]);
+    if (!currentWorkspace?.id) {
+      setTotalUnread(0);
+      return;
+    }
 
-  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const fetchUnread = async () => {
-      const { data } = await supabase.rpc('get_conversations_with_last_message');
-      if (data) {
-        const total = (data as any[]).filter((c) => (c.unread_count || 0) > 0).length;
-        setTotalUnread(total);
+      const { data, error } = await (supabase.rpc as any)('get_unread_conversations_count', {
+        p_workspace_id: currentWorkspace.id,
+      });
+
+      if (!error && typeof data === 'number') {
+        setTotalUnread(data);
       }
     };
+
+    const scheduleFetchUnread = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchUnread, 1200);
+    };
+
     fetchUnread();
 
     const channel = supabase
       .channel('sidebar-unread')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () =>
-        fetchUnread()
+        scheduleFetchUnread()
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () =>
-        fetchUnread()
+        scheduleFetchUnread()
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentWorkspace?.id]);
 
   return (
     <aside

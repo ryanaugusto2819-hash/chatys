@@ -11,6 +11,7 @@ interface AuthContextType {
   role: AppRole | null;
   isApproved: boolean;
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   isApproved: false,
   isAdmin: false,
+  isPlatformAdmin: false,
   signOut: async () => {},
 });
 
@@ -60,8 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<AppRole | null>(null);
   const [isApproved, setIsApproved] = useState(false);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const currentUserIdRef = useRef<string | null>(null);
-  const metaCacheRef = useRef<{ userId: string; role: AppRole; isApproved: boolean } | null>(null);
+  const metaCacheRef = useRef<{ userId: string; role: AppRole; isApproved: boolean; isPlatformAdmin: boolean } | null>(null);
   const fetchingRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const resetAuthState = () => {
       setRole(null);
       setIsApproved(false);
+      setIsPlatformAdmin(false);
       metaCacheRef.current = null;
     };
 
@@ -84,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (metaCacheRef.current?.userId === userId) {
         setRole(metaCacheRef.current.role);
         setIsApproved(metaCacheRef.current.isApproved);
+        setIsPlatformAdmin(metaCacheRef.current.isPlatformAdmin);
         if (showBlockingLoader) setLoading(false);
         return;
       }
@@ -99,34 +104,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const [profileRes, roleRes] = await fetchWithRetry(
-          () => Promise.all([
-            supabase.from('profiles').select('is_approved').eq('user_id', userId).maybeSingle(),
-            supabase.from('user_roles').select('role').eq('user_id', userId),
-          ]),
-          { retries: 2, timeoutMs: 6000 }
+        const metaRes = await fetchWithRetry<any>(
+          () => (supabase.rpc as any)('get_current_user_meta'),
+          { retries: 0, timeoutMs: 3000 }
         );
 
         if (!mounted || currentRequestId !== requestId) return;
 
-        if (profileRes.error) {
-          console.error('Error fetching user profile:', profileRes.error);
-        }
-        if (roleRes.error) {
-          console.error('Error fetching user roles:', roleRes.error);
+        if (metaRes.error) {
+          console.error('Error fetching user meta:', metaRes.error);
         }
 
-        const approved = profileRes.data?.is_approved ?? false;
+        const meta = Array.isArray(metaRes.data) ? metaRes.data[0] : metaRes.data;
+        const approved = meta?.is_approved ?? false;
         setIsApproved(approved);
 
-        const roles = roleRes.data?.map((r) => r.role) ?? [];
-        let resolvedRole: AppRole = 'agent';
-        if (roles.includes('admin')) resolvedRole = 'admin';
-        else if (roles.includes('supervisor')) resolvedRole = 'supervisor';
+        const resolvedRole: AppRole = meta?.role ?? 'agent';
         setRole(resolvedRole);
+        const platformAdmin = meta?.is_platform_admin === true;
+        setIsPlatformAdmin(platformAdmin);
 
         // Cache the result
-        metaCacheRef.current = { userId, role: resolvedRole, isApproved: approved };
+        metaCacheRef.current = { userId, role: resolvedRole, isApproved: approved, isPlatformAdmin: platformAdmin };
       } catch (e) {
         if (!mounted || currentRequestId !== requestId) return;
         console.error('Error fetching user meta (after retries):', e);
@@ -134,9 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (metaCacheRef.current?.userId === userId) {
           setRole(metaCacheRef.current.role);
           setIsApproved(metaCacheRef.current.isApproved);
+          setIsPlatformAdmin(metaCacheRef.current.isPlatformAdmin);
         } else {
           setRole(null);
           setIsApproved(false);
+          setIsPlatformAdmin(false);
         }
       } finally {
         fetchingRef.current = null;
@@ -231,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, role, isApproved, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, role, isApproved, isAdmin, isPlatformAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );
