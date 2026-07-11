@@ -173,6 +173,80 @@ function validateSendResponse(
   return { success: true };
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function safeStringify(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function isTransientProviderFailure(status: number, body?: unknown, errorMessage?: string): boolean {
+  const text = `${errorMessage || ""} ${safeStringify(body || "")}`.toLowerCase();
+  return (
+    [408, 409, 425, 429, 500, 502, 503, 504].includes(status) ||
+    /connection closed|connection reset|sendrequest|fetch failed|network|timeout|timed out|econnreset|socket|media upload failed on all hosts/.test(text)
+  );
+}
+
+function isEvolutionMediaUploadFailure(body?: unknown): boolean {
+  return /media upload failed on all hosts/i.test(safeStringify(body || ""));
+}
+
+async function readProviderResponse(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text().catch(() => "");
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : { value: parsed };
+  } catch {
+    return { raw: text.slice(0, 800) };
+  }
+}
+
+async function callProviderWithRetry(
+  providerLabel: string,
+  send: () => Promise<Response>,
+  maxAttempts = 3
+): Promise<{ response: Response; result: Record<string, unknown>; attempts: number }> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await send();
+      const result = await readProviderResponse(response);
+      if (!isTransientProviderFailure(response.status, result) || attempt === maxAttempts) {
+        if (attempt > 1) {
+          console.log(`[execute-flow] ${providerLabel} finished after ${attempt} attempts with HTTP ${response.status}`);
+        }
+        return { response, result, attempts: attempt };
+      }
+      console.warn(
+        `[execute-flow] ${providerLabel} transient failure ${attempt}/${maxAttempts}: HTTP ${response.status} ${safeStringify(result).slice(0, 300)}`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isTransientProviderFailure(500, null, message) || attempt === maxAttempts) {
+        return {
+          response: new Response(JSON.stringify({ error: message }), { status: 500 }),
+          result: { error: message },
+          attempts: attempt,
+        };
+      }
+      console.warn(`[execute-flow] ${providerLabel} request exception ${attempt}/${maxAttempts}: ${message}`);
+    }
+
+    await sleep(700 * attempt);
+  }
+
+  return {
+    response: new Response(JSON.stringify({ error: "Unknown provider error" }), { status: 500 }),
+    result: { error: "Unknown provider error" },
+    attempts: maxAttempts,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -628,8 +702,9 @@ Deno.serve(async (req) => {
       }
 
       let waResponse: Response;
-      let waResult: Record<string, unknown>;
+      let waResult: Record<string, unknown> = {};
       let sendValidation: { success: boolean; errorDetail?: string };
+      let providerAttempts = 1;
 
       try {
         if (useZapi) {
@@ -677,14 +752,17 @@ Deno.serve(async (req) => {
 
           console.log(`[execute-flow] Sending via Z-API node ${node.id} (${node.node_type}) to ${phone}`);
 
-          waResponse = await fetch(zapiEndpoint, {
+          const sendResult = await callProviderWithRetry("Z-API", () => fetch(zapiEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "Client-Token": zapiClientToken,
             },
             body: JSON.stringify(zapiBody),
-          });
+          }));
+          waResponse = sendResult.response;
+          waResult = sendResult.result;
+          providerAttempts = sendResult.attempts;
         } else if (useEvolution) {
           let evoEndpoint: string;
           let evoBody: Record<string, unknown>;
@@ -729,26 +807,48 @@ Deno.serve(async (req) => {
 
           console.log(`[execute-flow] Sending via Evolution node ${node.id} (${node.node_type}) to ${phone}`);
 
-          waResponse = await fetch(evoEndpoint, {
+          let sendResult = await callProviderWithRetry("Evolution", () => fetch(evoEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json", apikey: evoApiKey },
             body: JSON.stringify(evoBody),
-          });
+          }));
+
+          if (node.node_type === "audio" && !sendResult.response.ok && isEvolutionMediaUploadFailure(sendResult.result)) {
+            const fallbackEndpoint = `${evoBase}/sendMedia/${inst}`;
+            const fallbackBody = {
+              number: phone,
+              mediatype: "audio",
+              media: config.media_url,
+              caption: "",
+            };
+            console.warn(`[execute-flow] Evolution audio upload failed; retrying with sendMedia fallback for node ${node.id}`);
+            sendResult = await callProviderWithRetry("Evolution audio fallback", () => fetch(fallbackEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: evoApiKey },
+              body: JSON.stringify(fallbackBody),
+            }));
+          }
+
+          waResponse = sendResult.response;
+          waResult = sendResult.result;
+          providerAttempts = sendResult.attempts;
         } else {
           console.log(`[execute-flow] Sending via WA Cloud node ${node.id} (${node.node_type}) to ${phone}`);
 
-          waResponse = await sendWhatsAppCloudMessage({
+          const sendResult = await callProviderWithRetry("WhatsApp Cloud", () => sendWhatsAppCloudMessage({
             accessToken: accessToken || '',
             phoneNumberId: phoneNumberId || '',
             conversationPhone: phone,
             nodeType: node.node_type,
             config,
             waPayload,
-          });
+          }));
+          waResponse = sendResult.response;
+          waResult = sendResult.result;
+          providerAttempts = sendResult.attempts;
         }
 
-        waResult = await waResponse.json();
-        console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
+        console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, attempts: ${providerAttempts}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
 
         // Validate response body beyond just HTTP status
         sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
@@ -803,6 +903,7 @@ Deno.serve(async (req) => {
           title: useEvolution ? "Evolution API" : useZapi ? "Z-API" : "WhatsApp",
           message: errorDetail,
           error_data: {
+            attempts: providerAttempts,
             details: typeof waResult === "string" ? waResult : JSON.stringify(waResult).slice(0, 500),
           },
         }).slice(0, 800);
