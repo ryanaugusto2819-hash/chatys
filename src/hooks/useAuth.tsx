@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const metaRes = await fetchWithRetry<any>(
           () => (supabase.rpc as any)('get_current_user_meta'),
-          { retries: 0, timeoutMs: 3000 }
+          { retries: 1, timeoutMs: 8000 }
         );
 
         if (!mounted || currentRequestId !== requestId) return;

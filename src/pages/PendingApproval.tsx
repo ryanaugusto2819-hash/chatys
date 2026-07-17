@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Headphones, Clock, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function PendingApproval() {
   const navigate = useNavigate();
@@ -12,6 +13,30 @@ export default function PendingApproval() {
       navigate('/', { replace: true });
     }
   }, [isApproved, loading, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const checkApproval = async () => {
+      const { data, error } = await (supabase.rpc as any)('get_current_user_meta');
+      if (cancelled || error) return;
+
+      const meta = Array.isArray(data) ? data[0] : data;
+      if (meta?.is_approved === true) {
+        window.location.replace('/');
+      }
+    };
+
+    void checkApproval();
+    const intervalId = window.setInterval(checkApproval, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [user]);
 
   if (loading || isApproved) {
     return (
