@@ -1,8 +1,25 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Headphones, Clock, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function PendingApproval() {
-  const { signOut, user } = useAuth();
+  const navigate = useNavigate();
+  const { signOut, user, loading, isApproved } = useAuth();
+
+  useEffect(() => {
+    if (!loading && isApproved) {
+      navigate('/', { replace: true });
+    }
+  }, [isApproved, loading, navigate]);
+
+  if (loading || isApproved) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
