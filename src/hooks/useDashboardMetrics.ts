@@ -26,26 +26,26 @@ export function useDashboardMetrics() {
       ] = await Promise.all([
         supabase
           .from('conversations')
-          .select('id', { count: 'exact', head: true })
+          .select('id', { count: 'planned', head: true })
           .gte('created_at', since),
         supabase
           .from('messages')
-          .select('id', { count: 'exact', head: true })
+          .select('id', { count: 'planned', head: true })
           .in('sender_type', ['agent', 'bot'])
           .gte('created_at', since),
         supabase
           .from('messages')
-          .select('id', { count: 'exact', head: true })
+          .select('id', { count: 'planned', head: true })
           .eq('sender_type', 'customer')
           .gte('created_at', since),
         supabase
           .from('conversations')
-          .select('id', { count: 'exact', head: true })
+          .select('id', { count: 'planned', head: true })
           .eq('status', 'resolved')
           .gte('created_at', since),
         supabase
           .from('profiles')
-          .select('id', { count: 'exact', head: true })
+          .select('id', { count: 'planned', head: true })
           .eq('status', 'online'),
       ]);
 
