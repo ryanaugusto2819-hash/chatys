@@ -29,11 +29,6 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "Invalid JSON body" }, 400);
   }
 
-  // Only log events that carry ad-attribution data (the rest is noise we don't use).
-  // We check the raw payload for any of the click-to-WhatsApp / external-ad markers.
-  const rawString = (() => { try { return JSON.stringify(payload); } catch { return ""; } })();
-  const hasAdMarker = /"(ctwaClid|ctwa_clid|sourceId|source_id|externalAdReply|ctwaPayload|conversionData)"/.test(rawString);
-
   try {
     const event: string = payload?.event ?? payload?.type ?? "unknown";
     const instanceName: string | null = payload?.instance ?? payload?.instanceName ?? null;
@@ -51,14 +46,16 @@ Deno.serve(async (req) => {
       msg?.documentMessage?.caption ??
       null;
 
-    if (hasAdMarker) {
+    const logPayload = buildCompactAdLogPayload(payload, event);
+
+    if (logPayload) {
       await supabase.from("evolution_webhook_events").insert({
         event,
         instance_name: instanceName,
         remote_jid: remoteJid,
         push_name: pushName,
         message_text: messageText,
-        raw_payload: payload,
+        raw_payload: logPayload,
       });
     }
 
@@ -101,6 +98,94 @@ Deno.serve(async (req) => {
     return json({ success: false, error: String(err) }, 500);
   }
 });
+
+function hasAdAttribution(value: any): boolean {
+  if (!value || typeof value !== "object") return false;
+
+  const stack = [value];
+  let inspected = 0;
+
+  while (stack.length && inspected < 250) {
+    inspected += 1;
+    const current = stack.pop();
+    if (!current || typeof current !== "object") continue;
+
+    for (const [key, child] of Object.entries(current)) {
+      if (
+        key === "ctwaClid" ||
+        key === "ctwa_clid" ||
+        key === "sourceId" ||
+        key === "source_id" ||
+        key === "externalAdReply" ||
+        key === "ctwaPayload" ||
+        key === "conversionData"
+      ) {
+        return true;
+      }
+
+      if (child && typeof child === "object") stack.push(child);
+    }
+  }
+
+  return false;
+}
+
+function compactMessageForLog(item: any) {
+  const msg = item?.message ?? {};
+  const ctxInfo =
+    msg?.extendedTextMessage?.contextInfo ??
+    msg?.imageMessage?.contextInfo ??
+    msg?.videoMessage?.contextInfo ??
+    msg?.audioMessage?.contextInfo ??
+    msg?.documentMessage?.contextInfo ??
+    msg?.contextInfo ??
+    item?.contextInfo ??
+    null;
+
+  return {
+    key: item?.key ?? null,
+    pushName: item?.pushName ?? null,
+    messageTimestamp: item?.messageTimestamp ?? null,
+    messageType: Object.keys(msg || {})[0] ?? null,
+    text:
+      msg?.conversation ??
+      msg?.extendedTextMessage?.text ??
+      msg?.imageMessage?.caption ??
+      msg?.videoMessage?.caption ??
+      msg?.documentMessage?.caption ??
+      null,
+    adAttribution: ctxInfo
+      ? {
+          externalAdReply: ctxInfo.externalAdReply ?? null,
+          ctwaPayload: ctxInfo.ctwaPayload ?? null,
+          conversionData: ctxInfo.conversionData ?? null,
+        }
+      : null,
+  };
+}
+
+function buildCompactAdLogPayload(payload: any, event: string) {
+  const rawData = payload?.data;
+  const items: any[] = Array.isArray(rawData)
+    ? rawData
+    : Array.isArray(rawData?.messages)
+      ? rawData.messages
+      : [rawData];
+
+  const adItems = items.filter(hasAdAttribution).slice(0, 5);
+  if (adItems.length === 0 && !hasAdAttribution(payload)) return null;
+
+  return {
+    event,
+    instance: payload?.instance ?? payload?.instanceName ?? null,
+    logged_at: new Date().toISOString(),
+    compacted: true,
+    omitted_full_payload: true,
+    item_count: items.filter(Boolean).length,
+    ad_item_count_logged: adItems.length,
+    ad_items: adItems.map(compactMessageForLog),
+  };
+}
 
 async function processMessageEvent(supabase: any, payload: any) {
   const instanceName: string | null = payload?.instance ?? payload?.instanceName ?? null;
