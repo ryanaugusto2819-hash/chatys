@@ -1,0 +1,1 @@
+TRUNCATE TABLE public.evolution_webhook_events;
