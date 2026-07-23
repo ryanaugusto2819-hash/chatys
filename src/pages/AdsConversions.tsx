@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
-import { Loader2, Search, Megaphone, DollarSign, RefreshCw, ExternalLink, X, Link2, Copy, Settings, Plus, Trash2, Check } from 'lucide-react';
+import { Loader2, Search, Megaphone, DollarSign, RefreshCw, ExternalLink, X, Link2, Copy, Settings, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
 
 interface AdConversation {
   id: string;
