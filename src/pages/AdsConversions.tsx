@@ -44,10 +44,19 @@ const substituteTemplate = (template: string, conv: Pick<AdConversation, 'contac
   const phone = (conv.contact_phone || '').replace(/\D/g, '');
   const ctwa = conv.ctwa_clid || '';
   return template
+    // Placeholders com chaves
     .replace(/\{\{\s*TELEFONE\s*\}\}/gi, phone)
     .replace(/\{\{\s*PHONE\s*\}\}/gi, phone)
     .replace(/\{\{\s*CTWA_ID\s*\}\}/gi, ctwa)
-    .replace(/\{\{\s*CTWA\s*\}\}/gi, ctwa);
+    .replace(/\{\{\s*CTWA\s*\}\}/gi, ctwa)
+    // Placeholders literais (compatibilidade com templates antigos)
+    .replace(/COLE_O_CTWA_CLID_AQUI/gi, ctwa)
+    .replace(/COLE_CTWA_CLID_AQUI/gi, ctwa)
+    .replace(/CTWA_CLID_AQUI/gi, ctwa)
+    .replace(/5511999998888/g, phone)
+    .replace(/COLE_O_TELEFONE_AQUI/gi, phone)
+    .replace(/COLE_TELEFONE_AQUI/gi, phone)
+    .replace(/TELEFONE_AQUI/gi, phone);
 };
 
 export default function AdsConversions() {
