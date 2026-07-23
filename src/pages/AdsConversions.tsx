@@ -43,7 +43,7 @@ const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? 
 const substituteTemplate = (template: string, conv: Pick<AdConversation, 'contact_phone' | 'ctwa_clid'>) => {
   const phone = (conv.contact_phone || '').replace(/\D/g, '');
   const ctwa = conv.ctwa_clid || '';
-  return template
+  let result = template
     // Placeholders com chaves
     .replace(/\{\{\s*TELEFONE\s*\}\}/gi, phone)
     .replace(/\{\{\s*PHONE\s*\}\}/gi, phone)
@@ -57,6 +57,21 @@ const substituteTemplate = (template: string, conv: Pick<AdConversation, 'contac
     .replace(/COLE_O_TELEFONE_AQUI/gi, phone)
     .replace(/COLE_TELEFONE_AQUI/gi, phone)
     .replace(/TELEFONE_AQUI/gi, phone);
+
+  // Se não houver CTWA, remove o parâmetro vazio da URL para não deixar lixo
+  if (!ctwa) {
+    try {
+      const urlObj = new URL(result);
+      const params = new URLSearchParams(urlObj.search);
+      ['ctwa', 'ctwa_id', 'ctwa_clid'].forEach((k) => params.delete(k));
+      urlObj.search = params.toString();
+      result = urlObj.toString();
+    } catch {
+      // Se a URL não for válida (ex: template incompleto), mantém o resultado original
+    }
+  }
+
+  return result;
 };
 
 export default function AdsConversions() {
