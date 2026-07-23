@@ -477,6 +477,15 @@ export default function AdsConversions() {
                   </select>
                 </div>
 
+                {!linkTarget.ctwa_clid && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>CTWA ID não encontrado.</strong> O link será gerado apenas com o telefone do lead.
+                    </div>
+                  </div>
+                )}
+
                 {generatedFullUrl && (
                   <div>
                     <label className="block text-xs font-medium mb-1.5">Link completo</label>
