@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
-import { Loader2, Search, Megaphone, DollarSign, RefreshCw, ExternalLink, X, Link2, Copy, Settings, Plus, Trash2, Check } from 'lucide-react';
+import { Loader2, Search, Megaphone, DollarSign, RefreshCw, ExternalLink, X, Link2, Copy, Settings, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
 
 interface AdConversation {
   id: string;
@@ -476,6 +476,15 @@ export default function AdsConversions() {
                     {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
+
+                {!linkTarget.ctwa_clid && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>CTWA ID não encontrado.</strong> O link será gerado apenas com o telefone do lead.
+                    </div>
+                  </div>
+                )}
 
                 {generatedFullUrl && (
                   <div>
