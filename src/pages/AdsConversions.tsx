@@ -58,18 +58,23 @@ const substituteTemplate = (template: string, conv: Pick<AdConversation, 'contac
     .replace(/COLE_TELEFONE_AQUI/gi, phone)
     .replace(/TELEFONE_AQUI/gi, phone);
 
-  // Se não houver CTWA, remove o parâmetro vazio da URL para não deixar lixo
-  if (!ctwa) {
-    try {
-      const urlObj = new URL(result);
-      const params = new URLSearchParams(urlObj.search);
-      ['ctwa', 'ctwa_id', 'ctwa_clid'].forEach((k) => params.delete(k));
-      urlObj.search = params.toString();
-      result = urlObj.toString();
-    } catch {
-      // Se a URL não for válida (ex: template incompleto), mantém o resultado original
-    }
+  // Tenta ajustar parâmetros ctwa vazios (?ctwa_clid=) diretamente na URL
+  try {
+    const urlObj = new URL(result);
+    const params = new URLSearchParams(urlObj.search);
+    const ctwaKeys = ['ctwa', 'ctwa_id', 'ctwa_clid'];
+    ctwaKeys.forEach((k) => {
+      if (params.has(k)) {
+        if (ctwa) params.set(k, ctwa);
+        else params.delete(k);
+      }
+    });
+    urlObj.search = params.toString();
+    result = urlObj.toString();
+  } catch {
+    // Se a URL não for válida (ex: template incompleto), mantém o resultado original
   }
+
 
   return result;
 };
