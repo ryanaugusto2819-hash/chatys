@@ -1248,6 +1248,28 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                       />
                     </div>
                   </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      Pixel Meta CAPI (Purchase)
+                      {!conversation?.ctwa_clid && <span className="text-amber-500">— sem CTWA ID, evento não será enviado</span>}
+                    </label>
+                    <select
+                      value={saleData.pixelRefId}
+                      onChange={(e) => setSaleData(prev => ({ ...prev, pixelRefId: e.target.value }))}
+                      disabled={!conversation?.ctwa_clid || availablePixels.length === 0}
+                      className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                    >
+                      <option value="">— Não disparar evento —</option>
+                      {availablePixels.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.pixel_id}){p.test_event_code ? ' [TEST]' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {availablePixels.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Cadastre Pixels em Configurações → Workspace.</p>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowSaleDialog(false)}
