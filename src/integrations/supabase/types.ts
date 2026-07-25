@@ -1199,6 +1199,124 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_capi_events: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          ctwa_clid: string | null
+          currency: string | null
+          error: string | null
+          event_id: string
+          event_name: string
+          event_time: string
+          id: string
+          pixel_id: string
+          pixel_id_ref: string | null
+          request_payload: Json | null
+          response_body: string | null
+          response_status: number | null
+          success: boolean
+          value: number | null
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          ctwa_clid?: string | null
+          currency?: string | null
+          error?: string | null
+          event_id: string
+          event_name: string
+          event_time?: string
+          id?: string
+          pixel_id: string
+          pixel_id_ref?: string | null
+          request_payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean
+          value?: number | null
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          ctwa_clid?: string | null
+          currency?: string | null
+          error?: string | null
+          event_id?: string
+          event_name?: string
+          event_time?: string
+          id?: string
+          pixel_id?: string
+          pixel_id_ref?: string | null
+          request_payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean
+          value?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_events_pixel_id_ref_fkey"
+            columns: ["pixel_id_ref"]
+            isOneToOne: false
+            referencedRelation: "meta_capi_pixels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_capi_pixels: {
+        Row: {
+          access_token: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          pixel_id: string
+          test_event_code: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          pixel_id: string
+          test_event_code?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          pixel_id?: string
+          test_event_code?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_pixels_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_connections: {
         Row: {
           access_token: string
