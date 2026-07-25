@@ -1280,6 +1280,7 @@ export type Database = {
           pixel_id: string
           test_event_code: string | null
           updated_at: string
+          whatsapp_business_account_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -1294,6 +1295,7 @@ export type Database = {
           pixel_id: string
           test_event_code?: string | null
           updated_at?: string
+          whatsapp_business_account_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -1308,6 +1310,7 @@ export type Database = {
           pixel_id?: string
           test_event_code?: string | null
           updated_at?: string
+          whatsapp_business_account_id?: string | null
           workspace_id?: string
         }
         Relationships: [
