@@ -1173,7 +1173,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   <button
                     onClick={() => {
                       const adParts = conversation.ad_title?.split(' › ') || [];
-                      setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL' });
+                      setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL', pixelRefId: availablePixels[0]?.id || '' });
                       setShowSaleDialog(true);
                     }}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
