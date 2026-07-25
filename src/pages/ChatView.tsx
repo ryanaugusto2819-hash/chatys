@@ -370,7 +370,8 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [assignedAgent, setAssignedAgent] = useState<AgentProfile | null>(null);
   const [assignmentHistory, setAssignmentHistory] = useState<AssignmentHistory[]>([]);
   const [showSaleDialog, setShowSaleDialog] = useState(false);
-  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
+  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
+  const [availablePixels, setAvailablePixels] = useState<Array<{ id: string; name: string; pixel_id: string; test_event_code: string | null }>>([]);
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
 
@@ -561,6 +562,20 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   useEffect(() => {
     fetchRmkTag();
   }, [fetchRmkTag]);
+
+  // Load Meta CAPI pixels for the workspace (used in sale dialog)
+  useEffect(() => {
+    if (!currentWorkspace) { setAvailablePixels([]); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('meta_capi_pixels' as any)
+        .select('id, name, pixel_id, test_event_code')
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      setAvailablePixels((data as any) ?? []);
+    })();
+  }, [currentWorkspace?.id]);
 
   const toggleRmkTag = async () => {
     if (!rmkTag || !conversation) return;
@@ -863,7 +878,29 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
       toast.success('Venda registrada com sucesso!');
       setShowSaleDialog(false);
-      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
+      // Fire Meta Conversions API (Purchase) if pixel selected + lead has ctwa_clid
+      if (saleData.pixelRefId && conversation?.ctwa_clid) {
+        try {
+          const { data: capiRes } = await supabase.functions.invoke('meta-capi-send', {
+            body: {
+              conversationId: conversationId!,
+              pixelRefId: saleData.pixelRefId,
+              eventName: 'Purchase',
+              value: payload.valor,
+              currency: payload.moeda,
+            },
+          });
+          if (capiRes?.success) {
+            toast.success('📊 Evento Purchase enviado à Meta CAPI');
+          } else if (capiRes?.error) {
+            toast.warning(`Venda ok, mas CAPI falhou: ${capiRes.error}`, { duration: 6000 });
+          }
+        } catch (e: any) {
+          toast.warning(`Venda ok, mas CAPI falhou: ${e.message}`, { duration: 6000 });
+        }
+      }
+
+      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
       setSaleRegisteredAt(now);
     } catch (err) {
       console.error('Sale webhook error:', err);
@@ -1150,7 +1187,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   <button
                     onClick={() => {
                       const adParts = conversation.ad_title?.split(' › ') || [];
-                      setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL' });
+                      setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL', pixelRefId: availablePixels[0]?.id || '' });
                       setShowSaleDialog(true);
                     }}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
@@ -1210,6 +1247,28 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                         className="w-full mt-1 rounded-lg border border-input bg-muted px-3 py-1.5 text-xs"
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      Pixel Meta CAPI (Purchase)
+                      {!conversation?.ctwa_clid && <span className="text-amber-500">— sem CTWA ID, evento não será enviado</span>}
+                    </label>
+                    <select
+                      value={saleData.pixelRefId}
+                      onChange={(e) => setSaleData(prev => ({ ...prev, pixelRefId: e.target.value }))}
+                      disabled={!conversation?.ctwa_clid || availablePixels.length === 0}
+                      className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                    >
+                      <option value="">— Não disparar evento —</option>
+                      {availablePixels.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.pixel_id}){p.test_event_code ? ' [TEST]' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {availablePixels.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Cadastre Pixels em Configurações → Workspace.</p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
