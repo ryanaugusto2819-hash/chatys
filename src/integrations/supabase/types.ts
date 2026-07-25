@@ -1272,6 +1272,7 @@ export type Database = {
           access_token: string
           created_at: string
           created_by: string | null
+          currency: string
           id: string
           is_active: boolean
           is_default: boolean
@@ -1287,6 +1288,7 @@ export type Database = {
           access_token: string
           created_at?: string
           created_by?: string | null
+          currency?: string
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -1302,6 +1304,7 @@ export type Database = {
           access_token?: string
           created_at?: string
           created_by?: string | null
+          currency?: string
           id?: string
           is_active?: boolean
           is_default?: boolean
