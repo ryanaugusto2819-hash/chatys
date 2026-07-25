@@ -14,6 +14,7 @@ interface Pixel {
   test_event_code: string | null;
   is_active: boolean;
   is_default: boolean;
+  currency: string | null;
 }
 
 export default function MetaCapiPixels() {
@@ -24,7 +25,7 @@ export default function MetaCapiPixels() {
   const [saving, setSaving] = useState(false);
   const [editingPixel, setEditingPixel] = useState<Pixel | null>(null);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
-  const emptyForm = { name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '', whatsapp_business_account_id: '' };
+  const emptyForm = { name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '', whatsapp_business_account_id: '', currency: 'BRL' };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -56,6 +57,7 @@ export default function MetaCapiPixels() {
       test_event_code: form.test_event_code.trim() || null,
       page_id: form.page_id.trim() || null,
       whatsapp_business_account_id: form.whatsapp_business_account_id.trim(),
+      currency: (form.currency || 'BRL').trim().toUpperCase(),
     } as any;
     const { error } = editingPixel
       ? await supabase.from('meta_capi_pixels' as any).update(payload).eq('id', editingPixel.id)
@@ -78,6 +80,7 @@ export default function MetaCapiPixels() {
       test_event_code: p.test_event_code || '',
       page_id: p.page_id || '',
       whatsapp_business_account_id: p.whatsapp_business_account_id || '',
+      currency: p.currency || 'BRL',
     });
     setShowForm(true);
   };
@@ -160,12 +163,27 @@ export default function MetaCapiPixels() {
               <p className="text-[11px] text-muted-foreground mt-1">Deixe vazio se você usa WhatsApp Business no celular.</p>
             </div>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Test Event Code (opcional)</label>
-            <input value={form.test_event_code} onChange={e => setForm(f => ({ ...f, test_event_code: e.target.value }))}
-              placeholder="TEST12345"
-              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
-            <p className="text-[11px] text-muted-foreground mt-1">Use para validar na aba "Testar eventos" do Gerenciador de Eventos. Remova quando estiver em produção.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Moeda *</label>
+              <select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                <option value="BRL">BRL — Real (Brasil)</option>
+                <option value="PYG">PYG — Guarani (Paraguai)</option>
+                <option value="USD">USD — Dólar</option>
+                <option value="UYU">UYU — Peso (Uruguai)</option>
+                <option value="ARS">ARS — Peso (Argentina)</option>
+                <option value="EUR">EUR — Euro</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-1">Moeda usada nos eventos Purchase deste Pixel.</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Test Event Code (opcional)</label>
+              <input value={form.test_event_code} onChange={e => setForm(f => ({ ...f, test_event_code: e.target.value }))}
+                placeholder="TEST12345"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+              <p className="text-[11px] text-muted-foreground mt-1">Use para validar na aba "Testar eventos". Remova em produção.</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={closeForm} className="flex-1 rounded-lg border border-border py-2 text-xs">Cancelar</button>
@@ -196,7 +214,7 @@ export default function MetaCapiPixels() {
                     <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-500">TEST</span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground font-mono mt-0.5">Pixel: {p.pixel_id}</p>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">Pixel: {p.pixel_id} · Moeda: {p.currency || 'BRL'}</p>
                 <p className="text-xs text-muted-foreground font-mono mt-0.5">WABA: {p.whatsapp_business_account_id || 'não informado'}</p>
                 {p.page_id && <p className="text-xs text-muted-foreground font-mono mt-0.5">Página: {p.page_id}</p>}
                 <div className="flex items-center gap-1 mt-1">

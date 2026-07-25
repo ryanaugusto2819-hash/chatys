@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { conversationId, pixelRefId, eventName = "Purchase", value, currency = "BRL" } = await req.json();
+    const { conversationId, pixelRefId, eventName = "Purchase", value, currency: currencyOverride } = await req.json();
 
     if (!conversationId || !pixelRefId || value === undefined || value === null) {
       return new Response(JSON.stringify({
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // Load pixel
     const { data: pixel, error: pErr } = await supabase
       .from("meta_capi_pixels")
-      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id, page_id, whatsapp_business_account_id")
+      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id, page_id, whatsapp_business_account_id, currency")
       .eq("id", pixelRefId)
       .maybeSingle();
 
@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
 
     const event_id = `purchase_${conv.id}`;
     const event_time = Math.floor(Date.now() / 1000);
+
+    const currency = (currencyOverride || pixel.currency || "BRL").toString().toUpperCase();
 
     const custom_data: Record<string, any> = {
       currency,

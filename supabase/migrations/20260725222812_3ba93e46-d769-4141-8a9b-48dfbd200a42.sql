@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_capi_pixels ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'BRL';
