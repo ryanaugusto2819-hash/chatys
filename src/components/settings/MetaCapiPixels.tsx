@@ -14,6 +14,7 @@ interface Pixel {
   test_event_code: string | null;
   is_active: boolean;
   is_default: boolean;
+  currency: string | null;
 }
 
 export default function MetaCapiPixels() {
@@ -24,7 +25,7 @@ export default function MetaCapiPixels() {
   const [saving, setSaving] = useState(false);
   const [editingPixel, setEditingPixel] = useState<Pixel | null>(null);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
-  const emptyForm = { name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '', whatsapp_business_account_id: '' };
+  const emptyForm = { name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '', whatsapp_business_account_id: '', currency: 'BRL' };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -56,6 +57,7 @@ export default function MetaCapiPixels() {
       test_event_code: form.test_event_code.trim() || null,
       page_id: form.page_id.trim() || null,
       whatsapp_business_account_id: form.whatsapp_business_account_id.trim(),
+      currency: (form.currency || 'BRL').trim().toUpperCase(),
     } as any;
     const { error } = editingPixel
       ? await supabase.from('meta_capi_pixels' as any).update(payload).eq('id', editingPixel.id)
@@ -78,6 +80,7 @@ export default function MetaCapiPixels() {
       test_event_code: p.test_event_code || '',
       page_id: p.page_id || '',
       whatsapp_business_account_id: p.whatsapp_business_account_id || '',
+      currency: p.currency || 'BRL',
     });
     setShowForm(true);
   };
