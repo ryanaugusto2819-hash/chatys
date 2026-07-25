@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // Load pixel
     const { data: pixel, error: pErr } = await supabase
       .from("meta_capi_pixels")
-      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id")
+      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id, page_id")
       .eq("id", pixelRefId)
       .maybeSingle();
 
