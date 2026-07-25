@@ -21,7 +21,7 @@ export default function MetaCapiPixels() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
-  const [form, setForm] = useState({ name: '', pixel_id: '', access_token: '', test_event_code: '' });
+  const [form, setForm] = useState({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
 
   const load = async () => {
     if (!currentWorkspace) return;
