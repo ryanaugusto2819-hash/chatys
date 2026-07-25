@@ -80,11 +80,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!pixel.whatsapp_business_account_id) {
+    if (!pixel.page_id && !pixel.whatsapp_business_account_id) {
       return new Response(JSON.stringify({
         success: false,
-        code: "missing_waba_id",
-        error: "Este Pixel não tem WABA ID (ID da Conta do WhatsApp Business) cadastrado. A Meta exige esse identificador para eventos Click-to-WhatsApp.",
+        code: "missing_identifier",
+        error: "Cadastre pelo menos o Page ID (Página do Facebook do anúncio) neste Pixel. WABA ID só é usado por quem tem WhatsApp Cloud API — para WhatsApp Business normal, use o Page ID.",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -95,9 +95,9 @@ Deno.serve(async (req) => {
     const lastName = rest.join(" ");
 
     const user_data: Record<string, any> = {
-      whatsapp_business_account_id: pixel.whatsapp_business_account_id,
       ctwa_clid: conv.ctwa_clid,
     };
+    if (pixel.whatsapp_business_account_id) user_data.whatsapp_business_account_id = pixel.whatsapp_business_account_id;
     if (pixel.page_id) user_data.page_id = pixel.page_id;
     if (phone) user_data.ph = [await sha256Hex(phone)];
     if (firstName) user_data.fn = [await sha256Hex(firstName)];
