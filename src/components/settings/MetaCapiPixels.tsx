@@ -43,8 +43,8 @@ export default function MetaCapiPixels() {
 
   const handleSave = async () => {
     if (!currentWorkspace) return;
-    if (!form.name.trim() || !form.pixel_id.trim() || !form.access_token.trim() || !form.whatsapp_business_account_id.trim()) {
-      toast.error('Nome, Pixel ID, Access Token e WABA ID são obrigatórios');
+    if (!form.name.trim() || !form.pixel_id.trim() || !form.access_token.trim() || !form.page_id.trim()) {
+      toast.error('Nome, Pixel ID, Access Token e Page ID são obrigatórios');
       return;
     }
     setSaving(true);
@@ -146,18 +146,18 @@ export default function MetaCapiPixels() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground">WABA ID (Conta WhatsApp Business) *</label>
-              <input value={form.whatsapp_business_account_id} onChange={e => setForm(f => ({ ...f, whatsapp_business_account_id: e.target.value }))}
-                placeholder="123456789012345"
-                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
-              <p className="text-[11px] text-muted-foreground mt-1">Campo oficial exigido pela Meta para Click-to-WhatsApp.</p>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Page ID (opcional)</label>
+              <label className="text-xs text-muted-foreground">Page ID (Página do FB do anúncio) *</label>
               <input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
                 placeholder="123456789012345"
                 className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
-              <p className="text-[11px] text-muted-foreground mt-1">Use junto se a Meta pedir validação da Página.</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Obrigatório para quem usa WhatsApp Business normal (sem Cloud API).</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">WABA ID (opcional)</label>
+              <input value={form.whatsapp_business_account_id} onChange={e => setForm(f => ({ ...f, whatsapp_business_account_id: e.target.value }))}
+                placeholder="Só para WhatsApp Cloud API"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+              <p className="text-[11px] text-muted-foreground mt-1">Deixe vazio se você usa WhatsApp Business no celular.</p>
             </div>
           </div>
           <div>
