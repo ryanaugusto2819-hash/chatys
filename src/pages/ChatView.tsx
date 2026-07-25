@@ -370,7 +370,8 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [assignedAgent, setAssignedAgent] = useState<AgentProfile | null>(null);
   const [assignmentHistory, setAssignmentHistory] = useState<AssignmentHistory[]>([]);
   const [showSaleDialog, setShowSaleDialog] = useState(false);
-  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
+  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
+  const [availablePixels, setAvailablePixels] = useState<Array<{ id: string; name: string; pixel_id: string; test_event_code: string | null }>>([]);
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
 
