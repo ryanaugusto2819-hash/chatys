@@ -88,20 +88,25 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Build user_data with hashed PII
+    // Build user_data with the identifiers Meta expects for Click-to-WhatsApp.
+    // For test events, keep the payload as close as possible to Meta's sample
+    // so Events Manager can surface the event without extra matching fields.
     const phone = normalizePhone(conv.contact_phone || "");
     const fullName = (conv.contact_name || "").trim();
     const [firstName, ...rest] = fullName.split(/\s+/);
     const lastName = rest.join(" ");
+    const isTestEvent = Boolean(pixel.test_event_code);
 
     const user_data: Record<string, any> = {
       ctwa_clid: conv.ctwa_clid,
     };
     if (pixel.whatsapp_business_account_id) user_data.whatsapp_business_account_id = pixel.whatsapp_business_account_id;
     if (pixel.page_id) user_data.page_id = pixel.page_id;
-    if (phone) user_data.ph = [await sha256Hex(phone)];
-    if (firstName) user_data.fn = [await sha256Hex(firstName)];
-    if (lastName) user_data.ln = [await sha256Hex(lastName)];
+    if (!isTestEvent) {
+      if (phone) user_data.ph = [await sha256Hex(phone)];
+      if (firstName) user_data.fn = [await sha256Hex(firstName)];
+      if (lastName) user_data.ln = [await sha256Hex(lastName)];
+    }
 
     const event_id = `purchase_${conv.id}`;
     const event_time = Math.floor(Date.now() / 1000);
@@ -114,12 +119,12 @@ Deno.serve(async (req) => {
     const eventPayload: Record<string, any> = {
       event_name: eventName,
       event_time,
-      event_id,
       action_source: "business_messaging",
       messaging_channel: "whatsapp",
       user_data,
       custom_data,
     };
+    if (!isTestEvent) eventPayload.event_id = event_id;
 
     const body: Record<string, any> = { data: [eventPayload] };
     if (pixel.test_event_code) body.test_event_code = pixel.test_event_code;
