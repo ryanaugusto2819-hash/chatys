@@ -21,7 +21,7 @@ export default function MetaCapiPixels() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
-  const [form, setForm] = useState({ name: '', pixel_id: '', access_token: '', test_event_code: '' });
+  const [form, setForm] = useState({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
 
   const load = async () => {
     if (!currentWorkspace) return;
@@ -50,11 +50,12 @@ export default function MetaCapiPixels() {
       pixel_id: form.pixel_id.trim(),
       access_token: form.access_token.trim(),
       test_event_code: form.test_event_code.trim() || null,
-    });
+      page_id: form.page_id.trim() || null,
+    } as any);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return; }
     toast.success('Pixel adicionado');
-    setForm({ name: '', pixel_id: '', access_token: '', test_event_code: '' });
+    setForm({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
     setShowForm(false);
     load();
   };
@@ -113,6 +114,13 @@ export default function MetaCapiPixels() {
               placeholder="EAAG..."
               rows={2}
               className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Page ID (ID da Página do Facebook) *</label>
+            <input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
+              placeholder="123456789012345"
+              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+            <p className="text-[11px] text-muted-foreground mt-1">Exigido pela Meta para eventos de WhatsApp (erro 2804116). Encontre em: Facebook → Página → Sobre → Transparência da Página.</p>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Test Event Code (opcional)</label>
