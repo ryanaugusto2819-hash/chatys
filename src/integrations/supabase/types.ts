@@ -1276,6 +1276,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean
           name: string
+          page_id: string | null
           pixel_id: string
           test_event_code: string | null
           updated_at: string
@@ -1289,6 +1290,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name: string
+          page_id?: string | null
           pixel_id: string
           test_event_code?: string | null
           updated_at?: string
@@ -1302,6 +1304,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name?: string
+          page_id?: string | null
           pixel_id?: string
           test_event_code?: string | null
           updated_at?: string

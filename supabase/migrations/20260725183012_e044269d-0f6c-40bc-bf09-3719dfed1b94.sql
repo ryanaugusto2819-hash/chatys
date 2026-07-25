@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_capi_pixels ADD COLUMN IF NOT EXISTS page_id TEXT;
