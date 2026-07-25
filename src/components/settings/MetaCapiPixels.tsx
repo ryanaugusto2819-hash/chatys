@@ -116,6 +116,13 @@ export default function MetaCapiPixels() {
               className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono" />
           </div>
           <div>
+            <label className="text-xs text-muted-foreground">Page ID (ID da Página do Facebook) *</label>
+            <input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
+              placeholder="123456789012345"
+              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+            <p className="text-[11px] text-muted-foreground mt-1">Exigido pela Meta para eventos de WhatsApp (erro 2804116). Encontre em: Facebook → Página → Sobre → Transparência da Página.</p>
+          </div>
+          <div>
             <label className="text-xs text-muted-foreground">Test Event Code (opcional)</label>
             <input value={form.test_event_code} onChange={e => setForm(f => ({ ...f, test_event_code: e.target.value }))}
               placeholder="TEST12345"
