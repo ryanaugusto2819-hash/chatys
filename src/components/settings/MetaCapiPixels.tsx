@@ -50,11 +50,12 @@ export default function MetaCapiPixels() {
       pixel_id: form.pixel_id.trim(),
       access_token: form.access_token.trim(),
       test_event_code: form.test_event_code.trim() || null,
-    });
+      page_id: form.page_id.trim() || null,
+    } as any);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return; }
     toast.success('Pixel adicionado');
-    setForm({ name: '', pixel_id: '', access_token: '', test_event_code: '' });
+    setForm({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
     setShowForm(false);
     load();
   };
