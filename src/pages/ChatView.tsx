@@ -864,7 +864,29 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
       toast.success('Venda registrada com sucesso!');
       setShowSaleDialog(false);
-      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
+      // Fire Meta Conversions API (Purchase) if pixel selected + lead has ctwa_clid
+      if (saleData.pixelRefId && conversation?.ctwa_clid) {
+        try {
+          const { data: capiRes } = await supabase.functions.invoke('meta-capi-send', {
+            body: {
+              conversationId: conversationId!,
+              pixelRefId: saleData.pixelRefId,
+              eventName: 'Purchase',
+              value: payload.valor,
+              currency: payload.moeda,
+            },
+          });
+          if (capiRes?.success) {
+            toast.success('📊 Evento Purchase enviado à Meta CAPI');
+          } else if (capiRes?.error) {
+            toast.warning(`Venda ok, mas CAPI falhou: ${capiRes.error}`, { duration: 6000 });
+          }
+        } catch (e: any) {
+          toast.warning(`Venda ok, mas CAPI falhou: ${e.message}`, { duration: 6000 });
+        }
+      }
+
+      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
       setSaleRegisteredAt(now);
     } catch (err) {
       console.error('Sale webhook error:', err);
