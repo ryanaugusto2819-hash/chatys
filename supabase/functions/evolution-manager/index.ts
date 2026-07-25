@@ -89,7 +89,46 @@ Deno.serve(async (req) => {
             ],
           },
         });
-        if (!r.ok) return json({ error: "Failed to create", detail: r.data }, r.status);
+        if (!r.ok) {
+          const bodyStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
+          if (/already in use|already exists/i.test(bodyStr)) {
+            // Instance exists remotely — reuse it: fetch QR and upsert local record
+            const qrRes = await evo(`/instance/connect/${instanceName}`, "GET");
+            const qrcode = qrRes.data?.base64 || qrRes.data?.qrcode?.base64 || qrRes.data?.code || null;
+
+            const { data: existing } = await supabase
+              .from("connection_configs")
+              .select("id")
+              .eq("connection_id", "evolution")
+              .eq("config->>instance_name", instanceName)
+              .maybeSingle();
+
+            let connection = existing;
+            if (!existing) {
+              const { data: inserted } = await supabase
+                .from("connection_configs")
+                .insert({
+                  connection_id: "evolution",
+                  label: instanceName,
+                  config: {
+                    server_url: EVO_URL,
+                    instance_name: instanceName,
+                    api_key: EVO_KEY,
+                    phone_number: null,
+                  },
+                  is_connected: false,
+                  status: "qr_required",
+                  workspace_id: workspaceId,
+                })
+                .select()
+                .single();
+              connection = inserted;
+            }
+
+            return json({ success: true, reused: true, qrcode, connection });
+          }
+          return json({ error: `Nome "${instanceName}" já está em uso ou inválido. Escolha outro.`, detail: r.data }, r.status);
+        }
 
         // Best-effort webhook set (in case create payload didn't take it)
         await evo(`/webhook/set/${instanceName}`, "POST", {
