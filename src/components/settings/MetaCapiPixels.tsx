@@ -9,6 +9,8 @@ interface Pixel {
   name: string;
   pixel_id: string;
   access_token: string;
+  page_id: string | null;
+  whatsapp_business_account_id: string | null;
   test_event_code: string | null;
   is_active: boolean;
   is_default: boolean;
@@ -21,7 +23,8 @@ export default function MetaCapiPixels() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
-  const [form, setForm] = useState({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
+  const emptyForm = { name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '', whatsapp_business_account_id: '' };
+  const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
     if (!currentWorkspace) return;
@@ -39,8 +42,8 @@ export default function MetaCapiPixels() {
 
   const handleSave = async () => {
     if (!currentWorkspace) return;
-    if (!form.name.trim() || !form.pixel_id.trim() || !form.access_token.trim()) {
-      toast.error('Nome, Pixel ID e Access Token são obrigatórios');
+    if (!form.name.trim() || !form.pixel_id.trim() || !form.access_token.trim() || !form.whatsapp_business_account_id.trim()) {
+      toast.error('Nome, Pixel ID, Access Token e WABA ID são obrigatórios');
       return;
     }
     setSaving(true);
@@ -51,11 +54,12 @@ export default function MetaCapiPixels() {
       access_token: form.access_token.trim(),
       test_event_code: form.test_event_code.trim() || null,
       page_id: form.page_id.trim() || null,
+      whatsapp_business_account_id: form.whatsapp_business_account_id.trim(),
     } as any);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return; }
     toast.success('Pixel adicionado');
-    setForm({ name: '', pixel_id: '', access_token: '', test_event_code: '', page_id: '' });
+    setForm(emptyForm);
     setShowForm(false);
     load();
   };
@@ -115,12 +119,21 @@ export default function MetaCapiPixels() {
               rows={2}
               className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono" />
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Page ID (ID da Página do Facebook) *</label>
-            <input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
-              placeholder="123456789012345"
-              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
-            <p className="text-[11px] text-muted-foreground mt-1">Exigido pela Meta para eventos de WhatsApp (erro 2804116). Encontre em: Facebook → Página → Sobre → Transparência da Página.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">WABA ID (Conta WhatsApp Business) *</label>
+              <input value={form.whatsapp_business_account_id} onChange={e => setForm(f => ({ ...f, whatsapp_business_account_id: e.target.value }))}
+                placeholder="123456789012345"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+              <p className="text-[11px] text-muted-foreground mt-1">Campo oficial exigido pela Meta para Click-to-WhatsApp.</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Page ID (opcional)</label>
+              <input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
+                placeholder="123456789012345"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono" />
+              <p className="text-[11px] text-muted-foreground mt-1">Use junto se a Meta pedir validação da Página.</p>
+            </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Test Event Code (opcional)</label>
@@ -159,6 +172,8 @@ export default function MetaCapiPixels() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground font-mono mt-0.5">Pixel: {p.pixel_id}</p>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">WABA: {p.whatsapp_business_account_id || 'não informado'}</p>
+                {p.page_id && <p className="text-xs text-muted-foreground font-mono mt-0.5">Página: {p.page_id}</p>}
                 <div className="flex items-center gap-1 mt-1">
                   <span className="text-[11px] text-muted-foreground">Token:</span>
                   <span className="text-[11px] font-mono text-muted-foreground truncate max-w-md">

@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // Load pixel
     const { data: pixel, error: pErr } = await supabase
       .from("meta_capi_pixels")
-      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id, page_id")
+      .select("id, pixel_id, access_token, test_event_code, is_active, workspace_id, page_id, whatsapp_business_account_id")
       .eq("id", pixelRefId)
       .maybeSingle();
 
@@ -80,6 +80,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (!pixel.whatsapp_business_account_id) {
+      return new Response(JSON.stringify({
+        success: false,
+        code: "missing_waba_id",
+        error: "Este Pixel não tem WABA ID (ID da Conta do WhatsApp Business) cadastrado. A Meta exige esse identificador para eventos Click-to-WhatsApp.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Build user_data with hashed PII
     const phone = normalizePhone(conv.contact_phone || "");
     const fullName = (conv.contact_name || "").trim();
@@ -87,20 +95,13 @@ Deno.serve(async (req) => {
     const lastName = rest.join(" ");
 
     const user_data: Record<string, any> = {
+      whatsapp_business_account_id: pixel.whatsapp_business_account_id,
       ctwa_clid: conv.ctwa_clid,
     };
     if (pixel.page_id) user_data.page_id = pixel.page_id;
     if (phone) user_data.ph = [await sha256Hex(phone)];
     if (firstName) user_data.fn = [await sha256Hex(firstName)];
     if (lastName) user_data.ln = [await sha256Hex(lastName)];
-
-    if (!pixel.page_id) {
-      return new Response(JSON.stringify({
-        success: false,
-        code: "missing_page_id",
-        error: "Este Pixel não tem Page ID (ID da Página do Facebook) cadastrado. A Meta exige esse identificador para eventos de WhatsApp. Adicione em Configurações → Meta CAPI.",
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     const event_id = `purchase_${conv.id}`;
     const event_time = Math.floor(Date.now() / 1000);
