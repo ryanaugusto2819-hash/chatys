@@ -549,16 +549,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   // Fetch RMK tag for quick toggle
   const fetchRmkTag = useCallback(async () => {
     if (!currentWorkspace) return;
-    (async () => {
-      const { data } = await supabase
-        .from('meta_capi_pixels' as any)
-        .select('id, name, pixel_id, test_event_code')
-        .eq('workspace_id', currentWorkspace.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      setAvailablePixels((data as any) ?? []);
-    })();
-  }, [currentWorkspace?.id]);
     const { data } = await supabase
       .from('tags')
       .select('id, name, color')
@@ -572,6 +562,20 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   useEffect(() => {
     fetchRmkTag();
   }, [fetchRmkTag]);
+
+  // Load Meta CAPI pixels for the workspace (used in sale dialog)
+  useEffect(() => {
+    if (!currentWorkspace) { setAvailablePixels([]); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('meta_capi_pixels' as any)
+        .select('id, name, pixel_id, test_event_code')
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      setAvailablePixels((data as any) ?? []);
+    })();
+  }, [currentWorkspace?.id]);
 
   const toggleRmkTag = async () => {
     if (!rmkTag || !conversation) return;
