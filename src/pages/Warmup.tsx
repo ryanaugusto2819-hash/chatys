@@ -622,7 +622,140 @@ export default function Warmup() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog configurar IA */}
+      <Dialog open={!!editOf} onOpenChange={(o) => !o && setEditOf(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Configurar IA — {editOf?.connection_label}</DialogTitle>
+            <DialogDescription>
+              Cada conexão tem seu próprio comportamento: persona, idioma, volume e janela de envio.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Persona / comportamento da IA</Label>
+                <Textarea
+                  rows={6}
+                  value={editForm.persona_prompt}
+                  onChange={(e) => setEditForm({ ...editForm, persona_prompt: e.target.value })}
+                  placeholder="Descreva quem é essa pessoa, o tom, os assuntos que ela fala..."
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {editForm.persona_prompt.length} caracteres
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Idioma das respostas</Label>
+                <Select
+                  value={editForm.language}
+                  onValueChange={(v) => setEditForm({ ...editForm, language: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pt-BR">Português (BR)</SelectItem>
+                    <SelectItem value="es">Espanhol</SelectItem>
+                    <SelectItem value="en">Inglês</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Meta dia 1</Label>
+                  <Input
+                    type="number"
+                    value={editForm.base_daily_target}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, base_daily_target: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Crescimento/dia</Label>
+                  <Input
+                    type="number"
+                    step="0.05"
+                    value={editForm.growth_rate}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, growth_rate: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Teto diário</Label>
+                  <Input
+                    type="number"
+                    value={editForm.max_daily}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, max_daily: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Início</Label>
+                  <Input
+                    type="number"
+                    value={editForm.active_hours_start}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, active_hours_start: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fim</Label>
+                  <Input
+                    type="number"
+                    value={editForm.active_hours_end}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, active_hours_end: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Delay mín (s)</Label>
+                  <Input
+                    type="number"
+                    value={editForm.min_delay_seconds}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, min_delay_seconds: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Delay máx (s)</Label>
+                  <Input
+                    type="number"
+                    value={editForm.max_delay_seconds}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, max_delay_seconds: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              </div>
+
+              <Button className="w-full" onClick={saveEdit} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Salvar configuração
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog histórico */}
+
       <Dialog open={!!historyOf} onOpenChange={(o) => !o && setHistoryOf(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
