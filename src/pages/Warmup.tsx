@@ -154,7 +154,7 @@ export default function Warmup() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from('warmup_profiles').insert({
+    const { error } = await supabase.from('warmup_profiles' as any).insert({
       ...form,
       workspace_id: currentWorkspace!.id,
       is_active: true,
@@ -174,7 +174,7 @@ export default function Warmup() {
   const toggle = async (row: WarmupRow) => {
     const nextActive = !(row.is_active && row.status === 'active');
     const { error } = await supabase
-      .from('warmup_profiles')
+      .from('warmup_profiles' as any)
       .update({
         is_active: nextActive,
         status: nextActive ? 'active' : 'paused',
@@ -190,7 +190,7 @@ export default function Warmup() {
 
   const remove = async (row: WarmupRow) => {
     if (!confirm(`Remover "${row.connection_label}" do aquecimento?`)) return;
-    const { error } = await supabase.from('warmup_profiles').delete().eq('id', row.id);
+    const { error } = await supabase.from('warmup_profiles' as any).delete().eq('id', row.id);
     if (error) toast.error(error.message);
     else {
       toast.success('Removido do aquecimento');
@@ -202,12 +202,12 @@ export default function Warmup() {
     setHistoryOf(row);
     setLogsLoading(true);
     const { data } = await supabase
-      .from('warmup_logs')
+      .from('warmup_logs' as any)
       .select('*')
       .eq('warmup_id', row.id)
       .order('created_at', { ascending: false })
       .limit(200);
-    setLogs((data as WarmupLog[]) ?? []);
+    setLogs(((data as any) ?? []) as WarmupLog[]);
     setLogsLoading(false);
   };
 
