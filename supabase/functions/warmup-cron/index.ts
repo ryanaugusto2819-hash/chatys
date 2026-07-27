@@ -120,13 +120,17 @@ Deno.serve(async (req) => {
   const results: any[] = [];
 
   // Reconciliação: a Evolution nem sempre envia "messages.update".
-  // Se a mensagem foi aceita pelo provedor e não houve erro em 3 minutos,
-  // consideramos como enviada (evita ficar preso em "aguardando confirmação").
+  // Sem confirmação em 5 minutos, marcamos como FALHA (não como enviada),
+  // pois o WhatsApp pode ter rejeitado o envio (chip novo/banido ou sessão inválida).
   try {
-    const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const errPayload = JSON.stringify({
+      title: "Evolution API",
+      message: "Sem confirmação do WhatsApp em 5 minutos. Provável rejeição do envio (reconecte o chip).",
+    });
     const { data: stale } = await supabase
       .from("messages")
-      .update({ status: "sent", provider_status: "sent" })
+      .update({ status: "failed", provider_status: "no_confirmation", provider_error: errPayload })
       .eq("status", "pending")
       .eq("sender_type", "agent")
       .is("provider_error", null)
@@ -138,14 +142,15 @@ Deno.serve(async (req) => {
       if (m.sender_label !== "Aquecimento IA") continue;
       await supabase
         .from("warmup_logs")
-        .update({ status: "sent" })
+        .update({ status: "failed", error: "Sem confirmação do WhatsApp (envio rejeitado)" })
         .eq("conversation_id", m.conversation_id)
         .eq("content", m.content)
         .eq("status", "pending");
     }
 
-    if (stale?.length) results.push({ reconciled_pending: stale.length });
+    if (stale?.length) results.push({ unconfirmed_marked_failed: stale.length });
   } catch (_) { /* noop */ }
+
 
   try {
 
