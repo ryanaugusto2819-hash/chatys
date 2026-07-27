@@ -1868,6 +1868,142 @@ export type Database = {
         }
         Relationships: []
       }
+      warmup_logs: {
+        Row: {
+          connection_config_id: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          content: string | null
+          conversation_id: string | null
+          created_at: string
+          direction: string
+          error: string | null
+          id: string
+          status: string
+          warmup_id: string
+          workspace_id: string
+        }
+        Insert: {
+          connection_config_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          content?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          status?: string
+          warmup_id: string
+          workspace_id: string
+        }
+        Update: {
+          connection_config_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          content?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          status?: string
+          warmup_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warmup_logs_warmup_id_fkey"
+            columns: ["warmup_id"]
+            isOneToOne: false
+            referencedRelation: "warmup_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warmup_profiles: {
+        Row: {
+          active_hours_end: number
+          active_hours_start: number
+          base_daily_target: number
+          connection_config_id: string
+          created_at: string
+          created_by: string | null
+          growth_rate: number
+          id: string
+          is_active: boolean
+          language: string
+          last_activity_at: string | null
+          max_daily: number
+          max_delay_seconds: number
+          messages_received: number
+          messages_sent: number
+          min_delay_seconds: number
+          paused_at: string | null
+          persona_prompt: string
+          started_at: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active_hours_end?: number
+          active_hours_start?: number
+          base_daily_target?: number
+          connection_config_id: string
+          created_at?: string
+          created_by?: string | null
+          growth_rate?: number
+          id?: string
+          is_active?: boolean
+          language?: string
+          last_activity_at?: string | null
+          max_daily?: number
+          max_delay_seconds?: number
+          messages_received?: number
+          messages_sent?: number
+          min_delay_seconds?: number
+          paused_at?: string | null
+          persona_prompt?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active_hours_end?: number
+          active_hours_start?: number
+          base_daily_target?: number
+          connection_config_id?: string
+          created_at?: string
+          created_by?: string | null
+          growth_rate?: number
+          id?: string
+          is_active?: boolean
+          language?: string
+          last_activity_at?: string | null
+          max_daily?: number
+          max_delay_seconds?: number
+          messages_received?: number
+          messages_sent?: number
+          min_delay_seconds?: number
+          paused_at?: string | null
+          persona_prompt?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warmup_profiles_connection_config_id_fkey"
+            columns: ["connection_config_id"]
+            isOneToOne: true
+            referencedRelation: "connection_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_flow_mappings: {
         Row: {
           created_at: string
@@ -2357,6 +2493,29 @@ export type Database = {
           plan_slug: string
           role: string
           slug: string
+          status: string
+        }[]
+      }
+      get_warmup_overview: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          active_hours_end: number
+          active_hours_start: number
+          base_daily_target: number
+          connection_config_id: string
+          connection_label: string
+          connection_status: string
+          daily_target: number
+          days_in_warmup: number
+          growth_rate: number
+          id: string
+          is_active: boolean
+          last_activity_at: string
+          max_daily: number
+          messages_received: number
+          messages_sent: number
+          sent_today: number
+          started_at: string
           status: string
         }[]
       }
