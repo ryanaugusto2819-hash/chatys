@@ -132,15 +132,18 @@ Deno.serve(async (req) => {
       .is("provider_error", null)
       .not("provider_message_id", "is", null)
       .lt("created_at", cutoff)
-      .select("id");
+      .select("id, conversation_id, content, sender_label");
 
     for (const m of stale ?? []) {
+      if (m.sender_label !== "Aquecimento IA") continue;
       await supabase
         .from("warmup_logs")
         .update({ status: "sent" })
-        .eq("message_id", m.id)
+        .eq("conversation_id", m.conversation_id)
+        .eq("content", m.content)
         .eq("status", "pending");
     }
+
     if (stale?.length) results.push({ reconciled_pending: stale.length });
   } catch (_) { /* noop */ }
 
