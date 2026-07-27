@@ -116,6 +116,20 @@ export default function Warmup() {
   });
 
   const [historyOf, setHistoryOf] = useState<WarmupRow | null>(null);
+  const [editOf, setEditOf] = useState<WarmupRow | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editForm, setEditForm] = useState({
+    persona_prompt: DEFAULT_PERSONA,
+    language: 'pt-BR',
+    base_daily_target: 6,
+    growth_rate: 0.3,
+    max_daily: 60,
+    active_hours_start: 8,
+    active_hours_end: 21,
+    min_delay_seconds: 45,
+    max_delay_seconds: 240,
+  });
+
   const [logs, setLogs] = useState<WarmupLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
