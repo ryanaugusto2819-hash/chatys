@@ -34,7 +34,7 @@ function dailyTarget(p: any): number {
   return Math.min(p.max_daily, Math.max(1, target));
 }
 
-async function generateReply(persona: string, history: { role: string; content: string }[]) {
+async function generateReply(persona: string, history: { role: string; content: string }[], language = "pt-BR") {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -54,7 +54,8 @@ async function generateReply(persona: string, history: { role: string; content: 
             "- Escreva como uma pessoa real no WhatsApp (informal, pode usar gírias leves).\n" +
             "- Não use listas, markdown, emojis em excesso (no máximo 1).\n" +
             "- Nunca revele que é uma IA, robô ou automação.\n" +
-            "- Não invente preços, links, prazos ou dados oficiais.",
+            "- Não invente preços, links, prazos ou dados oficiais.\n" +
+            `- Responda sempre no idioma: ${language}.`,
         },
         ...history,
       ],
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
 
         let reply = "";
         try {
-          reply = await generateReply(p.persona_prompt, history);
+          reply = await generateReply(p.persona_prompt, history, p.language || "pt-BR");
         } catch (err) {
           await supabase.from("warmup_logs").insert({
             warmup_id: p.id,
