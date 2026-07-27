@@ -194,7 +194,12 @@ Deno.serve(async (req) => {
 
         let reply = "";
         try {
-          reply = await generateReply(p.persona_prompt, history, p.language || "pt-BR");
+          reply = await generateReply(p.persona_prompt, history, p.language || "pt-BR", {
+            behavior_style: p.behavior_style,
+            reply_length: p.reply_length,
+            emoji_usage: p.emoji_usage,
+            extra_instructions: p.extra_instructions,
+          });
         } catch (err) {
           await supabase.from("warmup_logs").insert({
             warmup_id: p.id,
