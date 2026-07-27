@@ -46,6 +46,7 @@ const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const EvolutionLogs = lazy(() => import("./pages/EvolutionLogs"));
 const AdsConversions = lazy(() => import("./pages/AdsConversions"));
 const ActivityReport = lazy(() => import("./pages/ActivityReport"));
+const Warmup = lazy(() => import("./pages/Warmup"));
 
 
 const queryClient = new QueryClient({
