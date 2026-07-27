@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
     if (
       event === "messages.upsert" || event === "MESSAGES_UPSERT" ||
       event === "messages.set" || event === "MESSAGES_SET"
+      || event === "send.message" || event === "SEND_MESSAGE"
     ) {
       const rawData = payload?.data;
       const items: any[] = Array.isArray(rawData)
