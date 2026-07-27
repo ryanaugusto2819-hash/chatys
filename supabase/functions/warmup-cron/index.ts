@@ -241,7 +241,27 @@ Deno.serve(async (req) => {
         });
 
         const sendBody = await sendRes.text();
-        const ok = sendRes.ok;
+        let sendData: any = null;
+        try {
+          sendData = sendBody ? JSON.parse(sendBody) : null;
+        } catch {
+          sendData = null;
+        }
+
+        const savedStatus = sendData?.savedMessage?.status;
+        const providerError =
+          sendData?.error ||
+          sendData?.savedMessage?.provider_error ||
+          sendData?.providerResponse?.response?.message ||
+          sendData?.providerResponse?.message ||
+          sendData?.providerResponse?.error ||
+          null;
+        const accepted = sendRes.ok && sendData?.success === true && savedStatus !== "failed";
+        const logStatus = !accepted
+          ? "failed"
+          : ["sent", "delivered", "read"].includes(savedStatus)
+            ? "sent"
+            : "pending";
 
         await supabase.from("warmup_logs").insert({
           warmup_id: p.id,
@@ -252,11 +272,17 @@ Deno.serve(async (req) => {
           contact_name: conv.contact_name,
           direction: "out",
           content: reply,
-          status: ok ? "sent" : "failed",
-          error: ok ? null : sendBody.slice(0, 500),
+          status: logStatus,
+          error: logStatus !== "failed"
+            ? null
+            : JSON.stringify({
+                http_status: sendRes.status,
+                error: providerError,
+                response: sendData ?? sendBody,
+              }).slice(0, 500),
         });
 
-        if (ok) {
+        if (logStatus === "sent") {
           sent += 1;
           await supabase
             .from("warmup_profiles")

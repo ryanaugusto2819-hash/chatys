@@ -863,6 +863,8 @@ export default function Warmup() {
                     <div className="flex items-center gap-2">
                       {log.status === 'failed' ? (
                         <Badge variant="destructive">Falhou</Badge>
+                      ) : log.status === 'pending' ? (
+                        <Badge variant="outline">Aguardando confirmação</Badge>
                       ) : (
                         <Badge variant="secondary">Enviada</Badge>
                       )}
