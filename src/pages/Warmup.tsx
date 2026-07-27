@@ -678,6 +678,74 @@ export default function Warmup() {
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
+                  <Label>Comportamento</Label>
+                  <Select
+                    value={editForm.behavior_style}
+                    onValueChange={(v) => setEditForm({ ...editForm, behavior_style: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="casual">Casual / amigável</SelectItem>
+                      <SelectItem value="formal">Formal / educado</SelectItem>
+                      <SelectItem value="curioso">Curioso / pergunta muito</SelectItem>
+                      <SelectItem value="objetivo">Objetivo / direto</SelectItem>
+                      <SelectItem value="brincalhao">Brincalhão / descontraído</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tamanho</Label>
+                  <Select
+                    value={editForm.reply_length}
+                    onValueChange={(v) => setEditForm({ ...editForm, reply_length: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="muito_curto">Muito curto (1 frase)</SelectItem>
+                      <SelectItem value="curto">Curto (até 2 frases)</SelectItem>
+                      <SelectItem value="medio">Médio (até 4 frases)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Emojis</Label>
+                  <Select
+                    value={editForm.emoji_usage}
+                    onValueChange={(v) => setEditForm({ ...editForm, emoji_usage: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nenhum">Nunca</SelectItem>
+                      <SelectItem value="raro">Raro (máx. 1)</SelectItem>
+                      <SelectItem value="frequente">Frequente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Instruções adicionais da IA</Label>
+                <Textarea
+                  rows={4}
+                  value={editForm.extra_instructions}
+                  onChange={(e) => setEditForm({ ...editForm, extra_instructions: e.target.value })}
+                  placeholder="Ex: nunca fale de política, sempre pergunte como foi o dia, cite que mora em São Paulo..."
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Regras extras aplicadas somente a esta conexão.
+                </p>
+              </div>
+
+
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
                   <Label>Meta dia 1</Label>
                   <Input
                     type="number"
