@@ -181,6 +181,15 @@ Deno.serve(async (req) => {
         const ageSec = (Date.now() - new Date(last.created_at).getTime()) / 1000;
         if (ageSec < p.min_delay_seconds || ageSec > 12 * 3600) continue;
 
+        // Delay aleatório entre min_delay_seconds e max_delay_seconds para parecer humano
+        const minDelay = Math.max(0, Number(p.min_delay_seconds) || 0);
+        const maxDelay = Math.max(minDelay, Number(p.max_delay_seconds) || minDelay);
+        const randomDelaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+        const waitMs = Math.max(0, randomDelaySeconds * 1000 - ageSec * 1000);
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+
         const history = (msgs ?? [])
           .slice()
           .reverse()
