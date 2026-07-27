@@ -34,6 +34,8 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   CalendarDays,
+  Settings2,
+
 } from 'lucide-react';
 import { toast } from 'sonner';
 
