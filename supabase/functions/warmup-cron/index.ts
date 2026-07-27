@@ -34,9 +34,44 @@ function dailyTarget(p: any): number {
   return Math.min(p.max_daily, Math.max(1, target));
 }
 
-async function generateReply(persona: string, history: { role: string; content: string }[], language = "pt-BR") {
+const LENGTH_RULES: Record<string, string> = {
+  muito_curto: "- Responda com apenas 1 frase bem curta.",
+  curto: "- Responda com no máximo 2 frases curtas.",
+  medio: "- Responda com no máximo 4 frases.",
+};
+
+const EMOJI_RULES: Record<string, string> = {
+  nenhum: "- Não use emojis.",
+  raro: "- Use no máximo 1 emoji, e raramente.",
+  frequente: "- Pode usar 1 a 2 emojis quando fizer sentido.",
+};
+
+const STYLE_RULES: Record<string, string> = {
+  casual: "- Tom casual e amigável, como uma conversa entre conhecidos.",
+  formal: "- Tom educado e formal, sem gírias.",
+  curioso: "- Demonstre curiosidade e faça perguntas de volta com frequência.",
+  objetivo: "- Seja objetivo e direto, sem rodeios.",
+  brincalhao: "- Tom descontraído e brincalhão, com leveza e bom humor.",
+};
+
+async function generateReply(
+  persona: string,
+  history: { role: string; content: string }[],
+  language = "pt-BR",
+  opts: {
+    behavior_style?: string;
+    reply_length?: string;
+    emoji_usage?: string;
+    extra_instructions?: string;
+  } = {},
+) {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) throw new Error("LOVABLE_API_KEY not configured");
+
+  const style = STYLE_RULES[opts.behavior_style || "casual"] || STYLE_RULES.casual;
+  const length = LENGTH_RULES[opts.reply_length || "curto"] || LENGTH_RULES.curto;
+  const emoji = EMOJI_RULES[opts.emoji_usage || "raro"] || EMOJI_RULES.raro;
+  const extra = (opts.extra_instructions || "").trim();
 
   const res = await fetch(AI_URL, {
     method: "POST",
@@ -44,18 +79,21 @@ async function generateReply(persona: string, history: { role: string; content: 
     body: JSON.stringify({
       model: AI_MODEL,
       temperature: 0.9,
-      max_tokens: 120,
+      max_tokens: 200,
       messages: [
         {
           role: "system",
           content:
             `${persona}\n\nRegras obrigatórias:\n` +
-            "- Responda com no máximo 2 frases curtas.\n" +
+            `${length}\n` +
+            `${style}\n` +
+            `${emoji}\n` +
             "- Escreva como uma pessoa real no WhatsApp (informal, pode usar gírias leves).\n" +
-            "- Não use listas, markdown, emojis em excesso (no máximo 1).\n" +
+            "- Não use listas nem markdown.\n" +
             "- Nunca revele que é uma IA, robô ou automação.\n" +
             "- Não invente preços, links, prazos ou dados oficiais.\n" +
-            `- Responda sempre no idioma: ${language}.`,
+            `- Responda sempre no idioma: ${language}.` +
+            (extra ? `\n\nInstruções adicionais:\n${extra}` : ""),
         },
         ...history,
       ],
@@ -156,7 +194,12 @@ Deno.serve(async (req) => {
 
         let reply = "";
         try {
-          reply = await generateReply(p.persona_prompt, history, p.language || "pt-BR");
+          reply = await generateReply(p.persona_prompt, history, p.language || "pt-BR", {
+            behavior_style: p.behavior_style,
+            reply_length: p.reply_length,
+            emoji_usage: p.emoji_usage,
+            extra_instructions: p.extra_instructions,
+          });
         } catch (err) {
           await supabase.from("warmup_logs").insert({
             warmup_id: p.id,
