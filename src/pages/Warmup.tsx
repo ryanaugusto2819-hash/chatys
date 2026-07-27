@@ -200,6 +200,53 @@ export default function Warmup() {
     }
   };
 
+  const openEdit = async (row: WarmupRow) => {
+    setEditOf(row);
+    setEditLoading(true);
+    const { data, error } = await supabase
+      .from('warmup_profiles' as any)
+      .select('*')
+      .eq('id', row.id)
+      .maybeSingle();
+    setEditLoading(false);
+    if (error || !data) {
+      toast.error(error?.message || 'Não foi possível carregar a configuração');
+      setEditOf(null);
+      return;
+    }
+    const d = data as any;
+    setEditForm({
+      persona_prompt: d.persona_prompt || DEFAULT_PERSONA,
+      language: d.language || 'pt-BR',
+      base_daily_target: d.base_daily_target ?? 6,
+      growth_rate: Number(d.growth_rate ?? 0.3),
+      max_daily: d.max_daily ?? 60,
+      active_hours_start: d.active_hours_start ?? 8,
+      active_hours_end: d.active_hours_end ?? 21,
+      min_delay_seconds: d.min_delay_seconds ?? 45,
+      max_delay_seconds: d.max_delay_seconds ?? 240,
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editOf) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('warmup_profiles' as any)
+      .update({ ...editForm, updated_at: new Date().toISOString() } as any)
+      .eq('id', editOf.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Comportamento da IA atualizado');
+    setEditOf(null);
+    load();
+  };
+
+
+
   const openHistory = async (row: WarmupRow) => {
     setHistoryOf(row);
     setLogsLoading(true);
