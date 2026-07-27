@@ -1926,9 +1926,12 @@ export type Database = {
           active_hours_end: number
           active_hours_start: number
           base_daily_target: number
+          behavior_style: string
           connection_config_id: string
           created_at: string
           created_by: string | null
+          emoji_usage: string
+          extra_instructions: string
           growth_rate: number
           id: string
           is_active: boolean
@@ -1941,6 +1944,7 @@ export type Database = {
           min_delay_seconds: number
           paused_at: string | null
           persona_prompt: string
+          reply_length: string
           started_at: string
           status: string
           updated_at: string
@@ -1950,9 +1954,12 @@ export type Database = {
           active_hours_end?: number
           active_hours_start?: number
           base_daily_target?: number
+          behavior_style?: string
           connection_config_id: string
           created_at?: string
           created_by?: string | null
+          emoji_usage?: string
+          extra_instructions?: string
           growth_rate?: number
           id?: string
           is_active?: boolean
@@ -1965,6 +1972,7 @@ export type Database = {
           min_delay_seconds?: number
           paused_at?: string | null
           persona_prompt?: string
+          reply_length?: string
           started_at?: string
           status?: string
           updated_at?: string
@@ -1974,9 +1982,12 @@ export type Database = {
           active_hours_end?: number
           active_hours_start?: number
           base_daily_target?: number
+          behavior_style?: string
           connection_config_id?: string
           created_at?: string
           created_by?: string | null
+          emoji_usage?: string
+          extra_instructions?: string
           growth_rate?: number
           id?: string
           is_active?: boolean
@@ -1989,6 +2000,7 @@ export type Database = {
           min_delay_seconds?: number
           paused_at?: string | null
           persona_prompt?: string
+          reply_length?: string
           started_at?: string
           status?: string
           updated_at?: string
