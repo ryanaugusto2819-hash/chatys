@@ -111,7 +111,8 @@ const App = () => (
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
                   <Route path="/activity" element={<AdminRoute><ActivityReport /></AdminRoute>} />
                   <Route path="/manager-ai" element={<AdminRoute><ManagerAI /></AdminRoute>} />
-                  
+                  <Route path="/warmup" element={<AdminRoute><Warmup /></AdminRoute>} />
+
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
                   <Route path="/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
                   <Route path="/evolution-logs" element={<AdminRoute><EvolutionLogs /></AdminRoute>} />
