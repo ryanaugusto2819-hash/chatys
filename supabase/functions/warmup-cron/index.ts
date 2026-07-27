@@ -119,7 +119,36 @@ Deno.serve(async (req) => {
 
   const results: any[] = [];
 
+  // Reconciliação: a Evolution nem sempre envia "messages.update".
+  // Se a mensagem foi aceita pelo provedor e não houve erro em 3 minutos,
+  // consideramos como enviada (evita ficar preso em "aguardando confirmação").
   try {
+    const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    const { data: stale } = await supabase
+      .from("messages")
+      .update({ status: "sent", provider_status: "sent" })
+      .eq("status", "pending")
+      .eq("sender_type", "agent")
+      .is("provider_error", null)
+      .not("provider_message_id", "is", null)
+      .lt("created_at", cutoff)
+      .select("id, conversation_id, content, sender_label");
+
+    for (const m of stale ?? []) {
+      if (m.sender_label !== "Aquecimento IA") continue;
+      await supabase
+        .from("warmup_logs")
+        .update({ status: "sent" })
+        .eq("conversation_id", m.conversation_id)
+        .eq("content", m.content)
+        .eq("status", "pending");
+    }
+
+    if (stale?.length) results.push({ reconciled_pending: stale.length });
+  } catch (_) { /* noop */ }
+
+  try {
+
     const { data: profiles } = await supabase
       .from("warmup_profiles")
       .select("*")
