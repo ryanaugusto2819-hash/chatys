@@ -610,17 +610,20 @@ export default function Warmup() {
                   }
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Delay máx (s)</Label>
-                <Input
-                  type="number"
-                  value={form.max_delay_seconds}
-                  onChange={(e) =>
-                    setForm({ ...form, max_delay_seconds: Number(e.target.value) })
-                  }
-                />
+                <div className="space-y-1.5">
+                  <Label>Delay máx (s)</Label>
+                  <Input
+                    type="number"
+                    value={form.max_delay_seconds}
+                    onChange={(e) =>
+                      setForm({ ...form, max_delay_seconds: Number(e.target.value) })
+                    }
+                  />
+                </div>
               </div>
-            </div>
+              <p className="text-xs text-muted-foreground">
+                O aquecedor sorteia um delay entre o mínimo e o máximo antes de responder, para simular comportamento humano.
+              </p>
 
             <Button className="w-full" onClick={createWarmup} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
