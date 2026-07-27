@@ -23,6 +23,7 @@ import {
   Radio,
   Megaphone,
   Activity,
+  Flame,
 } from 'lucide-react';
 
 
@@ -44,6 +45,7 @@ const adminItems = [
   { to: '/reports', icon: BarChart3, label: 'Relatórios' },
   { to: '/activity', icon: Activity, label: 'Atividade (IP)' },
   { to: '/manager-ai', icon: ShieldCheck, label: 'IA Gerente' },
+  { to: '/warmup', icon: Flame, label: 'Aquecedor de Chips' },
   { to: '/connections', icon: Plug, label: 'Conexões' },
   { to: '/users', icon: Users, label: 'Usuários' },
   { to: '/evolution-logs', icon: Radio, label: 'Logs Evolution' },
