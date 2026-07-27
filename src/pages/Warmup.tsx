@@ -121,6 +121,10 @@ export default function Warmup() {
   const [editForm, setEditForm] = useState({
     persona_prompt: DEFAULT_PERSONA,
     language: 'pt-BR',
+    behavior_style: 'casual',
+    reply_length: 'curto',
+    emoji_usage: 'raro',
+    extra_instructions: '',
     base_daily_target: 6,
     growth_rate: 0.3,
     max_daily: 60,
