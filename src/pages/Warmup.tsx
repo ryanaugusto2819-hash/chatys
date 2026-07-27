@@ -236,6 +236,10 @@ export default function Warmup() {
     setEditForm({
       persona_prompt: d.persona_prompt || DEFAULT_PERSONA,
       language: d.language || 'pt-BR',
+      behavior_style: d.behavior_style || 'casual',
+      reply_length: d.reply_length || 'curto',
+      emoji_usage: d.emoji_usage || 'raro',
+      extra_instructions: d.extra_instructions || '',
       base_daily_target: d.base_daily_target ?? 6,
       growth_rate: Number(d.growth_rate ?? 0.3),
       max_daily: d.max_daily ?? 60,
