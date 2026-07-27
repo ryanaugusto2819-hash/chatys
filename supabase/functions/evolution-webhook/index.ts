@@ -92,6 +92,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (
+      event === "messages.update" || event === "MESSAGES_UPDATE" ||
+      event === "message.update" || event === "MESSAGE_UPDATE"
+    ) {
+      const rawData = payload?.data;
+      const items: any[] = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.messages)
+          ? rawData.messages
+          : [rawData];
+
+      const task = (async () => {
+        for (const item of items) {
+          if (!item) continue;
+          await processStatusUpdate(supabase, item).catch((err) =>
+            console.error("[evolution-webhook] status update error:", err)
+          );
+        }
+      })();
+
+      // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(task);
+      } else {
+        await task;
+      }
+    }
+
     return json({ success: true });
   } catch (err) {
     console.error("evolution-webhook error:", err);
@@ -185,6 +214,105 @@ function buildCompactAdLogPayload(payload: any, event: string) {
     ad_item_count_logged: adItems.length,
     ad_items: adItems.map(compactMessageForLog),
   };
+}
+
+function normalizeProviderStatus(value: any): "pending" | "sent" | "delivered" | "read" | "failed" | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    if (value === 0) return "failed";
+    if (value === 1) return "pending";
+    if (value === 2) return "sent";
+    if (value === 3) return "delivered";
+    if (value >= 4) return "read";
+  }
+
+  const status = String(value).toLowerCase();
+  if (/error|fail|reject|block|timeout/.test(status)) return "failed";
+  if (/read|played/.test(status)) return "read";
+  if (/deliver/.test(status)) return "delivered";
+  if (/server_ack|sent|send|ack/.test(status)) return "sent";
+  if (/pending|wait|queue|accept/.test(status)) return "pending";
+  return null;
+}
+
+function extractStatusValue(item: any): any {
+  return (
+    item?.update?.status ??
+    item?.status ??
+    item?.message?.status ??
+    item?.messageStatus ??
+    item?.statusCode ??
+    item?.receipt?.status ??
+    item?.data?.status ??
+    null
+  );
+}
+
+function extractStatusMessageId(item: any): string | null {
+  const id =
+    item?.key?.id ??
+    item?.update?.key?.id ??
+    item?.message?.key?.id ??
+    item?.messageId ??
+    item?.id?.id ??
+    item?.id ??
+    null;
+  return id ? String(id) : null;
+}
+
+async function syncWarmupLogStatus(supabase: any, messageId: string, messageStatus: string, error: string | null = null) {
+  const { data: msg } = await supabase
+    .from("messages")
+    .select("conversation_id, content, sender_label")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (!msg || msg.sender_label !== "Aquecimento IA") return;
+
+  const warmupStatus = ["sent", "delivered", "read"].includes(messageStatus) ? "sent" : messageStatus;
+  await supabase
+    .from("warmup_logs")
+    .update({ status: warmupStatus, error })
+    .eq("conversation_id", msg.conversation_id)
+    .eq("content", msg.content)
+    .eq("status", "pending");
+}
+
+async function processStatusUpdate(supabase: any, item: any) {
+  const providerMsgId = extractStatusMessageId(item);
+  if (!providerMsgId) return;
+
+  const nextStatus = normalizeProviderStatus(extractStatusValue(item));
+  if (!nextStatus) return;
+
+  const errorDetail =
+    item?.error?.message ??
+    item?.error ??
+    item?.update?.error?.message ??
+    item?.update?.error ??
+    null;
+  const providerError = nextStatus === "failed"
+    ? JSON.stringify({
+        title: "Evolution API",
+        message: errorDetail ? String(errorDetail) : "Falha confirmada pelo provedor",
+        error_data: { details: JSON.stringify(item).slice(0, 500) },
+      })
+    : null;
+
+  const { data: updated } = await supabase
+    .from("messages")
+    .update({
+      status: nextStatus,
+      provider_status: String(extractStatusValue(item)),
+      ...(providerError ? { provider_error: providerError } : {}),
+    })
+    .eq("provider_message_id", providerMsgId)
+    .select("id")
+    .maybeSingle();
+
+  if (updated?.id) {
+    await syncWarmupLogStatus(supabase, updated.id, nextStatus, providerError);
+  }
 }
 
 async function processMessageEvent(supabase: any, payload: any) {
@@ -413,6 +541,13 @@ async function processMessageEvent(supabase: any, payload: any) {
       .limit(1)
       .maybeSingle();
     if (dup) {
+      if (fromMe) {
+        await supabase
+          .from("messages")
+          .update({ status: "sent", provider_status: "sent" })
+          .eq("id", dup.id);
+        await syncWarmupLogStatus(supabase, dup.id, "sent");
+      }
       console.log(`[evolution-webhook] duplicate ${providerMsgId}`);
       return;
     }
