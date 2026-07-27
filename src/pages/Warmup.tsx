@@ -444,7 +444,11 @@ export default function Warmup() {
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" onClick={() => openEdit(row)} title="Configurar IA">
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => openHistory(row)} title="Histórico">
+
                       <History className="h-4 w-4" />
                     </Button>
                     <Button size="icon" variant="ghost" onClick={() => toggle(row)} title="Pausar/Retomar">
