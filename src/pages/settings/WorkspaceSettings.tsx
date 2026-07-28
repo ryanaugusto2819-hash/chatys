@@ -4,6 +4,8 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 import { Building2, Globe, Clock, Save, Loader2, ImagePlus } from 'lucide-react';
 import MetaCapiPixels from '@/components/settings/MetaCapiPixels';
+import MetaCapiLogs from '@/components/settings/MetaCapiLogs';
+
 
 const TIMEZONES = [
   'America/Sao_Paulo', 'America/Fortaleza', 'America/Manaus', 'America/Belem',
@@ -237,6 +239,11 @@ export default function WorkspaceSettings() {
       <div className="pt-6 border-t border-border">
         <MetaCapiPixels />
       </div>
+
+      <div className="pt-6 border-t border-border">
+        <MetaCapiLogs />
+      </div>
+
     </div>
   );
 }
