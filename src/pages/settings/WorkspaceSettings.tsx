@@ -237,6 +237,11 @@ export default function WorkspaceSettings() {
       <div className="pt-6 border-t border-border">
         <MetaCapiPixels />
       </div>
+
+      <div className="pt-6 border-t border-border">
+        <MetaCapiLogs />
+      </div>
+
     </div>
   );
 }
