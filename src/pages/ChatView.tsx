@@ -884,8 +884,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         campanha: payload.campanha,
       });
 
-      toast.success('Venda registrada com sucesso!');
+      if (webhookWarning) {
+        toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
+      } else {
+        toast.success('Venda registrada com sucesso!');
+      }
       setShowSaleDialog(false);
+
       // Fire Meta Conversions API (Purchase) if pixel selected + lead has ctwa_clid
       if (saleData.pixelRefId && conversation?.ctwa_clid) {
         try {
