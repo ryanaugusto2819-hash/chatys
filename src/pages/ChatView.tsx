@@ -917,9 +917,10 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
       setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
       setSaleRegisteredAt(now);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Sale webhook error:', err);
-      toast.error('Erro ao registrar venda');
+      toast.error(err?.message || 'Erro ao registrar venda');
+
     } finally {
       setSendingSale(false);
     }
