@@ -872,7 +872,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         const { data: prof } = await supabase.from('profiles').select('full_name').eq('user_id', uid).maybeSingle();
         if (prof?.full_name) vendedor = prof.full_name;
       }
-      await supabase.from('sales_orders' as any).insert({
+      const { error: soErr } = await supabase.from('sales_orders' as any).insert({
         vendedor,
         valor: payload.valor,
         quantidade: 1,
@@ -883,6 +883,8 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         moeda: payload.moeda,
         campanha: payload.campanha,
       });
+      if (soErr) throw new Error(`Falha ao salvar a venda: ${soErr.message}`);
+
 
       if (webhookWarning) {
         toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
