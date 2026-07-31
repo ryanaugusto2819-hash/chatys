@@ -841,13 +841,21 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         vendas: 1,
       };
 
-      const res = await fetch('https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let webhookWarning: string | null = null;
+      try {
+        const res = await fetch('https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          webhookWarning = `Webhook externo retornou ${res.status}: ${txt.slice(0, 200)}`;
+        }
+      } catch (e: any) {
+        webhookWarning = `Falha ao chamar webhook externo: ${e?.message || e}`;
+      }
 
-      if (!res.ok) throw new Error('Webhook failed');
 
       // Persist sale registration in the database
       const now = new Date().toISOString();
@@ -876,8 +884,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         campanha: payload.campanha,
       });
 
-      toast.success('Venda registrada com sucesso!');
+      if (webhookWarning) {
+        toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
+      } else {
+        toast.success('Venda registrada com sucesso!');
+      }
       setShowSaleDialog(false);
+
       // Fire Meta Conversions API (Purchase) if pixel selected + lead has ctwa_clid
       if (saleData.pixelRefId && conversation?.ctwa_clid) {
         try {
