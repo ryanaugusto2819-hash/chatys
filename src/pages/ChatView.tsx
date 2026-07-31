@@ -843,7 +843,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
       let webhookWarning: string | null = null;
       try {
-        const res = await fetch('https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales', {
+        const res = await fetch('https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales?key=a7731ebc3828aa8973c5cefafac399cb', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
