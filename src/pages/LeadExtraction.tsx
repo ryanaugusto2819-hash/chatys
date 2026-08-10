@@ -21,15 +21,43 @@ function onlyDigits(p: string) {
   return (p || '').replace(/\D/g, '');
 }
 
-function download(filename: string, content: string, type = 'text/csv;charset=utf-8;') {
-  const blob = new Blob(['\uFEFF' + content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function DatePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const date = value ? parseISO(value) : undefined;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              'w-full justify-start text-left font-normal',
+              !value && 'text-muted-foreground',
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : <span>dd/mm/aaaa</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(d) => {
+              onChange(d ? format(d, 'yyyy-MM-dd') : '');
+              setOpen(false);
+            }}
+            initialFocus
+            className={cn('p-3 pointer-events-auto')}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
+
 
 export default function LeadExtraction() {
   const [from, setFrom] = useState('');
