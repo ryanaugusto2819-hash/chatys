@@ -21,6 +21,17 @@ function onlyDigits(p: string) {
   return (p || '').replace(/\D/g, '');
 }
 
+function download(filename: string, content: string, type = 'text/csv;charset=utf-8;') {
+  const blob = new Blob(['\uFEFF' + content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
 function DatePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const date = value ? parseISO(value) : undefined;
   const [open, setOpen] = useState(false);
