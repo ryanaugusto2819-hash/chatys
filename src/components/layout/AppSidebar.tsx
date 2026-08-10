@@ -24,6 +24,7 @@ import {
   Megaphone,
   Activity,
   Flame,
+  UserSearch,
 } from 'lucide-react';
 
 
@@ -43,6 +44,7 @@ const adminItems = [
   { to: '/webhook-mappings', icon: Webhook, label: 'Webhooks' },
   { to: '/ai', icon: Bot, label: 'Nichos & IA' },
   { to: '/reports', icon: BarChart3, label: 'Relatórios' },
+  { to: '/leads', icon: UserSearch, label: 'Extração de Leads' },
   { to: '/activity', icon: Activity, label: 'Atividade (IP)' },
   { to: '/manager-ai', icon: ShieldCheck, label: 'IA Gerente' },
   { to: '/warmup', icon: Flame, label: 'Aquecedor de Chips' },
