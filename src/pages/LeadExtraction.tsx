@@ -201,14 +201,8 @@ export default function LeadExtraction() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-          <div className="space-y-1.5">
-            <Label>De</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Até</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+          <DatePicker label="De" value={from} onChange={setFrom} />
+          <DatePicker label="Até" value={to} onChange={setTo} />
           <div className="space-y-1.5">
             <Label>País</Label>
             <Select value={country} onValueChange={(v) => { setCountry(v); setNiche('all'); }}>
