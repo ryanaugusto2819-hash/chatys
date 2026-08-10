@@ -9,8 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, Loader2, Users, Filter, RefreshCw } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Download, Loader2, Users, Filter, RefreshCw, CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 function onlyDigits(p: string) {
   return (p || '').replace(/\D/g, '');
@@ -25,6 +30,45 @@ function download(filename: string, content: string, type = 'text/csv;charset=ut
   a.click();
   URL.revokeObjectURL(url);
 }
+
+
+function DatePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const date = value ? parseISO(value) : undefined;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              'w-full justify-start text-left font-normal',
+              !value && 'text-muted-foreground',
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, 'dd/MM/yyyy', { locale: ptBR }) : <span>dd/mm/aaaa</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(d) => {
+              onChange(d ? format(d, 'yyyy-MM-dd') : '');
+              setOpen(false);
+            }}
+            initialFocus
+            className={cn('p-3 pointer-events-auto')}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 
 export default function LeadExtraction() {
   const [from, setFrom] = useState('');
@@ -157,14 +201,8 @@ export default function LeadExtraction() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-          <div className="space-y-1.5">
-            <Label>De</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Até</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+          <DatePicker label="De" value={from} onChange={setFrom} />
+          <DatePicker label="Até" value={to} onChange={setTo} />
           <div className="space-y-1.5">
             <Label>País</Label>
             <Select value={country} onValueChange={(v) => { setCountry(v); setNiche('all'); }}>
