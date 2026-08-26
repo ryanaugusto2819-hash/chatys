@@ -79,7 +79,11 @@ Deno.serve(async (req) => {
                 type: "input_audio",
                 input_audio: {
                   data: base64Audio,
-                  format: mimeType === "audio/mpeg" ? "mp3" : "wav",
+                  format:
+                    mimeType === "audio/mpeg" ? "mp3"
+                    : mimeType === "audio/wav" ? "wav"
+                    : mimeType === "audio/aac" ? "aac"
+                    : "ogg",
                 },
               },
             ],
