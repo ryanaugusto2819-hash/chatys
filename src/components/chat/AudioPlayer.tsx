@@ -93,8 +93,35 @@ export function AudioPlayer({ src, inverted, failed }: Props) {
     setSpeed(next);
   };
 
+  const handleTranscribe = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const audioUrl = resolved || src;
+      const { data, error: fnErr } = await supabase.functions.invoke("transcribe-audio", {
+        body: { audioUrl },
+      });
+      if (fnErr) throw fnErr;
+      const text: string = data?.transcription || "";
+      if (!text) throw new Error("Transcrição vazia");
+      setTranscript(text);
+
+      const { data: tData, error: tErr } = await supabase.functions.invoke("translate-message", {
+        body: { text, target: "pt-BR" },
+      });
+      if (tErr) throw tErr;
+      setTranslation(tData?.translation || null);
+    } catch (e: any) {
+      setError(e?.message || "Falha ao transcrever o áudio");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className={`mb-1.5 flex items-center gap-2 min-w-[220px] ${failed ? "opacity-50" : ""}`}>
+    <div className={`mb-1.5 min-w-[220px] ${failed ? "opacity-50" : ""}`}>
+    <div className="flex items-center gap-2">
       <audio
         ref={ref}
         controls
