@@ -55,6 +55,10 @@ async function getSignedUrl(bucket: string, path: string): Promise<string | null
 export function AudioPlayer({ src, inverted, failed }: Props) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const [speed, setSpeed] = useState<number>(1);
+  const [busy, setBusy] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const parsed = useMemo(() => parseStorageUrl(src), [src]);
   const needsSigned = !!(parsed && !PUBLIC_BUCKETS.has(parsed.bucket));
   const cachedInitial = needsSigned && parsed ? signedUrlCache.get(`${parsed.bucket}/${parsed.path}`)?.url : null;
@@ -89,8 +93,35 @@ export function AudioPlayer({ src, inverted, failed }: Props) {
     setSpeed(next);
   };
 
+  const handleTranscribe = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const audioUrl = resolved || src;
+      const { data, error: fnErr } = await supabase.functions.invoke("transcribe-audio", {
+        body: { audioUrl },
+      });
+      if (fnErr) throw fnErr;
+      const text: string = data?.transcription || "";
+      if (!text) throw new Error("Transcrição vazia");
+      setTranscript(text);
+
+      const { data: tData, error: tErr } = await supabase.functions.invoke("translate-message", {
+        body: { text, target: "pt-BR" },
+      });
+      if (tErr) throw tErr;
+      setTranslation(tData?.translation || null);
+    } catch (e: any) {
+      setError(e?.message || "Falha ao transcrever o áudio");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className={`mb-1.5 flex items-center gap-2 min-w-[220px] ${failed ? "opacity-50" : ""}`}>
+    <div className={`mb-1.5 min-w-[220px] ${failed ? "opacity-50" : ""}`}>
+    <div className="flex items-center gap-2">
       <audio
         ref={ref}
         controls
@@ -111,6 +142,33 @@ export function AudioPlayer({ src, inverted, failed }: Props) {
       >
         {speed}x
       </button>
+
+      <button
+        type="button"
+        onClick={handleTranscribe}
+        disabled={busy}
+        title="Transcrever e traduzir para português"
+        className="shrink-0 rounded-full bg-background/60 hover:bg-background border border-border text-foreground text-xs font-semibold px-2 py-1 disabled:opacity-50"
+      >
+        {busy ? "..." : "PT"}
+      </button>
+    </div>
+
+    {(transcript || error) && (
+      <div className="mt-1.5 rounded-lg border border-border bg-background/60 p-2 text-xs space-y-1 max-w-[320px]">
+        {error && <p className="text-destructive">{error}</p>}
+        {transcript && (
+          <p className="opacity-70 whitespace-pre-wrap break-words">
+            <span className="font-semibold">Transcrição:</span> {transcript}
+          </p>
+        )}
+        {translation && (
+          <p className="whitespace-pre-wrap break-words">
+            <span className="font-semibold">PT-BR:</span> {translation}
+          </p>
+        )}
+      </div>
+    )}
     </div>
   );
 }
