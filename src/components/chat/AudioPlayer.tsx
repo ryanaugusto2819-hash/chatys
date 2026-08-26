@@ -55,6 +55,10 @@ async function getSignedUrl(bucket: string, path: string): Promise<string | null
 export function AudioPlayer({ src, inverted, failed }: Props) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const [speed, setSpeed] = useState<number>(1);
+  const [busy, setBusy] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const parsed = useMemo(() => parseStorageUrl(src), [src]);
   const needsSigned = !!(parsed && !PUBLIC_BUCKETS.has(parsed.bucket));
   const cachedInitial = needsSigned && parsed ? signedUrlCache.get(`${parsed.bucket}/${parsed.path}`)?.url : null;
