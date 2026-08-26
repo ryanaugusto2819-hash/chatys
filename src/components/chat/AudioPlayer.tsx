@@ -142,6 +142,33 @@ export function AudioPlayer({ src, inverted, failed }: Props) {
       >
         {speed}x
       </button>
+
+      <button
+        type="button"
+        onClick={handleTranscribe}
+        disabled={busy}
+        title="Transcrever e traduzir para português"
+        className="shrink-0 rounded-full bg-background/60 hover:bg-background border border-border text-foreground text-xs font-semibold px-2 py-1 disabled:opacity-50"
+      >
+        {busy ? "..." : "PT"}
+      </button>
+    </div>
+
+    {(transcript || error) && (
+      <div className="mt-1.5 rounded-lg border border-border bg-background/60 p-2 text-xs space-y-1 max-w-[320px]">
+        {error && <p className="text-destructive">{error}</p>}
+        {transcript && (
+          <p className="opacity-70 whitespace-pre-wrap break-words">
+            <span className="font-semibold">Transcrição:</span> {transcript}
+          </p>
+        )}
+        {translation && (
+          <p className="whitespace-pre-wrap break-words">
+            <span className="font-semibold">PT-BR:</span> {translation}
+          </p>
+        )}
+      </div>
+    )}
     </div>
   );
 }
