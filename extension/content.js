@@ -18,12 +18,10 @@ async function waitFor(fn, timeout = 25000, interval = 400) {
 }
 
 async function openChat(phone) {
-  const target = digits(phone);
-  const current = new URL(location.href);
-  // A navegação é feita pelo background (senão a página recarrega e o canal fecha)
-  if (digits(current.searchParams.get("phone")) !== target) {
-    throw new Error("NAV_REQUIRED");
-  }
+  if (!digits(phone)) throw new Error("Número do contato inválido");
+  // A navegação é concluída pelo background. O WhatsApp remove o parâmetro
+  // `phone` da URL depois de abrir o chat, então a URL não pode ser usada
+  // para validar a conversa neste ponto.
   const composer = await waitFor(findComposer, 30000);
   if (!composer) throw new Error("Não foi possível abrir a conversa deste número");
   return composer;
@@ -33,6 +31,7 @@ function setText(el, text) {
   el.focus();
   document.execCommand("selectAll", false, null);
   document.execCommand("insertText", false, text);
+  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
 }
 
 function pressEnter(el) {
@@ -47,7 +46,11 @@ async function sendText(phone, text) {
   if (!text) throw new Error("Mensagem vazia");
   setText(composer, text);
   await sleep(250);
-  pressEnter(composer);
+  const sendBtn =
+    document.querySelector('button[aria-label*="Enviar"], button[aria-label*="Send"]') ||
+    document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
+  if (sendBtn) sendBtn.click();
+  else pressEnter(composer);
   await sleep(600);
   return { sentAt: new Date().toISOString() };
 }
@@ -127,3 +130,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     .catch((err) => sendResponse({ success: false, error: String(err.message || err) }));
   return true;
 });
+
+// Se a pessoa trocar a conversa manualmente, invalida o último número
+// lembrado para impedir que a próxima mensagem seja enviada ao contato errado.
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target instanceof Element && target.closest("#pane-side")) {
+    chrome.runtime.sendMessage({ type: "ACTIVE_CHAT_CHANGED" }).catch(() => {});
+  }
+}, true);
