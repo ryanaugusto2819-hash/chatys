@@ -1,3 +1,8 @@
+(function () {
+// Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
+if (globalThis.__chatysContentLoaded) return;
+globalThis.__chatysContentLoaded = true;
+
 // Executa comandos vindos do CRM dentro do WhatsApp Web
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const digits = (v) => String(v || "").replace(/\D/g, "");
@@ -148,7 +153,7 @@ async function typing(phone, durationMs) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PING") {
-    sendResponse({ ok: true, activePhone });
+    sendResponse({ ok: true, activePhone, composerReady: Boolean(findComposer()) });
     return false;
   }
   if (msg.type === "PREPARE_CHAT") {
@@ -215,3 +220,4 @@ document.addEventListener("click", (event) => {
     chrome.runtime.sendMessage({ type: "ACTIVE_CHAT_CHANGED" }).catch(() => {});
   }
 }, true);
+})();

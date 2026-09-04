@@ -59,14 +59,35 @@ async function prepareChat(tabId, phone) {
   if (!target) throw new Error("Número do contato inválido");
   const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" }).catch(() => null);
   if (onlyDigits(ping?.activePhone) === target) {
-    return true;
+    return { ready: true, explicitNavigationRequired: false };
   }
-  const response = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
-  if (response?.success) {
-    await rememberOpenedPhone(tabId, target);
-    return true;
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
+    if (response?.success) {
+      await rememberOpenedPhone(tabId, target);
+      return { ready: true, explicitNavigationRequired: false };
+    }
+    return {
+      ready: false,
+      explicitNavigationRequired: /NAV_REQUIRED/.test(response?.error || ""),
+    };
+  } catch (error) {
+    const message = String(error?.message || error);
+    // O WhatsApp pode fechar o canal ao trocar de conversa, embora a troca
+    // tenha sido concluída. Confirma o editor antes de considerar uma falha.
+    if (/message channel closed|receiving end does not exist|context invalidated/i.test(message)) {
+      await new Promise((r) => setTimeout(r, 1200));
+      await ensureContentScript(tabId);
+      const afterNavigation = await chrome.tabs
+        .sendMessage(tabId, { type: "PING" })
+        .catch(() => null);
+      if (afterNavigation?.composerReady) {
+        await rememberOpenedPhone(tabId, target);
+        return { ready: true, explicitNavigationRequired: false };
+      }
+    }
+    throw error;
   }
-  return false;
 }
 
 async function waitTabReady(tabId, timeout = 45000) {
@@ -119,10 +140,13 @@ async function runCommand(command) {
   const phone = command?.payload?.phone;
 
   await ensureContentScript(tab.id);
-  const prepared = await prepareChat(tab.id, phone).catch(() => false);
-  if (!prepared) {
+  const prepared = await prepareChat(tab.id, phone);
+  if (!prepared.ready && prepared.explicitNavigationRequired) {
     await openChatTab(tab.id, phone);
     await ensureContentScript(tab.id);
+  }
+  if (!prepared.ready && !prepared.explicitNavigationRequired) {
+    throw new Error("Não foi possível confirmar a conversa no WhatsApp Web");
   }
 
   let response;
