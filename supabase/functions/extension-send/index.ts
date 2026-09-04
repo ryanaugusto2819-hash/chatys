@@ -53,7 +53,10 @@ serve(async (req) => {
         .eq("id", conversation.connection_config_id)
         .maybeSingle();
       const cfg = (conn?.config || {}) as Record<string, string>;
+      // Conexão dedicada da extensão OU conexão normal (Evolution/Z-API/Meta)
+      // configurada para enviar pela extensão
       if (conn?.connection_id === "extension" && cfg.device_id) deviceId = cfg.device_id;
+      if (!deviceId && cfg.extension_device_id) deviceId = cfg.extension_device_id;
     }
 
     if (!deviceId) {

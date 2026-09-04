@@ -413,6 +413,46 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
               </div>
             ))}
 
+          {supportsExtensionSending && (
+            <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-card-foreground">Enviar pela extensão do Chrome</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    As mensagens continuam chegando por esta conexão, mas o envio é feito pelo WhatsApp Web da extensão.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={values.send_via_extension === '1'}
+                  onChange={e => setValues(prev => ({ ...prev, send_via_extension: e.target.checked ? '1' : '' }))}
+                  className="mt-1 h-4 w-4 accent-primary"
+                />
+              </div>
+              {values.send_via_extension === '1' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Computador que vai enviar</label>
+                  <select
+                    value={values.extension_device_id || ''}
+                    onChange={e => setValues(prev => ({ ...prev, extension_device_id: e.target.value }))}
+                    className="w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Selecione um computador</option>
+                    {devices.map(d => (
+                      <option key={d.id} value={d.id}>{d.name} ({d.status === 'online' ? 'online' : 'offline'})</option>
+                    ))}
+                  </select>
+                  {devices.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhum computador cadastrado. Cadastre em “Extensão WhatsApp”.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+
 
           {connection.connection_id === 'whatsapp' && (
             <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-2">
