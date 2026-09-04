@@ -42,16 +42,31 @@ const activeChatKey = (tabId) => `activeChat:${tabId}`;
 
 async function getLastOpenedPhone(tabId) {
   const key = activeChatKey(tabId);
-  const stored = await chrome.storage.session.get(key);
+  const stored = await chrome.storage.local.get(key);
   return onlyDigits(stored[key]);
 }
 
 async function rememberOpenedPhone(tabId, phone) {
-  await chrome.storage.session.set({ [activeChatKey(tabId)]: onlyDigits(phone) });
+  await chrome.storage.local.set({ [activeChatKey(tabId)]: onlyDigits(phone) });
 }
 
 async function forgetOpenedPhone(tabId) {
-  await chrome.storage.session.remove(activeChatKey(tabId));
+  await chrome.storage.local.remove(activeChatKey(tabId));
+}
+
+async function prepareChat(tabId, phone) {
+  const target = onlyDigits(phone);
+  if (!target) throw new Error("Número do contato inválido");
+  const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" }).catch(() => null);
+  if (onlyDigits(ping?.activePhone) === target) {
+    return true;
+  }
+  const response = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
+  if (response?.success) {
+    await rememberOpenedPhone(tabId, target);
+    return true;
+  }
+  return false;
 }
 
 async function waitTabReady(tabId, timeout = 45000) {
@@ -72,8 +87,7 @@ async function openChatTab(tabId, phone) {
   try {
     currentPhone = onlyDigits(new URL(tab.url).searchParams.get("phone"));
   } catch {}
-  const lastOpenedPhone = await getLastOpenedPhone(tabId);
-  if (currentPhone === target || lastOpenedPhone === target) return;
+  if (currentPhone === target) return;
   await chrome.tabs.update(tabId, {
     url: `https://web.whatsapp.com/send?phone=${target}&type=phone_number&app_absent=0`,
   });
@@ -104,8 +118,12 @@ async function runCommand(command) {
   if (!tab) throw new Error("WhatsApp Web não está aberto nesta máquina");
   const phone = command?.payload?.phone;
 
-  await openChatTab(tab.id, phone);
   await ensureContentScript(tab.id);
+  const prepared = await prepareChat(tab.id, phone).catch(() => false);
+  if (!prepared) {
+    await openChatTab(tab.id, phone);
+    await ensureContentScript(tab.id);
+  }
 
   let response;
   try {
