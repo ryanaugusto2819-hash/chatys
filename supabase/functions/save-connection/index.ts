@@ -319,6 +319,8 @@ Deno.serve(async (req) => {
       connectionConfig = validation.config as Record<string, string>;
       status = validation.status;
       diagnostics = validation.diagnostics;
+    } else if (connectionId === "extension") {
+      status = "active";
     }
 
     const { data, error: insertError } = await serviceClient

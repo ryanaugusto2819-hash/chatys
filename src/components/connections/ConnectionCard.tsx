@@ -9,6 +9,7 @@ import {
   EyeOff,
   Loader2,
   MessageSquare,
+  Puzzle,
   RefreshCw,
   RotateCw,
   Save,
@@ -92,6 +93,14 @@ const PROVIDER_CONFIG: Record<string, {
       { key: 'server_url', label: 'Server URL', placeholder: 'https://evolution.seudominio.com', sensitive: false },
       { key: 'instance_name', label: 'Instance Name', placeholder: 'teste03', sensitive: false },
       { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
+    ],
+  },
+  extension: {
+    name: 'Extensão Chrome (WhatsApp Web)',
+    color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    docsUrl: '#',
+    fields: [
+      { key: 'device_id', label: 'ID do Computador', placeholder: 'UUID do dispositivo', sensitive: false },
     ],
   },
 };
@@ -248,7 +257,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
       <div className="p-5">
         <div className="flex items-start gap-4">
           <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${provider.color}`}>
-            <MessageSquare className="h-5 w-5" />
+            {connection.connection_id === 'extension' ? <Puzzle className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
