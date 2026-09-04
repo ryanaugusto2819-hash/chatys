@@ -43,11 +43,16 @@ export async function sendWhatsAppMessage(
   if (conversationResult.data?.connection_config_id) {
     const { data: connConfig } = await supabase
       .from("connection_configs")
-      .select("connection_id")
+      .select("connection_id, config")
       .eq("id", conversationResult.data.connection_config_id)
       .single();
 
-    if (connConfig?.connection_id === "zapi") {
+    const cfg = (connConfig?.config || {}) as Record<string, string>;
+
+    if (cfg.send_via_extension === "1") {
+      // Recebe pela conexão original, mas envia pela extensão do Chrome
+      functionName = "extension-send";
+    } else if (connConfig?.connection_id === "zapi") {
       functionName = "zapi-send";
     } else if (connConfig?.connection_id === "evolution") {
       functionName = "evolution-send";
