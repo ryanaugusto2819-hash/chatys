@@ -26,10 +26,19 @@ async function getWhatsAppTab() {
 }
 
 async function ensureContentScript(tabId) {
+  let versionMismatch = false;
   try {
     const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" });
     if (ping?.version === EXTENSION_VERSION) return;
+    versionMismatch = Boolean(ping);
   } catch {}
+  // Um comunicador antigo não pode ser removido por reinjeção. Faz uma única
+  // atualização após trocar a versão para descarregar os listeners antigos.
+  if (versionMismatch) {
+    await chrome.tabs.reload(tabId);
+    await waitTabReady(tabId);
+    await new Promise((r) => setTimeout(r, 2500));
+  }
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
