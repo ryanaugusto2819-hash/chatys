@@ -708,9 +708,68 @@ Deno.serve(async (req) => {
       let waResult: Record<string, unknown> = {};
       let sendValidation: { success: boolean; errorDetail?: string };
       let providerAttempts = 1;
+      let messageSavedExternally = false;
 
       try {
-        if (useZapi) {
+        if (useExtension) {
+          // Roteia o envio para a extensão do Chrome (ela executa no WhatsApp Web)
+          let extText = "";
+          let extMedia: string | null = null;
+          let extType = "text";
+
+          if (node.node_type === "image" || node.node_type === "video") {
+            extType = node.node_type;
+            extMedia = (config.media_url as string) || null;
+            extText = replaceVariables((config.caption as string) || "");
+          } else if (node.node_type === "audio") {
+            extType = "audio";
+            extMedia = (config.media_url as string) || null;
+          } else if (node.node_type === "call_button") {
+            const content = replaceVariables((config.content as string) || "");
+            const callPhone = (config.call_phone as string) || "";
+            const callButtonText = (config.call_button_text as string) || "Ligar agora";
+            extText = `${content}\n\n📞 ${callButtonText}: ${callPhone}`;
+          } else {
+            const textBody = (waPayload as Record<string, unknown>).text as Record<string, unknown> | undefined;
+            const interactiveBody = (waPayload as Record<string, unknown>).interactive as Record<string, unknown> | undefined;
+            if (textBody) {
+              extText = (textBody.body as string) || "";
+            } else if (interactiveBody) {
+              const body = ((interactiveBody.body as Record<string, unknown>)?.text as string) || "";
+              const action = interactiveBody.action as Record<string, unknown>;
+              const buttons = (action?.buttons as Array<Record<string, unknown>>) || [];
+              const btnText = buttons
+                .map((b, i) => `${i + 1}. ${(b.reply as Record<string, unknown>)?.title || ""}`)
+                .join("\n");
+              extText = body + (btnText ? "\n\n" + btnText : "");
+            }
+          }
+
+          console.log(`[execute-flow] Sending via Chrome extension node ${node.id} (${node.node_type}) to ${phone}`);
+
+          const extResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extension-send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              conversationId,
+              message: extText,
+              mediaUrl: extMedia,
+              type: extType,
+              senderLabel: requestedLabel || "fluxo",
+            }),
+          });
+
+          waResult = await extResp.json().catch(() => ({}));
+          waResponse = new Response(JSON.stringify(waResult), { status: extResp.ok ? 200 : 502 });
+          sendValidation = {
+            success: extResp.ok,
+            errorDetail: extResp.ok ? undefined : ((waResult as Record<string, unknown>)?.error as string) || "Falha ao enviar comando para a extensão",
+          };
+          messageSavedExternally = extResp.ok && !!(waResult as Record<string, any>)?.savedMessage?.id;
+        } else if (useZapi) {
           let zapiEndpoint: string;
           let zapiBody: Record<string, unknown>;
           const zapiBase = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}`;
