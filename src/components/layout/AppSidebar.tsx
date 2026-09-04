@@ -25,6 +25,7 @@ import {
   Activity,
   Flame,
   UserSearch,
+  Chrome,
 } from 'lucide-react';
 
 
@@ -48,6 +49,7 @@ const adminItems = [
   { to: '/activity', icon: Activity, label: 'Atividade (IP)' },
   { to: '/manager-ai', icon: ShieldCheck, label: 'IA Gerente' },
   { to: '/warmup', icon: Flame, label: 'Aquecedor de Chips' },
+  { to: '/extension', icon: Chrome, label: 'Extensão WhatsApp' },
   { to: '/connections', icon: Plug, label: 'Conexões' },
   { to: '/users', icon: Users, label: 'Usuários' },
   { to: '/evolution-logs', icon: Radio, label: 'Logs Evolution' },

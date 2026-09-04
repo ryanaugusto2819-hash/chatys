@@ -1,0 +1,100 @@
+const DEFAULT_GATEWAY =
+  "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
+
+async function getConfig() {
+  const { gatewayUrl, token } = await chrome.storage.local.get(["gatewayUrl", "token"]);
+  return { gatewayUrl: gatewayUrl || DEFAULT_GATEWAY, token: token || "" };
+}
+
+async function callGateway(body) {
+  const { gatewayUrl, token } = await getConfig();
+  if (!token) throw new Error("Token não configurado");
+  const res = await fetch(gatewayUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-extension-token": token },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function getWhatsAppTab() {
+  const tabs = await chrome.tabs.query({ url: "https://web.whatsapp.com/*" });
+  return tabs[0] || null;
+}
+
+async function runCommand(command) {
+  const tab = await getWhatsAppTab();
+  if (!tab) throw new Error("WhatsApp Web não está aberto nesta máquina");
+  const response = await chrome.tabs.sendMessage(tab.id, { type: "EXECUTE", command });
+  if (!response) throw new Error("Sem resposta da aba do WhatsApp Web");
+  if (!response.success) throw new Error(response.error || "Falha ao executar");
+  return response;
+}
+
+let running = false;
+
+async function tick() {
+  if (running) return;
+  running = true;
+  try {
+    const data = await callGateway({ action: "poll" });
+    await chrome.storage.local.set({ lastPoll: Date.now(), lastError: "" });
+    for (const command of data.commands || []) {
+      try {
+        const result = await runCommand(command);
+        await callGateway({
+          action: "ack",
+          commandId: command.id,
+          success: true,
+          result: result.result || null,
+          providerMessageId: result.providerMessageId || null,
+        });
+      } catch (err) {
+        await callGateway({
+          action: "ack",
+          commandId: command.id,
+          success: false,
+          error: String(err.message || err),
+        });
+      }
+    }
+  } catch (err) {
+    await chrome.storage.local.set({ lastError: String(err.message || err) });
+  } finally {
+    running = false;
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create("poll", { periodInMinutes: 0.1 });
+});
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create("poll", { periodInMinutes: 0.1 });
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "poll") tick();
+});
+
+// Faster loop while the service worker is alive
+setInterval(tick, 3000);
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === "TEST_CONNECTION") {
+    callGateway({ action: "hello", phone: msg.phone || null })
+      .then((d) => sendResponse({ success: true, data: d }))
+      .catch((e) => sendResponse({ success: false, error: String(e.message || e) }));
+    return true;
+  }
+  if (msg.type === "INBOUND") {
+    callGateway({ action: "inbound", ...msg.payload })
+      .then((d) => sendResponse({ success: true, data: d }))
+      .catch((e) => sendResponse({ success: false, error: String(e.message || e) }));
+    return true;
+  }
+  if (msg.type === "POLL_NOW") {
+    tick().then(() => sendResponse({ success: true }));
+    return true;
+  }
+});

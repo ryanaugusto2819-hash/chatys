@@ -51,6 +51,8 @@ export async function sendWhatsAppMessage(
       functionName = "zapi-send";
     } else if (connConfig?.connection_id === "evolution") {
       functionName = "evolution-send";
+    } else if (connConfig?.connection_id === "extension") {
+      functionName = "extension-send";
     }
   } else {
     // No connection on conversation — fallback: check if any Z-API/Evolution is active

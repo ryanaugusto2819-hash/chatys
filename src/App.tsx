@@ -48,6 +48,7 @@ const AdsConversions = lazy(() => import("./pages/AdsConversions"));
 const ActivityReport = lazy(() => import("./pages/ActivityReport"));
 const Warmup = lazy(() => import("./pages/Warmup"));
 const LeadExtraction = lazy(() => import("./pages/LeadExtraction"));
+const ExtensionAgents = lazy(() => import("./pages/ExtensionAgents"));
 
 
 const queryClient = new QueryClient({
@@ -114,6 +115,7 @@ const App = () => (
                   <Route path="/manager-ai" element={<AdminRoute><ManagerAI /></AdminRoute>} />
                   <Route path="/warmup" element={<AdminRoute><Warmup /></AdminRoute>} />
                   <Route path="/leads" element={<AdminRoute><LeadExtraction /></AdminRoute>} />
+                  <Route path="/extension" element={<AdminRoute><ExtensionAgents /></AdminRoute>} />
 
                   <Route path="/connections" element={<AdminRoute><Connections /></AdminRoute>} />
                   <Route path="/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
