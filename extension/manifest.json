@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Chatys — Agente WhatsApp Web",
+  "version": "1.0.0",
+  "description": "Recebe comandos do CRM Chatys e executa no WhatsApp Web (enviar texto, mídia, marcar lido e digitando).",
+  "permissions": ["storage", "tabs", "scripting", "alarms"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://*.supabase.co/*",
+    "https://*.lovable.cloud/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Chatys" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
