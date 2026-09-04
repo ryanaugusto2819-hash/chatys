@@ -20,10 +20,9 @@ async function waitFor(fn, timeout = 25000, interval = 400) {
 async function openChat(phone) {
   const target = digits(phone);
   const current = new URL(location.href);
-  if (current.searchParams.get("phone") !== target) {
-    location.href = `https://web.whatsapp.com/send?phone=${target}&type=phone_number&app_absent=0`;
-    // A navegação recarrega a página; o comando será reexecutado no próximo poll
-    await sleep(1500);
+  // A navegação é feita pelo background (senão a página recarrega e o canal fecha)
+  if (digits(current.searchParams.get("phone")) !== target) {
+    throw new Error("NAV_REQUIRED");
   }
   const composer = await waitFor(findComposer, 30000);
   if (!composer) throw new Error("Não foi possível abrir a conversa deste número");
