@@ -1,7 +1,8 @@
 (function () {
+const CONTENT_VERSION = "1.0.6";
 // Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
-if (globalThis.__chatysContentLoaded) return;
-globalThis.__chatysContentLoaded = true;
+if (globalThis.__chatysContentVersion === CONTENT_VERSION) return;
+globalThis.__chatysContentVersion = CONTENT_VERSION;
 
 // Executa comandos vindos do CRM dentro do WhatsApp Web
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -162,7 +163,7 @@ async function typing(phone, durationMs) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PING") {
-    sendResponse({ ok: true, activePhone, composerReady: Boolean(findComposer()) });
+    sendResponse({ ok: true, version: CONTENT_VERSION, activePhone, composerReady: Boolean(findComposer()) });
     return false;
   }
   if (msg.type === "PREPARE_CHAT") {
