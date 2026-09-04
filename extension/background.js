@@ -24,10 +24,33 @@ async function getWhatsAppTab() {
   return tabs[0] || null;
 }
 
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "PING" });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 async function runCommand(command) {
   const tab = await getWhatsAppTab();
   if (!tab) throw new Error("WhatsApp Web não está aberto nesta máquina");
-  const response = await chrome.tabs.sendMessage(tab.id, { type: "EXECUTE", command });
+  await ensureContentScript(tab.id);
+  const response = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Tempo esgotado aguardando WhatsApp Web")), 30000);
+    chrome.tabs.sendMessage(tab.id, { type: "EXECUTE", command }, (resp) => {
+      clearTimeout(timeout);
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message || "Erro de comunicação com a aba"));
+        return;
+      }
+      resolve(resp);
+    });
+  });
   if (!response) throw new Error("Sem resposta da aba do WhatsApp Web");
   if (!response.success) throw new Error(response.error || "Falha ao executar");
   return response;

@@ -104,6 +104,10 @@ async function typing(phone, durationMs) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === "PING") {
+    sendResponse({ ok: true });
+    return false;
+  }
   if (msg.type !== "EXECUTE") return;
   const { type, payload } = msg.command;
   (async () => {

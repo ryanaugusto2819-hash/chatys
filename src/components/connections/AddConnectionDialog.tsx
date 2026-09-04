@@ -1,11 +1,17 @@
-import { useState } from 'react';
-import { MessageSquare, Plus, Loader2, Eye, EyeOff, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MessageSquare, Plus, Loader2, Eye, EyeOff, Zap, Puzzle } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import EmbeddedSignup from './EmbeddedSignup';
+
+interface ExtensionDeviceOption {
+  id: string;
+  name: string;
+  phone_number: string | null;
+}
 
 const PROVIDERS = [
   {
@@ -49,6 +55,14 @@ const PROVIDERS = [
     ],
     isEmbedded: false,
   },
+  {
+    id: 'extension',
+    name: 'Extensão Chrome (WhatsApp Web)',
+    description: 'Use a extensão instalada em um computador como número.',
+    fields: [],
+    isEmbedded: false,
+    isExtension: true,
+  },
 ];
 
 interface AddConnectionDialogProps {
@@ -64,6 +78,9 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
   const [values, setValues] = useState<Record<string, string>>({});
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [extensionDevices, setExtensionDevices] = useState<ExtensionDeviceOption[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [loadingDevices, setLoadingDevices] = useState(false);
 
   const reset = () => {
     setStep('select');
@@ -71,6 +88,7 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
     setLabel('');
     setValues({});
     setShowSecrets({});
+    setSelectedDeviceId('');
   };
 
   const handleSelectProvider = (p: typeof PROVIDERS[0]) => {
@@ -81,6 +99,26 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
       setStep('form');
     }
   };
+
+  useEffect(() => {
+    if (step !== 'form' || selectedProvider?.id !== 'extension') {
+      setExtensionDevices([]);
+      return;
+    }
+    setLoadingDevices(true);
+    supabase
+      .from('extension_devices')
+      .select('id, name, phone_number')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error('Erro ao carregar computadores da extensão.');
+        } else {
+          setExtensionDevices((data || []) as ExtensionDeviceOption[]);
+        }
+        setLoadingDevices(false);
+      });
+  }, [step, selectedProvider]);
 
   const handleCreate = async () => {
     if (!selectedProvider) return;
@@ -93,10 +131,17 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
       toast.error('Dê um nome para esta conexão.');
       return;
     }
+    if (selectedProvider.id === 'extension' && !selectedDeviceId) {
+      toast.error('Selecione um computador da extensão.');
+      return;
+    }
     setSaving(true);
     try {
+      const config = selectedProvider.id === 'extension'
+        ? { device_id: selectedDeviceId }
+        : values;
       const { data, error } = await supabase.functions.invoke('save-connection', {
-        body: { connectionId: selectedProvider.id, config: values, label: label.trim() },
+        body: { connectionId: selectedProvider.id, config, label: label.trim() },
       });
       if (error) throw error;
 
@@ -154,9 +199,13 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
                 className="flex items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-secondary/50 transition-colors active:scale-[0.98] relative"
               >
                 <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                  p.isEmbedded ? 'bg-[#1877F2]/10 text-[#1877F2]' : 'bg-primary/10 text-primary'
+                  p.isEmbedded ? 'bg-[#1877F2]/10 text-[#1877F2]' :
+                  p.id === 'extension' ? 'bg-purple-500/10 text-purple-600' :
+                  'bg-primary/10 text-primary'
                 }`}>
-                  {p.isEmbedded ? <Zap className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
+                  {p.isEmbedded ? <Zap className="h-5 w-5" /> :
+                   p.id === 'extension' ? <Puzzle className="h-5 w-5" /> :
+                   <MessageSquare className="h-5 w-5" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -195,6 +244,33 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
                 className="w-full rounded-xl border border-input bg-background py-2.5 px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            {selectedProvider.id === 'extension' && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Computador da extensão</label>
+                {loadingDevices ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2.5">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+                  </div>
+                ) : extensionDevices.length === 0 ? (
+                  <p className="text-sm text-destructive">
+                    Nenhum computador cadastrado. Crie um em "Extensão WhatsApp" primeiro.
+                  </p>
+                ) : (
+                  <select
+                    value={selectedDeviceId}
+                    onChange={e => setSelectedDeviceId(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background py-2.5 px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Selecione...</option>
+                    {extensionDevices.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}{d.phone_number ? ` — ${d.phone_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
             {selectedProvider.fields.map(field => (
               <div key={field.key} className="space-y-1.5">
                 <label className="text-sm font-medium">{field.label}</label>
