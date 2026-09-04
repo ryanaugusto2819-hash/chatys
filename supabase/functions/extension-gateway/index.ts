@@ -57,20 +57,23 @@ serve(async (req) => {
     }
 
     if (action === "poll") {
-      const { data: commands } = await supabase
+      const { data: commands, error: commandsError } = await supabase
         .from("extension_commands")
         .select("*")
         .eq("device_id", device.id)
-        .eq("status", "pending")
+        .in("status", ["pending", "delivered"])
         .order("created_at", { ascending: true })
-        .limit(10);
+        .limit(1);
+
+      if (commandsError) throw commandsError;
 
       const list = commands || [];
-      if (list.length > 0) {
+      const pendingIds = list.filter((c: any) => c.status === "pending").map((c: any) => c.id);
+      if (pendingIds.length > 0) {
         await supabase
           .from("extension_commands")
           .update({ status: "delivered", delivered_at: new Date().toISOString() })
-          .in("id", list.map((c: any) => c.id));
+          .in("id", pendingIds);
       }
 
       return json({

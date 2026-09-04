@@ -125,7 +125,7 @@ export default function ExtensionAgents() {
   };
 
   const downloadExtension = () => {
-    fetch(`/chatys-extension.zip?v=1.1.1-${Date.now()}`, { cache: 'no-store' })
+    fetch(`/chatys-extension.zip?v=2.0.0-${Date.now()}`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error(`Falha no download: ${res.status}`);
         return res.blob();
@@ -266,7 +266,7 @@ export default function ExtensionAgents() {
           <p>2. Abra chrome://extensions e ative o "Modo do desenvolvedor".</p>
           <p>3. Clique em "Carregar sem compactação" e selecione a pasta.</p>
           <p>4. Clique no ícone da extensão, cole a chave do computador e salve.</p>
-          <p>5. Deixe o WhatsApp Web aberto nessa máquina.</p>
+          <p>5. Recarregue o WhatsApp Web e confirme que aparece "Comunicador ativo: 2.0.0".</p>
         </div>
       </div>
     </div>
