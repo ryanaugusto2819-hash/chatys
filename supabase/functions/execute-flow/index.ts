@@ -1054,7 +1054,7 @@ Deno.serve(async (req) => {
         provider_message_id: providerMessageId,
         provider_status: providerMessageId ? (useEvolution ? "sent" : "accepted") : null,
         sender_label: requestedLabel || "fluxo",
-      });
+      })).error;
 
       if (messageInsertError) {
         console.error("[execute-flow] Message insert error:", messageInsertError);
