@@ -913,7 +913,9 @@ Deno.serve(async (req) => {
         console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, attempts: ${providerAttempts}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
 
         // Validate response body beyond just HTTP status
-        sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
+        if (!useExtension) {
+          sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
+        }
       } catch (error) {
         console.error("[execute-flow] Send exception for node", node.id, ":", error);
         waResponse = new Response(null, { status: 500 });
