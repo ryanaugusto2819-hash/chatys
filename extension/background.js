@@ -1,6 +1,6 @@
 const DEFAULT_GATEWAY =
   "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
-const EXTENSION_VERSION = "1.0.6";
+const EXTENSION_VERSION = "1.0.8";
 
 async function getConfig() {
   const { gatewayUrl, token } = await chrome.storage.local.get(["gatewayUrl", "token"]);
@@ -104,7 +104,7 @@ async function prepareChat(tabId, phone) {
     const message = String(error?.message || error);
     // O WhatsApp pode fechar o canal ao trocar de conversa, embora a troca
     // tenha sido concluída. Confirma o editor antes de considerar uma falha.
-    if (/message channel closed|receiving end does not exist|context invalidated/i.test(message)) {
+    if (/message channel closed|receiving end does not exist|context invalidated|asynchronous response/i.test(message)) {
       await new Promise((r) => setTimeout(r, 1200));
       await ensureContentScript(tabId);
       const afterNavigation = await chrome.tabs
@@ -114,6 +114,9 @@ async function prepareChat(tabId, phone) {
         await rememberOpenedPhone(tabId, target);
         return { ready: true, explicitNavigationRequired: false };
       }
+      // Navegar pelo background não mantém um canal de mensagem aberto e evita
+      // que o Chrome transforme a troca de conversa em falha do comando.
+      return { ready: false, explicitNavigationRequired: true };
     }
     throw error;
   }
@@ -258,8 +261,19 @@ async function tick() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   chrome.alarms.create("poll", { periodInMinutes: 0.1 });
+  if (details.reason === "update") {
+    const tabs = await chrome.tabs.query({ url: "https://web.whatsapp.com/*" });
+    await Promise.all(
+      tabs
+        .filter((tab) => typeof tab.id === "number")
+        .map(async (tab) => {
+          await forgetOpenedPhone(tab.id);
+          await chrome.tabs.reload(tab.id).catch(() => {});
+        }),
+    );
+  }
 });
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create("poll", { periodInMinutes: 0.1 });
@@ -297,9 +311,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type === "ACTIVE_CHAT_CHANGED" && _sender.tab?.id) {
-    forgetOpenedPhone(_sender.tab.id)
-      .then(() => sendResponse({ success: true }))
-      .catch((e) => sendResponse({ success: false, error: String(e.message || e) }));
-    return true;
+    // O WhatsApp pode trocar o contexto da página logo após este clique.
+    // Responda antes da troca e limpe o estado sem manter o canal aberto.
+    forgetOpenedPhone(_sender.tab.id).catch(() => {});
+    sendResponse({ success: true });
+    return false;
   }
 });

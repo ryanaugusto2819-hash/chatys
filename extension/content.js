@@ -1,5 +1,5 @@
 (function () {
-const CONTENT_VERSION = "1.0.6";
+const CONTENT_VERSION = "1.0.8";
 // Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
 if (globalThis.__chatysContentVersion === CONTENT_VERSION) return;
 globalThis.__chatysContentVersion = CONTENT_VERSION;
