@@ -973,7 +973,8 @@ Deno.serve(async (req) => {
         }).slice(0, 800);
 
         // Insert message with status 'failed' so it appears in chat with error indicator
-        await supabase.from("messages").insert({
+        // (skipped when the extension route already saved the message)
+        if (!messageSavedExternally) await supabase.from("messages").insert({
           conversation_id: conversationId,
           content: failedContent || `[${failedType}]`,
           sender_type: "agent",
@@ -1042,7 +1043,8 @@ Deno.serve(async (req) => {
           : qrContent;
       }
 
-      const { error: messageInsertError } = await supabase.from("messages").insert({
+      // A extensão já salva a mensagem como "pending/queued" — não duplicar
+      const messageInsertError = messageSavedExternally ? null : (await supabase.from("messages").insert({
         conversation_id: conversationId,
         content: msgContent,
         sender_type: "agent",
