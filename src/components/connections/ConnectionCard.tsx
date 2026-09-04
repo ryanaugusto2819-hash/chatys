@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ZApiQrCodePanel from './ZApiQrCodePanel';
 import {
   AlertCircle,
@@ -126,6 +126,22 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [checking, setChecking] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [devices, setDevices] = useState<{ id: string; name: string; status: string }[]>([]);
+
+  const supportsExtensionSending = ['evolution', 'zapi', 'whatsapp'].includes(connection.connection_id);
+
+  useEffect(() => {
+    if (!expanded || !supportsExtensionSending) return;
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from('extension_devices')
+        .select('id, name, status')
+        .order('created_at', { ascending: true });
+      if (active) setDevices(data || []);
+    })();
+    return () => { active = false; };
+  }, [expanded, supportsExtensionSending]);
 
   const handleRestartEvolution = async () => {
     const instanceName = connection.config?.instance_name;
