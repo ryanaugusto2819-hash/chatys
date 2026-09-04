@@ -4,6 +4,9 @@ chrome.storage.local.get(["token", "gatewayUrl", "lastPoll", "lastError"], (s) =
   $("token").value = s.token || "";
   $("gateway").value = s.gatewayUrl || "";
   render(s);
+  chrome.runtime.sendMessage({ type: "GET_VERSION" }, (response) => {
+    if (response?.version) $("version").textContent = `Versão ${response.version}`;
+  });
 });
 
 function render(s) {

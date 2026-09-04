@@ -1,5 +1,6 @@
 const DEFAULT_GATEWAY =
   "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
+const EXTENSION_VERSION = "1.0.6";
 
 async function getConfig() {
   const { gatewayUrl, token } = await chrome.storage.local.get(["gatewayUrl", "token"]);
@@ -26,13 +27,21 @@ async function getWhatsAppTab() {
 
 async function ensureContentScript(tabId) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: "PING" });
-  } catch {
+    const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    if (ping?.version === EXTENSION_VERSION) return;
+  } catch {}
+  try {
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content.js"],
     });
     await new Promise((r) => setTimeout(r, 1000));
+    const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    if (ping?.version !== EXTENSION_VERSION) {
+      throw new Error("A aba do WhatsApp ainda está usando uma versão antiga da extensão");
+    }
+  } catch (error) {
+    throw new Error(String(error?.message || error));
   }
 }
 
@@ -258,6 +267,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 setInterval(tick, 3000);
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === "GET_VERSION") {
+    sendResponse({ version: EXTENSION_VERSION });
+    return false;
+  }
   if (msg.type === "TEST_CONNECTION") {
     callGateway({ action: "hello", phone: msg.phone || null })
       .then((d) => sendResponse({ success: true, data: d }))

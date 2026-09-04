@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <style>
       body { width: 300px; font-family: system-ui, sans-serif; background:#0a0a0a; color:#fff; padding:14px; }
-      h1 { font-size: 15px; margin: 0 0 12px; }
+      h1 { font-size: 15px; margin: 0; }
+      #version { font-size: 11px; color:#888; margin: 3px 0 12px; }
       label { font-size: 12px; display:block; margin-bottom:4px; color:#bbb; }
       input { width:100%; box-sizing:border-box; padding:8px; border-radius:8px; border:1px solid #333; background:#141414; color:#fff; margin-bottom:10px; font-size:12px; }
       button { width:100%; padding:9px; border:0; border-radius:8px; background:#800080; color:#fff; font-weight:600; cursor:pointer; }
@@ -13,6 +14,7 @@
   </head>
   <body>
     <h1>Chatys — Agente WhatsApp</h1>
+    <div id="version">Versão</div>
     <label>Chave de acesso (token)</label>
     <input id="token" placeholder="cole a chave gerada no CRM" />
     <label>Endereço do CRM (opcional)</label>
