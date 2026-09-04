@@ -58,6 +58,25 @@ Deno.serve(async (req) => {
         .eq("id", conversation.connection_config_id)
         .single();
 
+      const cfgEarly = (connConfig?.config as Record<string, unknown>) || {};
+      if (cfgEarly.send_via_extension === "1") {
+        // Conexão configurada para enviar pela extensão do Chrome: delega o envio
+        console.log("[zapi-send] send_via_extension ativo — delegando para extension-send");
+        const extRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extension-send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ conversationId, message, mediaUrl, type, senderAgentId, senderLabel }),
+        });
+        const extText = await extRes.text();
+        return new Response(extText, {
+          status: extRes.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       if (connConfig?.connection_id === "zapi") {
         const cfg = connConfig.config as Record<string, unknown>;
         instanceId = (cfg?.instance_id as string) || null;

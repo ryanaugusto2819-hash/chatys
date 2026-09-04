@@ -134,6 +134,24 @@ Deno.serve(async (req) => {
         .select("connection_id, config")
         .eq("id", conv.connection_config_id)
         .single();
+      const cfgEarly = (cc?.config as any) || {};
+      if (cfgEarly.send_via_extension === "1") {
+        // Conexão configurada para enviar pela extensão do Chrome: delega o envio
+        console.log("[evolution-send] send_via_extension ativo — delegando para extension-send");
+        const extRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extension-send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ conversationId, message, mediaUrl, type, senderAgentId, senderLabel }),
+        });
+        const extText = await extRes.text();
+        return new Response(extText, {
+          status: extRes.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (cc?.connection_id === "evolution") {
         const cfg = (cc.config as any) || {};
         serverUrl = cleanUrl(cfg.server_url);
@@ -175,7 +193,7 @@ Deno.serve(async (req) => {
     let endpoint = `${serverUrl}/message/sendText/${encodeURIComponent(instanceName)}`;
     let body: Record<string, unknown> = { number: phone, text: message };
 
-    const downloadableMediaUrl = await ensureDownloadableMediaUrl(supabase, mediaUrl);
+    const downloadableMediaUrl = await ensureDownloadableMediaUrl(supabase as any, mediaUrl);
 
     if (downloadableMediaUrl) {
       endpoint = `${serverUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`;

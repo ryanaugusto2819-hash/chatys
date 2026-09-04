@@ -546,6 +546,26 @@ Gere a mensagem de follow-up:`,
           }
         }
 
+        // Se a conexão da conversa está configurada para enviar pela extensão do Chrome, prioriza a extensão
+        {
+          const { data: convConn } = await supabase
+            .from("conversations")
+            .select("connection_config_id")
+            .eq("id", conv.id)
+            .maybeSingle();
+          if (convConn?.connection_config_id) {
+            const { data: cc } = await supabase
+              .from("connection_configs")
+              .select("connection_id, config")
+              .eq("id", convConn.connection_config_id)
+              .maybeSingle();
+            const cfg = (cc?.config as Record<string, unknown>) || {};
+            if (cfg.send_via_extension === "1" || cc?.connection_id === "extension") {
+              sendFunction = "extension-send";
+            }
+          }
+        }
+
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 

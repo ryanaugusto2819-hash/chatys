@@ -365,6 +365,9 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Conexão configurada para enviar pela extensão do Chrome?
+    const useExtension = ((resolvedConnection as Record<string, unknown> | null)?.send_via_extension as string) === "1";
+
     const zapiInstanceId = useZapi
       ? (resolvedConnection?.instance_id as string) || Deno.env.get("ZAPI_INSTANCE_ID")
       : null;
@@ -390,15 +393,15 @@ Deno.serve(async (req) => {
       ? (resolvedConnection?.access_token as string) || Deno.env.get("WHATSAPP_ACCESS_TOKEN")
       : null;
 
-    if (useZapi && (!zapiInstanceId || !zapiToken)) {
+    if (!useExtension && useZapi && (!zapiInstanceId || !zapiToken)) {
       return createJsonResponse({ error: "Z-API not configured" }, 500);
     }
 
-    if (useEvolution && (!evoServerUrl || !evoInstanceName || !evoApiKey)) {
+    if (!useExtension && useEvolution && (!evoServerUrl || !evoInstanceName || !evoApiKey)) {
       return createJsonResponse({ error: "Evolution not configured" }, 500);
     }
 
-    if (!useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
+    if (!useExtension && !useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
       return createJsonResponse({ error: "WhatsApp not configured" }, 500);
     }
 
@@ -703,11 +706,70 @@ Deno.serve(async (req) => {
 
       let waResponse: Response;
       let waResult: Record<string, unknown> = {};
-      let sendValidation: { success: boolean; errorDetail?: string };
+      let sendValidation: { success: boolean; errorDetail?: string } = { success: false };
       let providerAttempts = 1;
+      let messageSavedExternally = false;
 
       try {
-        if (useZapi) {
+        if (useExtension) {
+          // Roteia o envio para a extensão do Chrome (ela executa no WhatsApp Web)
+          let extText = "";
+          let extMedia: string | null = null;
+          let extType = "text";
+
+          if (node.node_type === "image" || node.node_type === "video") {
+            extType = node.node_type;
+            extMedia = (config.media_url as string) || null;
+            extText = replaceVariables((config.caption as string) || "");
+          } else if (node.node_type === "audio") {
+            extType = "audio";
+            extMedia = (config.media_url as string) || null;
+          } else if (node.node_type === "call_button") {
+            const content = replaceVariables((config.content as string) || "");
+            const callPhone = (config.call_phone as string) || "";
+            const callButtonText = (config.call_button_text as string) || "Ligar agora";
+            extText = `${content}\n\n📞 ${callButtonText}: ${callPhone}`;
+          } else {
+            const textBody = (waPayload as Record<string, unknown>).text as Record<string, unknown> | undefined;
+            const interactiveBody = (waPayload as Record<string, unknown>).interactive as Record<string, unknown> | undefined;
+            if (textBody) {
+              extText = (textBody.body as string) || "";
+            } else if (interactiveBody) {
+              const body = ((interactiveBody.body as Record<string, unknown>)?.text as string) || "";
+              const action = interactiveBody.action as Record<string, unknown>;
+              const buttons = (action?.buttons as Array<Record<string, unknown>>) || [];
+              const btnText = buttons
+                .map((b, i) => `${i + 1}. ${(b.reply as Record<string, unknown>)?.title || ""}`)
+                .join("\n");
+              extText = body + (btnText ? "\n\n" + btnText : "");
+            }
+          }
+
+          console.log(`[execute-flow] Sending via Chrome extension node ${node.id} (${node.node_type}) to ${phone}`);
+
+          const extResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extension-send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              conversationId,
+              message: extText,
+              mediaUrl: extMedia,
+              type: extType,
+              senderLabel: requestedLabel || "fluxo",
+            }),
+          });
+
+          waResult = await extResp.json().catch(() => ({}));
+          waResponse = new Response(JSON.stringify(waResult), { status: extResp.ok ? 200 : 502 });
+          sendValidation = {
+            success: extResp.ok,
+            errorDetail: extResp.ok ? undefined : ((waResult as Record<string, unknown>)?.error as string) || "Falha ao enviar comando para a extensão",
+          };
+          messageSavedExternally = extResp.ok && !!(waResult as Record<string, any>)?.savedMessage?.id;
+        } else if (useZapi) {
           let zapiEndpoint: string;
           let zapiBody: Record<string, unknown>;
           const zapiBase = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}`;
@@ -851,7 +913,9 @@ Deno.serve(async (req) => {
         console.log(`[execute-flow] API response node ${node.id}: HTTP ${waResponse.status}, attempts: ${providerAttempts}, body: ${JSON.stringify(waResult).slice(0, 400)}`);
 
         // Validate response body beyond just HTTP status
-        sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
+        if (!useExtension) {
+          sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
+        }
       } catch (error) {
         console.error("[execute-flow] Send exception for node", node.id, ":", error);
         waResponse = new Response(null, { status: 500 });
@@ -909,7 +973,8 @@ Deno.serve(async (req) => {
         }).slice(0, 800);
 
         // Insert message with status 'failed' so it appears in chat with error indicator
-        await supabase.from("messages").insert({
+        // (skipped when the extension route already saved the message)
+        if (!messageSavedExternally) await supabase.from("messages").insert({
           conversation_id: conversationId,
           content: failedContent || `[${failedType}]`,
           sender_type: "agent",
@@ -978,7 +1043,8 @@ Deno.serve(async (req) => {
           : qrContent;
       }
 
-      const { error: messageInsertError } = await supabase.from("messages").insert({
+      // A extensão já salva a mensagem como "pending/queued" — não duplicar
+      const messageInsertError = messageSavedExternally ? null : (await supabase.from("messages").insert({
         conversation_id: conversationId,
         content: msgContent,
         sender_type: "agent",
@@ -988,7 +1054,7 @@ Deno.serve(async (req) => {
         provider_message_id: providerMessageId,
         provider_status: providerMessageId ? (useEvolution ? "sent" : "accepted") : null,
         sender_label: requestedLabel || "fluxo",
-      });
+      })).error;
 
       if (messageInsertError) {
         console.error("[execute-flow] Message insert error:", messageInsertError);
