@@ -1,6 +1,6 @@
 const DEFAULT_GATEWAY =
   "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
-const EXTENSION_VERSION = "1.1.0";
+const EXTENSION_VERSION = "1.1.1";
 const whatsappPorts = new Map();
 const pendingPortRequests = new Map();
 

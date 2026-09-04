@@ -1,5 +1,5 @@
 (function () {
-const CONTENT_VERSION = "1.1.0";
+const CONTENT_VERSION = "1.1.1";
 // Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
 if (globalThis.__chatysContentVersion === CONTENT_VERSION) return;
 globalThis.__chatysContentVersion = CONTENT_VERSION;
@@ -225,82 +225,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PREPARE_STATUS") {
     sendResponse(prepareState);
     return false;
-  }
-  if (msg.type !== "EXECUTE") return;
-  const { type, payload, id } = msg.command;
-  const dedupeKey = id ? `chatys_cmd_${id}` : null;
-  if (!dedupeKey) {
-    sendResponse({ accepted: false, error: "Comando sem identificador" });
-    return false;
-  }
-
-  try {
-    const previous = JSON.parse(localStorage.getItem(dedupeKey) || "null");
-    if (previous?.status === "running" || previous?.status === "success") {
-      sendResponse({ accepted: true, status: previous.status });
-      return false;
-    }
-    // Marcadores das versões anteriores significam que a ação já começou.
-    // Não execute novamente, pois ela pode já ter sido enviada ao WhatsApp.
-    if (previous?.dedupe) {
-      localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result: { dedupe: true } }));
-      sendResponse({ accepted: true, status: "success" });
-      return false;
-    }
-    localStorage.setItem(dedupeKey, JSON.stringify({ status: "running", startedAt: Date.now() }));
-  } catch {
-    sendResponse({ accepted: false, error: "Não foi possível registrar o comando" });
-    return false;
-  }
-
-  (async () => {
-    let result;
-    switch (type) {
-      case "send_text":
-        result = await sendText(payload.phone, payload.text, dedupeKey);
-        break;
-      case "send_media":
-        result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType, dedupeKey);
-        break;
-      case "mark_read":
-        result = await markRead(payload.phone);
-        break;
-      case "typing":
-        result = await typing(payload.phone, payload.durationMs);
-        break;
-      default:
-        throw new Error(`Comando desconhecido: ${type}`);
-    }
-    localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result: result || {} }));
-    return result;
-  })()
-    .catch((err) => {
-      try {
-        const current = JSON.parse(localStorage.getItem(dedupeKey) || "null");
-        if (current?.status !== "success") {
-          localStorage.setItem(
-            dedupeKey,
-            JSON.stringify({ status: "failed", error: String(err.message || err) }),
-          );
-        }
-      } catch {}
-    });
-  sendResponse({ accepted: true, status: "running" });
-  return false;
-});
-
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type !== "COMMAND_STATUS") return;
-  const id = msg.commandId;
-  if (!id) {
-    sendResponse({ status: "failed", error: "Comando sem identificador" });
-    return false;
-  }
-  try {
-    const state = JSON.parse(localStorage.getItem(`chatys_cmd_${id}`) || "null");
-    sendResponse(state || { status: "missing" });
-  } catch {
-    sendResponse({ status: "failed", error: "Não foi possível consultar o comando" });
   }
   return false;
 });
