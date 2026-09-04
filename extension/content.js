@@ -1,6 +1,7 @@
 // Executa comandos vindos do CRM dentro do WhatsApp Web
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const digits = (v) => String(v || "").replace(/\D/g, "");
+let activePhone = "";
 
 function findComposer() {
   const boxes = document.querySelectorAll('div[contenteditable="true"][data-tab]');
@@ -25,6 +26,46 @@ async function openChat(phone) {
   const composer = await waitFor(findComposer, 30000);
   if (!composer) throw new Error("Não foi possível abrir a conversa deste número");
   return composer;
+}
+
+function findChatSearch() {
+  const selectors = [
+    '#side div[contenteditable="true"][role="textbox"]',
+    'div[contenteditable="true"][data-tab="3"]',
+    'div[contenteditable="true"][aria-label*="Pesquisar"]',
+    'div[contenteditable="true"][aria-label*="Search"]',
+  ];
+  return selectors.map((selector) => document.querySelector(selector)).find(Boolean) || null;
+}
+
+async function selectChatWithoutReload(phone) {
+  const target = digits(phone);
+  if (!target) throw new Error("Número do contato inválido");
+  if (activePhone === target && findComposer()) return { ready: true, alreadyOpen: true };
+
+  const search = await waitFor(findChatSearch, 8000);
+  if (!search) return { ready: false, error: "NAV_REQUIRED" };
+
+  setText(search, target);
+  const result = await waitFor(() => {
+    const rows = [...document.querySelectorAll('#pane-side [role="row"], #pane-side [role="listitem"]')];
+    return rows.find((row) => {
+      const rowDigits = digits(row.textContent);
+      return rowDigits.includes(target) || rowDigits.endsWith(target.slice(-9));
+    }) || (rows.length === 1 ? rows[0] : null);
+  }, 12000);
+
+  if (!result) {
+    setText(search, "");
+    return { ready: false, error: "NAV_REQUIRED" };
+  }
+
+  result.click();
+  const composer = await waitFor(findComposer, 15000);
+  setText(search, "");
+  if (!composer) return { ready: false, error: "NAV_REQUIRED" };
+  activePhone = target;
+  return { ready: true, alreadyOpen: false };
 }
 
 function setText(el, text) {
@@ -107,8 +148,14 @@ async function typing(phone, durationMs) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PING") {
-    sendResponse({ ok: true });
+    sendResponse({ ok: true, activePhone });
     return false;
+  }
+  if (msg.type === "PREPARE_CHAT") {
+    selectChatWithoutReload(msg.phone)
+      .then((result) => sendResponse({ success: result.ready, ...result }))
+      .catch((err) => sendResponse({ success: false, error: String(err.message || err) }));
+    return true;
   }
   if (msg.type !== "EXECUTE") return;
   const { type, payload } = msg.command;
@@ -136,6 +183,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (target instanceof Element && target.closest("#pane-side")) {
+    activePhone = "";
     chrome.runtime.sendMessage({ type: "ACTIVE_CHAT_CHANGED" }).catch(() => {});
   }
 }, true);
