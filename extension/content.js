@@ -88,7 +88,13 @@ function pressEnter(el) {
   el.dispatchEvent(new KeyboardEvent("keyup", opts));
 }
 
-async function sendText(phone, text) {
+function markCommandSent(dedupeKey) {
+  const result = { sentAt: new Date().toISOString() };
+  localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result }));
+  return result;
+}
+
+async function sendText(phone, text, dedupeKey) {
   const composer = await openChat(phone);
   if (!text) throw new Error("Mensagem vazia");
   setText(composer, text);
@@ -98,11 +104,12 @@ async function sendText(phone, text) {
     document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
   if (sendBtn) sendBtn.click();
   else pressEnter(composer);
+  const result = markCommandSent(dedupeKey);
   await sleep(600);
-  return { sentAt: new Date().toISOString() };
+  return result;
 }
 
-async function sendMedia(phone, mediaUrl, caption, mediaType) {
+async function sendMedia(phone, mediaUrl, caption, mediaType, dedupeKey) {
   const composer = await openChat(phone);
   const res = await fetch(mediaUrl);
   if (!res.ok) throw new Error(`Não consegui baixar o arquivo (${res.status})`);
@@ -132,8 +139,9 @@ async function sendMedia(phone, mediaUrl, caption, mediaType) {
     document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
   if (sendBtn) sendBtn.click();
   else pressEnter(previewBox);
+  const result = markCommandSent(dedupeKey);
   await sleep(1500);
-  return { sentAt: new Date().toISOString() };
+  return result;
 }
 
 async function markRead(phone) {
@@ -211,10 +219,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     let result;
     switch (type) {
       case "send_text":
-        result = await sendText(payload.phone, payload.text);
+        result = await sendText(payload.phone, payload.text, dedupeKey);
         break;
       case "send_media":
-        result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType);
+        result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType, dedupeKey);
         break;
       case "mark_read":
         result = await markRead(payload.phone);
@@ -230,10 +238,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   })()
     .catch((err) => {
       try {
-        localStorage.setItem(
-          dedupeKey,
-          JSON.stringify({ status: "failed", error: String(err.message || err) }),
-        );
+        const current = JSON.parse(localStorage.getItem(dedupeKey) || "null");
+        if (current?.status !== "success") {
+          localStorage.setItem(
+            dedupeKey,
+            JSON.stringify({ status: "failed", error: String(err.message || err) }),
+          );
+        }
       } catch {}
     });
   sendResponse({ accepted: true, status: "running" });
