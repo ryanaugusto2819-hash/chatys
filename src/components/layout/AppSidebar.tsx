@@ -25,6 +25,7 @@ import {
   Activity,
   Flame,
   UserSearch,
+  Chrome,
 } from 'lucide-react';
 
 
