@@ -58,8 +58,7 @@ async function prepareChat(tabId, phone) {
   const target = onlyDigits(phone);
   if (!target) throw new Error("Número do contato inválido");
   const ping = await chrome.tabs.sendMessage(tabId, { type: "PING" }).catch(() => null);
-  const remembered = await getLastOpenedPhone(tabId);
-  if (onlyDigits(ping?.activePhone) === target || (remembered === target && ping?.ok)) {
+  if (onlyDigits(ping?.activePhone) === target) {
     return true;
   }
   const response = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
@@ -88,8 +87,7 @@ async function openChatTab(tabId, phone) {
   try {
     currentPhone = onlyDigits(new URL(tab.url).searchParams.get("phone"));
   } catch {}
-  const lastOpenedPhone = await getLastOpenedPhone(tabId);
-  if (currentPhone === target || lastOpenedPhone === target) return;
+  if (currentPhone === target) return;
   await chrome.tabs.update(tabId, {
     url: `https://web.whatsapp.com/send?phone=${target}&type=phone_number&app_absent=0`,
   });
