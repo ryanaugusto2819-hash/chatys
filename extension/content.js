@@ -158,25 +158,53 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type !== "EXECUTE") return;
-  const { type, payload } = msg.command;
+  const { type, payload, id } = msg.command;
+  const dedupeKey = id ? `chatys_cmd_${id}` : null;
   (async () => {
+    // Evita reenvio quando o canal cai (reload) e o background tenta de novo
+    if (dedupeKey) {
+      try {
+        const prev = localStorage.getItem(dedupeKey);
+        if (prev) return JSON.parse(prev);
+        localStorage.setItem(dedupeKey, JSON.stringify({ dedupe: true }));
+      } catch {}
+    }
+    let result;
     switch (type) {
       case "send_text":
-        return sendText(payload.phone, payload.text);
+        result = await sendText(payload.phone, payload.text);
+        break;
       case "send_media":
-        return sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType);
+        result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType);
+        break;
       case "mark_read":
-        return markRead(payload.phone);
+        result = await markRead(payload.phone);
+        break;
       case "typing":
-        return typing(payload.phone, payload.durationMs);
+        result = await typing(payload.phone, payload.durationMs);
+        break;
       default:
         throw new Error(`Comando desconhecido: ${type}`);
     }
+    if (dedupeKey) {
+      try {
+        localStorage.setItem(dedupeKey, JSON.stringify(result || {}));
+      } catch {}
+    }
+    return result;
   })()
     .then((result) => sendResponse({ success: true, result }))
-    .catch((err) => sendResponse({ success: false, error: String(err.message || err) }));
+    .catch((err) => {
+      if (dedupeKey) {
+        try {
+          localStorage.removeItem(dedupeKey);
+        } catch {}
+      }
+      sendResponse({ success: false, error: String(err.message || err) });
+    });
   return true;
 });
+
 
 // Se a pessoa trocar a conversa manualmente, invalida o último número
 // lembrado para impedir que a próxima mensagem seja enviada ao contato errado.
