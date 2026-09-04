@@ -258,10 +258,17 @@ Deno.serve(async (req) => {
       if (conv.connection_config_id) {
         const { data: connConfig } = await supabase
           .from("connection_configs")
-          .select("connection_id")
+          .select("connection_id, config")
           .eq("id", conv.connection_config_id)
           .single();
-        if (connConfig?.connection_id === "zapi") functionName = "zapi-send";
+        const cfg = (connConfig?.config as Record<string, unknown>) || {};
+        if (cfg.send_via_extension === "1" || connConfig?.connection_id === "extension") {
+          functionName = "extension-send";
+        } else if (connConfig?.connection_id === "zapi") {
+          functionName = "zapi-send";
+        } else if (connConfig?.connection_id === "evolution") {
+          functionName = "evolution-send";
+        }
       }
 
       const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/${functionName}`;
