@@ -706,7 +706,7 @@ Deno.serve(async (req) => {
 
       let waResponse: Response;
       let waResult: Record<string, unknown> = {};
-      let sendValidation: { success: boolean; errorDetail?: string };
+      let sendValidation: { success: boolean; errorDetail?: string } = { success: false };
       let providerAttempts = 1;
       let messageSavedExternally = false;
 

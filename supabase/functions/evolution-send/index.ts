@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
     let endpoint = `${serverUrl}/message/sendText/${encodeURIComponent(instanceName)}`;
     let body: Record<string, unknown> = { number: phone, text: message };
 
-    const downloadableMediaUrl = await ensureDownloadableMediaUrl(supabase, mediaUrl);
+    const downloadableMediaUrl = await ensureDownloadableMediaUrl(supabase as any, mediaUrl);
 
     if (downloadableMediaUrl) {
       endpoint = `${serverUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`;
