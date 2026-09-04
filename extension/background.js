@@ -1,6 +1,8 @@
 const DEFAULT_GATEWAY =
   "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
-const EXTENSION_VERSION = "1.0.8";
+const EXTENSION_VERSION = "1.1.0";
+const whatsappPorts = new Map();
+const pendingPortRequests = new Map();
 
 async function getConfig() {
   const { gatewayUrl, token } = await chrome.storage.local.get(["gatewayUrl", "token"]);
@@ -149,6 +151,35 @@ async function openChatTab(tabId, phone) {
   await new Promise((r) => setTimeout(r, 4000));
 }
 
+async function waitForWhatsAppPort(tabId, timeout = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const port = whatsappPorts.get(tabId);
+    if (port) return port;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("A extensão não conseguiu conectar à aba do WhatsApp Web");
+}
+
+async function executeThroughPort(tabId, command) {
+  const port = await waitForWhatsAppPort(tabId);
+  const requestId = crypto.randomUUID();
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingPortRequests.delete(requestId);
+      reject(new Error("Tempo esgotado aguardando o envio no WhatsApp Web"));
+    }, 60000);
+    pendingPortRequests.set(requestId, { tabId, resolve, reject, timeout });
+    try {
+      port.postMessage({ type: "EXECUTE_PORT", requestId, command });
+    } catch (error) {
+      clearTimeout(timeout);
+      pendingPortRequests.delete(requestId);
+      reject(error);
+    }
+  });
+}
+
 async function sendToTab(tabId, command) {
   if (!command?.id) throw new Error("Comando sem identificador");
   let started;
@@ -196,29 +227,11 @@ async function runCommand(command) {
   if (!tab) throw new Error("WhatsApp Web não está aberto nesta máquina");
   const phone = command?.payload?.phone;
 
+  // A navegação acontece antes da conexão persistente. Não usamos sendMessage
+  // porque seu canal temporário é destruído pelo WhatsApp durante a navegação.
+  await openChatTab(tab.id, phone);
   await ensureContentScript(tab.id);
-  const prepared = await prepareChat(tab.id, phone);
-  if (!prepared.ready && prepared.explicitNavigationRequired) {
-    await openChatTab(tab.id, phone);
-    await ensureContentScript(tab.id);
-  }
-  if (!prepared.ready && !prepared.explicitNavigationRequired) {
-    throw new Error("Não foi possível confirmar a conversa no WhatsApp Web");
-  }
-
-  let response = await sendToTab(tab.id, command);
-
-  if (response && !response.success && /NAV_REQUIRED/.test(response.error || "")) {
-    await chrome.tabs.update(tab.id, {
-      url: `https://web.whatsapp.com/send?phone=${onlyDigits(phone)}&type=phone_number&app_absent=0`,
-    });
-    await waitTabReady(tab.id);
-    await new Promise((r) => setTimeout(r, 4000));
-    await ensureContentScript(tab.id);
-    response = await sendToTab(tab.id, command);
-  }
-
-  if (!response) throw new Error("Sem resposta da aba do WhatsApp Web");
+  const response = await executeThroughPort(tab.id, command);
   if (!response.success) {
     const msg = response.error || "Falha ao executar";
     throw new Error(msg === "NAV_REQUIRED" ? "Não foi possível abrir a conversa deste número" : msg);
@@ -283,7 +296,31 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  whatsappPorts.delete(tabId);
   forgetOpenedPhone(tabId).catch(() => {});
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== `chatys-whatsapp-${EXTENSION_VERSION}` || !port.sender?.tab?.id) return;
+  const tabId = port.sender.tab.id;
+  whatsappPorts.set(tabId, port);
+  port.onMessage.addListener((message) => {
+    if (message?.type !== "COMMAND_RESULT" || !message.requestId) return;
+    const pending = pendingPortRequests.get(message.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    pendingPortRequests.delete(message.requestId);
+    pending.resolve(message.response);
+  });
+  port.onDisconnect.addListener(() => {
+    if (whatsappPorts.get(tabId) === port) whatsappPorts.delete(tabId);
+    for (const [requestId, pending] of pendingPortRequests) {
+      if (pending.tabId !== tabId) continue;
+      clearTimeout(pending.timeout);
+      pendingPortRequests.delete(requestId);
+      pending.reject(new Error("A aba do WhatsApp foi recarregada durante o envio"));
+    }
+  });
 });
 
 // Faster loop while the service worker is alive

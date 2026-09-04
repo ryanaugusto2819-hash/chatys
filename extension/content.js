@@ -1,5 +1,5 @@
 (function () {
-const CONTENT_VERSION = "1.0.8";
+const CONTENT_VERSION = "1.1.0";
 // Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
 if (globalThis.__chatysContentVersion === CONTENT_VERSION) return;
 globalThis.__chatysContentVersion = CONTENT_VERSION;
@@ -160,6 +160,43 @@ async function typing(phone, durationMs) {
   }
   return { typedFor: durationMs || 2500 };
 }
+
+async function executeCommand(command) {
+  const { type, payload, id } = command || {};
+  const dedupeKey = id ? `chatys_cmd_${id}` : null;
+  if (!dedupeKey) return { success: false, error: "Comando sem identificador" };
+  try {
+    const previous = JSON.parse(localStorage.getItem(dedupeKey) || "null");
+    if (previous?.status === "success") return { success: true, result: previous.result || {} };
+    localStorage.setItem(dedupeKey, JSON.stringify({ status: "running", startedAt: Date.now() }));
+    let result;
+    switch (type) {
+      case "send_text": result = await sendText(payload.phone, payload.text, dedupeKey); break;
+      case "send_media": result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType, dedupeKey); break;
+      case "mark_read": result = await markRead(payload.phone); break;
+      case "typing": result = await typing(payload.phone, payload.durationMs); break;
+      default: throw new Error(`Comando desconhecido: ${type}`);
+    }
+    localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result: result || {} }));
+    return { success: true, result: result || {} };
+  } catch (error) {
+    const message = String(error?.message || error);
+    localStorage.setItem(dedupeKey, JSON.stringify({ status: "failed", error: message }));
+    return { success: false, error: message };
+  }
+}
+
+// Canal persistente: ao contrário de sendMessage/sendResponse, não é encerrado
+// pelo Chrome enquanto uma ação assíncrona está sendo concluída na página.
+const commandPort = chrome.runtime.connect({ name: `chatys-whatsapp-${CONTENT_VERSION}` });
+commandPort.onMessage.addListener((message) => {
+  if (message?.type !== "EXECUTE_PORT" || !message.requestId) return;
+  executeCommand(message.command).then((response) => {
+    try {
+      commandPort.postMessage({ type: "COMMAND_RESULT", requestId: message.requestId, response });
+    } catch {}
+  });
+});
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PING") {
