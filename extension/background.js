@@ -38,6 +38,22 @@ async function ensureContentScript(tabId) {
 
 const onlyDigits = (v) => String(v || "").replace(/\D/g, "");
 
+const activeChatKey = (tabId) => `activeChat:${tabId}`;
+
+async function getLastOpenedPhone(tabId) {
+  const key = activeChatKey(tabId);
+  const stored = await chrome.storage.session.get(key);
+  return onlyDigits(stored[key]);
+}
+
+async function rememberOpenedPhone(tabId, phone) {
+  await chrome.storage.session.set({ [activeChatKey(tabId)]: onlyDigits(phone) });
+}
+
+async function forgetOpenedPhone(tabId) {
+  await chrome.storage.session.remove(activeChatKey(tabId));
+}
+
 async function waitTabReady(tabId, timeout = 45000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
@@ -56,7 +72,8 @@ async function openChatTab(tabId, phone) {
   try {
     currentPhone = onlyDigits(new URL(tab.url).searchParams.get("phone"));
   } catch {}
-  if (currentPhone === target) return;
+  const lastOpenedPhone = await getLastOpenedPhone(tabId);
+  if (currentPhone === target || lastOpenedPhone === target) return;
   await chrome.tabs.update(tabId, {
     url: `https://web.whatsapp.com/send?phone=${target}&type=phone_number&app_absent=0`,
   });
@@ -116,6 +133,7 @@ async function runCommand(command) {
     const msg = response.error || "Falha ao executar";
     throw new Error(msg === "NAV_REQUIRED" ? "Não foi possível abrir a conversa deste número" : msg);
   }
+  if (phone) await rememberOpenedPhone(tab.id, phone);
   return response;
 }
 
@@ -163,6 +181,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "poll") tick();
 });
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  forgetOpenedPhone(tabId).catch(() => {});
+});
+
 // Faster loop while the service worker is alive
 setInterval(tick, 3000);
 
@@ -181,6 +203,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.type === "POLL_NOW") {
     tick().then(() => sendResponse({ success: true }));
+    return true;
+  }
+  if (msg.type === "ACTIVE_CHAT_CHANGED" && _sender.tab?.id) {
+    forgetOpenedPhone(_sender.tab.id)
+      .then(() => sendResponse({ success: true }))
+      .catch((e) => sendResponse({ success: false, error: String(e.message || e) }));
     return true;
   }
 });
