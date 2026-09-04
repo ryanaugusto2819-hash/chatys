@@ -393,15 +393,15 @@ Deno.serve(async (req) => {
       ? (resolvedConnection?.access_token as string) || Deno.env.get("WHATSAPP_ACCESS_TOKEN")
       : null;
 
-    if (useZapi && (!zapiInstanceId || !zapiToken)) {
+    if (!useExtension && useZapi && (!zapiInstanceId || !zapiToken)) {
       return createJsonResponse({ error: "Z-API not configured" }, 500);
     }
 
-    if (useEvolution && (!evoServerUrl || !evoInstanceName || !evoApiKey)) {
+    if (!useExtension && useEvolution && (!evoServerUrl || !evoInstanceName || !evoApiKey)) {
       return createJsonResponse({ error: "Evolution not configured" }, 500);
     }
 
-    if (!useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
+    if (!useExtension && !useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
       return createJsonResponse({ error: "WhatsApp not configured" }, 500);
     }
 
