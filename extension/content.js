@@ -180,28 +180,36 @@
         throw new Error(`Ação desconhecida: ${command.type}`);
     }
     localStorage.setItem(resultKey, JSON.stringify({ status: "done", result }));
-    localStorage.removeItem(PENDING_KEY);
     return result;
   }
 
   async function processCommand(command) {
+    let result;
     try {
-      const result = await execute(command);
+      result = await execute(command);
       if (result === null) return false;
-      await callGateway({ action: "ack", commandId: command.id, success: true, result });
-      await setDiagnostic("");
-      return true;
     } catch (error) {
       const message = String(error?.message || error);
-      localStorage.removeItem(PENDING_KEY);
       await callGateway({
         action: "ack",
         commandId: command.id,
         success: false,
         error: `[Extensão ${VERSION}] ${message}`,
       }).catch(() => {});
+      localStorage.removeItem(PENDING_KEY);
       await setDiagnostic(message);
       return true;
+    }
+
+    try {
+      await callGateway({ action: "ack", commandId: command.id, success: true, result });
+      localStorage.removeItem(PENDING_KEY);
+      await setDiagnostic("");
+      return true;
+    } catch (error) {
+      const message = String(error?.message || error);
+      await setDiagnostic(`A ação foi executada; confirmação pendente: ${message}`);
+      return false;
     }
   }
 
