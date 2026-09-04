@@ -62,15 +62,26 @@ async function prepareChat(tabId, phone) {
     return { ready: true, explicitNavigationRequired: false };
   }
   try {
-    const response = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
-    if (response?.success) {
-      await rememberOpenedPhone(tabId, target);
-      return { ready: true, explicitNavigationRequired: false };
+    const started = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_CHAT", phone: target });
+    if (!started?.accepted) {
+      return { ready: false, explicitNavigationRequired: false };
     }
-    return {
-      ready: false,
-      explicitNavigationRequired: /NAV_REQUIRED/.test(response?.error || ""),
-    };
+    const start = Date.now();
+    while (Date.now() - start < 30000) {
+      await new Promise((r) => setTimeout(r, 400));
+      const state = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_STATUS" });
+      if (state?.status === "success" && onlyDigits(state.phone) === target) {
+        await rememberOpenedPhone(tabId, target);
+        return { ready: true, explicitNavigationRequired: false };
+      }
+      if (state?.status === "failed") {
+        return {
+          ready: false,
+          explicitNavigationRequired: /NAV_REQUIRED/.test(state.error || ""),
+        };
+      }
+    }
+    throw new Error("Tempo esgotado ao abrir a conversa no WhatsApp Web");
   } catch (error) {
     const message = String(error?.message || error);
     // O WhatsApp pode fechar o canal ao trocar de conversa, embora a troca
@@ -118,20 +129,45 @@ async function openChatTab(tabId, phone) {
 }
 
 async function sendToTab(tabId, command) {
-  return await new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("Tempo esgotado aguardando WhatsApp Web")),
-      60000,
-    );
-    chrome.tabs.sendMessage(tabId, { type: "EXECUTE", command }, (resp) => {
-      clearTimeout(timeout);
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message || "Erro de comunicação com a aba"));
-        return;
-      }
-      resolve(resp);
+  if (!command?.id) throw new Error("Comando sem identificador");
+  let started;
+  try {
+    started = await chrome.tabs.sendMessage(tabId, { type: "EXECUTE", command });
+  } catch {
+    await ensureContentScript(tabId);
+    const existing = await chrome.tabs.sendMessage(tabId, {
+      type: "COMMAND_STATUS",
+      commandId: command.id,
     });
-  });
+    if (existing?.status === "missing") {
+      started = await chrome.tabs.sendMessage(tabId, { type: "EXECUTE", command });
+    } else {
+      started = { accepted: true };
+    }
+  }
+  if (!started?.accepted) throw new Error(started?.error || "WhatsApp não aceitou o comando");
+
+  const start = Date.now();
+  while (Date.now() - start < 60000) {
+    await new Promise((r) => setTimeout(r, 400));
+    let state;
+    try {
+      state = await chrome.tabs.sendMessage(tabId, {
+        type: "COMMAND_STATUS",
+        commandId: command.id,
+      });
+    } catch {
+      await ensureContentScript(tabId);
+      continue;
+    }
+    if (state?.status === "success") {
+      return { success: true, result: state.result || null };
+    }
+    if (state?.status === "failed") {
+      return { success: false, error: state.error || "Falha ao executar" };
+    }
+  }
+  throw new Error("Tempo esgotado aguardando WhatsApp Web");
 }
 
 async function runCommand(command) {
@@ -149,16 +185,7 @@ async function runCommand(command) {
     throw new Error("Não foi possível confirmar a conversa no WhatsApp Web");
   }
 
-  let response;
-  try {
-    response = await sendToTab(tab.id, command);
-  } catch (err) {
-    // Canal fechou (navegação/reload): recarrega o script e tenta de novo
-    await waitTabReady(tab.id);
-    await new Promise((r) => setTimeout(r, 2000));
-    await ensureContentScript(tab.id);
-    response = await sendToTab(tab.id, command);
-  }
+  let response = await sendToTab(tab.id, command);
 
   if (response && !response.success && /NAV_REQUIRED/.test(response.error || "")) {
     await chrome.tabs.update(tab.id, {
