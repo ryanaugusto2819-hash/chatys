@@ -48,6 +48,7 @@ const AdsConversions = lazy(() => import("./pages/AdsConversions"));
 const ActivityReport = lazy(() => import("./pages/ActivityReport"));
 const Warmup = lazy(() => import("./pages/Warmup"));
 const LeadExtraction = lazy(() => import("./pages/LeadExtraction"));
+const ExtensionAgents = lazy(() => import("./pages/ExtensionAgents"));
 
 
 const queryClient = new QueryClient({
