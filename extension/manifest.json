@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chatys — Agente WhatsApp Web",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Recebe comandos do CRM Chatys e executa no WhatsApp Web (enviar texto, mídia, marcar lido e digitando).",
   "permissions": ["storage", "tabs", "scripting", "alarms"],
   "host_permissions": [
