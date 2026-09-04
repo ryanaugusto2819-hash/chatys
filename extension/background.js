@@ -1,6 +1,6 @@
 const DEFAULT_GATEWAY =
   "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
-const EXTENSION_VERSION = "1.0.7";
+const EXTENSION_VERSION = "1.0.8";
 
 async function getConfig() {
   const { gatewayUrl, token } = await chrome.storage.local.get(["gatewayUrl", "token"]);
@@ -311,9 +311,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type === "ACTIVE_CHAT_CHANGED" && _sender.tab?.id) {
-    forgetOpenedPhone(_sender.tab.id)
-      .then(() => sendResponse({ success: true }))
-      .catch((e) => sendResponse({ success: false, error: String(e.message || e) }));
-    return true;
+    // O WhatsApp pode trocar o contexto da página logo após este clique.
+    // Responda antes da troca e limpe o estado sem manter o canal aberto.
+    forgetOpenedPhone(_sender.tab.id).catch(() => {});
+    sendResponse({ success: true });
+    return false;
   }
 });
