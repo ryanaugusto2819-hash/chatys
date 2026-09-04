@@ -1,30 +1,41 @@
+const DEFAULT_GATEWAY =
+  "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
 const $ = (id) => document.getElementById(id);
 
-chrome.storage.local.get(["token", "gatewayUrl", "lastPoll", "lastError"], (s) => {
-  $("token").value = s.token || "";
-  $("gateway").value = s.gatewayUrl || "";
-  render(s);
-  chrome.runtime.sendMessage({ type: "GET_VERSION" }, (response) => {
-    if (response?.version) $("version").textContent = `Versão ${response.version}`;
-  });
-});
-
-function render(s) {
-  const last = s.lastPoll ? new Date(s.lastPoll).toLocaleTimeString("pt-BR") : "nunca";
-  $("status").textContent = `Último contato com o CRM: ${last}${s.lastError ? `\nErro: ${s.lastError}` : ""}`;
+function render(state) {
+  const last = state.lastPoll ? new Date(state.lastPoll).toLocaleTimeString("pt-BR") : "nunca";
+  const active = state.activeVersion
+    ? `Comunicador ativo: ${state.activeVersion}`
+    : "Abra ou recarregue o WhatsApp Web";
+  $("status").textContent = `${active}\nÚltimo contato com o CRM: ${last}${
+    state.lastError ? `\nErro: ${state.lastError}` : ""
+  }`;
 }
 
+chrome.storage.local.get(
+  ["token", "gatewayUrl", "lastPoll", "lastError", "activeVersion"],
+  (state) => {
+    $("token").value = state.token || "";
+    $("gateway").value = state.gatewayUrl || "";
+    $("version").textContent = `Versão ${chrome.runtime.getManifest().version}`;
+    render(state);
+  },
+);
+
 $("save").addEventListener("click", async () => {
-  await chrome.storage.local.set({
-    token: $("token").value.trim(),
-    gatewayUrl: $("gateway").value.trim(),
-  });
-  chrome.runtime.sendMessage({ type: "TEST_CONNECTION" }, (res) => {
-    if (res && res.success) {
-      $("status").textContent = `Conectado como: ${res.data?.device?.name || "aparelho"}`;
-      chrome.runtime.sendMessage({ type: "POLL_NOW" });
-    } else {
-      $("status").textContent = `Falha: ${res?.error || "sem resposta"}`;
-    }
-  });
+  const token = $("token").value.trim();
+  const gatewayUrl = $("gateway").value.trim();
+  await chrome.storage.local.set({ token, gatewayUrl, lastError: "" });
+  try {
+    const response = await fetch(gatewayUrl || DEFAULT_GATEWAY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-extension-token": token },
+      body: JSON.stringify({ action: "hello", clientVersion: chrome.runtime.getManifest().version }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `CRM respondeu ${response.status}`);
+    $("status").textContent = `Conectado como: ${data.device?.name || "computador"}\nRecarregue o WhatsApp Web uma vez.`;
+  } catch (error) {
+    $("status").textContent = `Falha: ${String(error?.message || error)}`;
+  }
 });

@@ -125,7 +125,7 @@ export default function ExtensionAgents() {
   };
 
   const downloadExtension = () => {
-    fetch(`/chatys-extension.zip?v=1.1.1-${Date.now()}`, { cache: 'no-store' })
+    fetch(`/chatys-extension.zip?v=2.0.0-${Date.now()}`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error(`Falha no download: ${res.status}`);
         return res.blob();

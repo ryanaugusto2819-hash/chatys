@@ -1,242 +1,232 @@
 (function () {
-const CONTENT_VERSION = "1.1.1";
-// Impede múltiplas cópias do comunicador quando a extensão é atualizada/reinjetada.
-if (globalThis.__chatysContentVersion === CONTENT_VERSION) return;
-globalThis.__chatysContentVersion = CONTENT_VERSION;
+  const VERSION = "2.0.0";
+  const DEFAULT_GATEWAY =
+    "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
+  const PENDING_KEY = "chatys_pending_command_v2";
 
-// Executa comandos vindos do CRM dentro do WhatsApp Web
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const digits = (v) => String(v || "").replace(/\D/g, "");
-let activePhone = "";
-let prepareState = { status: "idle", phone: "", error: "" };
+  if (globalThis.__chatysDirectWorkerVersion === VERSION) return;
+  globalThis.__chatysDirectWorkerVersion = VERSION;
 
-function findComposer() {
-  const boxes = document.querySelectorAll('div[contenteditable="true"][data-tab]');
-  return boxes[boxes.length - 1] || null;
-}
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const digits = (value) => String(value || "").replace(/\D/g, "");
+  let busy = false;
 
-async function waitFor(fn, timeout = 25000, interval = 400) {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    const value = fn();
-    if (value) return value;
-    await sleep(interval);
-  }
-  return null;
-}
-
-async function openChat(phone) {
-  if (!digits(phone)) throw new Error("Número do contato inválido");
-  // A navegação é concluída pelo background. O WhatsApp remove o parâmetro
-  // `phone` da URL depois de abrir o chat, então a URL não pode ser usada
-  // para validar a conversa neste ponto.
-  const composer = await waitFor(findComposer, 30000);
-  if (!composer) throw new Error("Não foi possível abrir a conversa deste número");
-  return composer;
-}
-
-function findChatSearch() {
-  const selectors = [
-    '#side div[contenteditable="true"][role="textbox"]',
-    'div[contenteditable="true"][data-tab="3"]',
-    'div[contenteditable="true"][aria-label*="Pesquisar"]',
-    'div[contenteditable="true"][aria-label*="Search"]',
-  ];
-  return selectors.map((selector) => document.querySelector(selector)).find(Boolean) || null;
-}
-
-async function selectChatWithoutReload(phone) {
-  const target = digits(phone);
-  if (!target) throw new Error("Número do contato inválido");
-  if (activePhone === target && findComposer()) return { ready: true, alreadyOpen: true };
-
-  const search = await waitFor(findChatSearch, 8000);
-  if (!search) return { ready: false, error: "NAV_REQUIRED" };
-
-  setText(search, target);
-  const result = await waitFor(() => {
-    const rows = [...document.querySelectorAll('#pane-side [role="row"], #pane-side [role="listitem"]')];
-    return rows.find((row) => {
-      const rowDigits = digits(row.textContent);
-      return rowDigits.includes(target) || rowDigits.endsWith(target.slice(-9));
-    }) || (rows.length === 1 ? rows[0] : null);
-  }, 12000);
-
-  if (!result) {
-    setText(search, "");
-    return { ready: false, error: "NAV_REQUIRED" };
+  async function setDiagnostic(lastError = "") {
+    await chrome.storage.local.set({
+      activeVersion: VERSION,
+      lastPoll: Date.now(),
+      lastError,
+    });
   }
 
-  result.click();
-  const composer = await waitFor(findComposer, 15000);
-  setText(search, "");
-  if (!composer) return { ready: false, error: "NAV_REQUIRED" };
-  activePhone = target;
-  return { ready: true, alreadyOpen: false };
-}
-
-function setText(el, text) {
-  el.focus();
-  document.execCommand("selectAll", false, null);
-  document.execCommand("insertText", false, text);
-  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
-}
-
-function pressEnter(el) {
-  const opts = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-  el.dispatchEvent(new KeyboardEvent("keydown", opts));
-  el.dispatchEvent(new KeyboardEvent("keypress", opts));
-  el.dispatchEvent(new KeyboardEvent("keyup", opts));
-}
-
-function markCommandSent(dedupeKey) {
-  const result = { sentAt: new Date().toISOString() };
-  localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result }));
-  return result;
-}
-
-async function sendText(phone, text, dedupeKey) {
-  const composer = await openChat(phone);
-  if (!text) throw new Error("Mensagem vazia");
-  setText(composer, text);
-  await sleep(250);
-  const sendBtn =
-    document.querySelector('button[aria-label*="Enviar"], button[aria-label*="Send"]') ||
-    document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
-  if (sendBtn) sendBtn.click();
-  else pressEnter(composer);
-  const result = markCommandSent(dedupeKey);
-  await sleep(600);
-  return result;
-}
-
-async function sendMedia(phone, mediaUrl, caption, mediaType, dedupeKey) {
-  const composer = await openChat(phone);
-  const res = await fetch(mediaUrl);
-  if (!res.ok) throw new Error(`Não consegui baixar o arquivo (${res.status})`);
-  const blob = await res.blob();
-  const ext = (blob.type.split("/")[1] || "bin").split(";")[0];
-  const file = new File([blob], `${mediaType || "arquivo"}.${ext}`, { type: blob.type });
-
-  const dt = new DataTransfer();
-  dt.items.add(file);
-  composer.focus();
-  composer.dispatchEvent(
-    new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }),
-  );
-
-  const previewBox = await waitFor(
-    () => document.querySelector('div[contenteditable="true"][data-tab="10"]') || findComposer(),
-    20000,
-  );
-  if (!previewBox) throw new Error("A pré-visualização do arquivo não abriu");
-  await sleep(1200);
-  if (caption) {
-    setText(previewBox, caption);
-    await sleep(300);
+  async function callGateway(body) {
+    const stored = await chrome.storage.local.get(["gatewayUrl", "token"]);
+    const token = String(stored.token || "").trim();
+    if (!token) throw new Error("Chave da extensão não configurada");
+    const response = await fetch(stored.gatewayUrl || DEFAULT_GATEWAY, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-extension-token": token,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `CRM respondeu ${response.status}`);
+    return data;
   }
-  const sendBtn =
-    document.querySelector('div[role="button"][aria-label*="Enviar"]') ||
-    document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
-  if (sendBtn) sendBtn.click();
-  else pressEnter(previewBox);
-  const result = markCommandSent(dedupeKey);
-  await sleep(1500);
-  return result;
-}
 
-async function markRead(phone) {
-  await openChat(phone);
-  return { readAt: new Date().toISOString() };
-}
-
-async function typing(phone, durationMs) {
-  const composer = await openChat(phone);
-  composer.focus();
-  const end = Date.now() + (durationMs || 2500);
-  while (Date.now() < end) {
-    composer.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
-    await sleep(400);
-  }
-  return { typedFor: durationMs || 2500 };
-}
-
-async function executeCommand(command) {
-  const { type, payload, id } = command || {};
-  const dedupeKey = id ? `chatys_cmd_${id}` : null;
-  if (!dedupeKey) return { success: false, error: "Comando sem identificador" };
-  try {
-    const previous = JSON.parse(localStorage.getItem(dedupeKey) || "null");
-    if (previous?.status === "success") return { success: true, result: previous.result || {} };
-    localStorage.setItem(dedupeKey, JSON.stringify({ status: "running", startedAt: Date.now() }));
-    let result;
-    switch (type) {
-      case "send_text": result = await sendText(payload.phone, payload.text, dedupeKey); break;
-      case "send_media": result = await sendMedia(payload.phone, payload.mediaUrl, payload.text, payload.mediaType, dedupeKey); break;
-      case "mark_read": result = await markRead(payload.phone); break;
-      case "typing": result = await typing(payload.phone, payload.durationMs); break;
-      default: throw new Error(`Comando desconhecido: ${type}`);
+  async function waitFor(find, timeout = 30000, interval = 400) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeout) {
+      const value = find();
+      if (value) return value;
+      await sleep(interval);
     }
-    localStorage.setItem(dedupeKey, JSON.stringify({ status: "success", result: result || {} }));
-    return { success: true, result: result || {} };
-  } catch (error) {
-    const message = String(error?.message || error);
-    localStorage.setItem(dedupeKey, JSON.stringify({ status: "failed", error: message }));
-    return { success: false, error: message };
+    return null;
   }
-}
 
-// Canal persistente: ao contrário de sendMessage/sendResponse, não é encerrado
-// pelo Chrome enquanto uma ação assíncrona está sendo concluída na página.
-const commandPort = chrome.runtime.connect({ name: `chatys-whatsapp-${CONTENT_VERSION}` });
-commandPort.onMessage.addListener((message) => {
-  if (message?.type !== "EXECUTE_PORT" || !message.requestId) return;
-  executeCommand(message.command).then((response) => {
+  function findComposer() {
+    const footer = document.querySelector("footer");
+    const scoped = footer?.querySelectorAll('div[contenteditable="true"][role="textbox"]');
+    if (scoped?.length) return scoped[scoped.length - 1];
+    const boxes = document.querySelectorAll('div[contenteditable="true"][data-tab]');
+    return boxes[boxes.length - 1] || null;
+  }
+
+  function setText(element, text) {
+    element.focus();
+    document.execCommand("selectAll", false, null);
+    document.execCommand("insertText", false, text);
+    element.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }),
+    );
+  }
+
+  function pressEnter(element) {
+    const options = {
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+    };
+    element.dispatchEvent(new KeyboardEvent("keydown", options));
+    element.dispatchEvent(new KeyboardEvent("keypress", options));
+    element.dispatchEvent(new KeyboardEvent("keyup", options));
+  }
+
+  function currentUrlPhone() {
     try {
-      commandPort.postMessage({ type: "COMMAND_RESULT", requestId: message.requestId, response });
-    } catch {}
-  });
-});
-
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === "PING") {
-    sendResponse({ ok: true, version: CONTENT_VERSION, activePhone, composerReady: Boolean(findComposer()) });
-    return false;
-  }
-  if (msg.type === "PREPARE_CHAT") {
-    const phone = digits(msg.phone);
-    if (activePhone === phone && findComposer()) {
-      prepareState = { status: "success", phone, error: "" };
-    } else if (prepareState.status !== "running" || prepareState.phone !== phone) {
-      prepareState = { status: "running", phone, error: "" };
-      selectChatWithoutReload(phone)
-        .then((result) => {
-          prepareState = result.ready
-            ? { status: "success", phone, error: "" }
-            : { status: "failed", phone, error: result.error || "NAV_REQUIRED" };
-        })
-        .catch((err) => {
-          prepareState = { status: "failed", phone, error: String(err.message || err) };
-        });
+      return digits(new URL(location.href).searchParams.get("phone"));
+    } catch {
+      return "";
     }
-    sendResponse({ accepted: true });
-    return false;
   }
-  if (msg.type === "PREPARE_STATUS") {
-    sendResponse(prepareState);
-    return false;
-  }
-  return false;
-});
 
+  async function ensureConversation(command) {
+    const phone = digits(command?.payload?.phone);
+    if (!phone) throw new Error("Número do contato inválido");
+    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+    if (pending?.id === command.id || currentUrlPhone() === phone) {
+      const composer = await waitFor(findComposer, 45000);
+      if (!composer) throw new Error("A conversa não abriu no WhatsApp Web");
+      return composer;
+    }
 
-// Se a pessoa trocar a conversa manualmente, invalida o último número
-// lembrado para impedir que a próxima mensagem seja enviada ao contato errado.
-document.addEventListener("click", (event) => {
-  const target = event.target;
-  if (target instanceof Element && target.closest("#pane-side")) {
-    activePhone = "";
-    chrome.runtime.sendMessage({ type: "ACTIVE_CHAT_CHANGED" }).catch(() => {});
+    localStorage.setItem(PENDING_KEY, JSON.stringify(command));
+    location.assign(`https://web.whatsapp.com/send?phone=${phone}&type=phone_number&app_absent=0`);
+    return null;
   }
-}, true);
+
+  async function sendText(command, composer) {
+    const text = String(command.payload?.text || "");
+    if (!text) throw new Error("Mensagem vazia");
+    setText(composer, text);
+    await sleep(300);
+    const button =
+      document.querySelector('button[aria-label*="Enviar"], button[aria-label*="Send"]') ||
+      document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
+    if (button) button.click();
+    else pressEnter(composer);
+    await sleep(700);
+    return { sentAt: new Date().toISOString(), extensionVersion: VERSION };
+  }
+
+  async function sendMedia(command, composer) {
+    const mediaUrl = String(command.payload?.mediaUrl || "");
+    if (!mediaUrl) throw new Error("Arquivo sem endereço para download");
+    const response = await fetch(mediaUrl);
+    if (!response.ok) throw new Error(`Não consegui baixar o arquivo (${response.status})`);
+    const blob = await response.blob();
+    const extension = (blob.type.split("/")[1] || "bin").split(";")[0];
+    const file = new File(
+      [blob],
+      `${command.payload?.mediaType || "arquivo"}.${extension}`,
+      { type: blob.type || "application/octet-stream" },
+    );
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    composer.focus();
+    composer.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+    );
+    const preview = await waitFor(
+      () => document.querySelector('div[contenteditable="true"][data-tab="10"]'),
+      20000,
+    );
+    if (!preview) throw new Error("A pré-visualização do arquivo não abriu");
+    const caption = String(command.payload?.text || "");
+    if (caption) setText(preview, caption);
+    await sleep(500);
+    const button =
+      document.querySelector('div[role="button"][aria-label*="Enviar"]') ||
+      document.querySelector('span[data-icon="send"]')?.closest('div[role="button"], button');
+    if (button) button.click();
+    else pressEnter(preview);
+    await sleep(1500);
+    return { sentAt: new Date().toISOString(), extensionVersion: VERSION };
+  }
+
+  async function execute(command) {
+    const resultKey = `chatys_cmd_v2_${command.id}`;
+    const previous = JSON.parse(localStorage.getItem(resultKey) || "null");
+    if (previous?.status === "done") return previous.result;
+
+    const composer = await ensureConversation(command);
+    if (!composer) return null;
+
+    localStorage.setItem(resultKey, JSON.stringify({ status: "running", at: Date.now() }));
+    let result;
+    switch (command.type) {
+      case "send_text":
+        result = await sendText(command, composer);
+        break;
+      case "send_media":
+        result = await sendMedia(command, composer);
+        break;
+      case "mark_read":
+        result = { readAt: new Date().toISOString(), extensionVersion: VERSION };
+        break;
+      case "typing": {
+        composer.focus();
+        const duration = Number(command.payload?.durationMs || 2500);
+        await sleep(Math.min(Math.max(duration, 500), 10000));
+        result = { typedFor: duration, extensionVersion: VERSION };
+        break;
+      }
+      default:
+        throw new Error(`Ação desconhecida: ${command.type}`);
+    }
+    localStorage.setItem(resultKey, JSON.stringify({ status: "done", result }));
+    localStorage.removeItem(PENDING_KEY);
+    return result;
+  }
+
+  async function processCommand(command) {
+    try {
+      const result = await execute(command);
+      if (result === null) return false;
+      await callGateway({ action: "ack", commandId: command.id, success: true, result });
+      await setDiagnostic("");
+      return true;
+    } catch (error) {
+      const message = String(error?.message || error);
+      localStorage.removeItem(PENDING_KEY);
+      await callGateway({
+        action: "ack",
+        commandId: command.id,
+        success: false,
+        error: `[Extensão ${VERSION}] ${message}`,
+      }).catch(() => {});
+      await setDiagnostic(message);
+      return true;
+    }
+  }
+
+  async function cycle() {
+    if (busy) return;
+    busy = true;
+    try {
+      const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+      if (pending?.id) {
+        const finished = await processCommand(pending);
+        if (!finished) return;
+      }
+      const data = await callGateway({ action: "poll", clientVersion: VERSION });
+      await setDiagnostic("");
+      for (const command of data.commands || []) {
+        const finished = await processCommand(command);
+        if (!finished) return;
+      }
+    } catch (error) {
+      await setDiagnostic(String(error?.message || error));
+    } finally {
+      busy = false;
+    }
+  }
+
+  cycle();
+  setInterval(cycle, 3000);
 })();
