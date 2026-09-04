@@ -365,6 +365,9 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Conexão configurada para enviar pela extensão do Chrome?
+    const useExtension = ((resolvedConnection as Record<string, unknown> | null)?.send_via_extension as string) === "1";
+
     const zapiInstanceId = useZapi
       ? (resolvedConnection?.instance_id as string) || Deno.env.get("ZAPI_INSTANCE_ID")
       : null;
