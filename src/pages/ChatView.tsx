@@ -1187,7 +1187,17 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                         }
                       }
                     }}
-...
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
+                  >
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Registrar Venda
+                  </button>
+                )}
+              </div>
+
+              {showSaleDialog && (
+                <div className="rounded-lg border border-border bg-background p-3 space-y-2.5">
+                  <p className="text-xs font-semibold text-card-foreground">Dados da Venda</p>
                   <div>
                     <label className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                       Campanha
@@ -1201,6 +1211,44 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                       className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground">Valor *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={saleData.valor}
+                      onChange={(e) => setSaleData(prev => ({ ...prev, valor: e.target.value }))}
+                      placeholder="150.00"
+                      className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">País</label>
+                      <select
+                        value={saleData.pais}
+                        onChange={(e) => {
+                          const pais = e.target.value;
+                          const moeda = pais === 'uruguay' ? 'UYU' : 'BRL';
+                          setSaleData(prev => ({ ...prev, pais, moeda }));
+                        }}
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="brasil">Brasil</option>
+                        <option value="uruguay">Uruguay</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Moeda</label>
+                      <input
+                        type="text"
+                        value={saleData.moeda}
+                        readOnly
+                        className="w-full mt-1 rounded-lg border border-input bg-muted px-3 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
 
                   <div className="flex gap-2">
                     <button
