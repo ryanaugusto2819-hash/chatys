@@ -33,6 +33,8 @@ Deno.serve(async (req) => {
       "META_ADS_ACCESS_TOKEN_5",
       "META_ADS_ACCESS_TOKEN_6",
       "META_ADS_ACCESS_TOKEN_7",
+      "META_ADS_ACCESS_TOKEN_8",
+      "META_ADS_ACCESS_TOKEN_9",
     ];
     const tokens: string[] = [];
     for (const key of tokenKeys) {
