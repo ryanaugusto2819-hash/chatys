@@ -370,8 +370,8 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [assignedAgent, setAssignedAgent] = useState<AgentProfile | null>(null);
   const [assignmentHistory, setAssignmentHistory] = useState<AssignmentHistory[]>([]);
   const [showSaleDialog, setShowSaleDialog] = useState(false);
-  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
-  const [availablePixels, setAvailablePixels] = useState<Array<{ id: string; name: string; pixel_id: string; test_event_code: string | null }>>([]);
+  const [saleData, setSaleData] = useState({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
+  const [campaignLookupLoading, setCampaignLookupLoading] = useState(false);
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
 
@@ -563,19 +563,6 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     fetchRmkTag();
   }, [fetchRmkTag]);
 
-  // Load Meta CAPI pixels for the workspace (used in sale dialog)
-  useEffect(() => {
-    if (!currentWorkspace) { setAvailablePixels([]); return; }
-    (async () => {
-      const { data } = await supabase
-        .from('meta_capi_pixels' as any)
-        .select('id, name, pixel_id, test_event_code')
-        .eq('workspace_id', currentWorkspace.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      setAvailablePixels((data as any) ?? []);
-    })();
-  }, [currentWorkspace?.id]);
 
   const toggleRmkTag = async () => {
     if (!rmkTag || !conversation) return;
