@@ -902,7 +902,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         }
       }
 
-      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL', pixelRefId: '' });
+      setSaleData({ valor: '', campanha: '', pais: 'brasil', moeda: 'BRL' });
       setSaleRegisteredAt(now);
     } catch (err: any) {
       console.error('Sale webhook error:', err);
