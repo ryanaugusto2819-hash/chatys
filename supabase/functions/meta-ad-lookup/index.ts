@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
     if (!adData) {
       console.error(`No token could resolve ad for sourceId: ${sourceId}`);
       return new Response(
-        JSON.stringify({ success: false, error: "Ad not found with any configured token" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, notFound: true, error: "Ad not found with any configured token" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
