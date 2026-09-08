@@ -287,6 +287,15 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
+            <label className="flex items-center gap-2 px-1 pb-1 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary cursor-pointer"
+                checked={selected.length > 0 && selected.length === instances.length}
+                onChange={e => setSelected(e.target.checked ? instances.map(getName).filter(Boolean) : [])}
+              />
+              Selecionar todas
+            </label>
             {instances.map((i, idx) => {
               const name = getName(i);
               const state = getState(i);
