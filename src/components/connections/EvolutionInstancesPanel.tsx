@@ -34,6 +34,8 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +141,33 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const toggleSelect = (name: string) => {
+    setSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  };
+
+  const bulkDelete = async () => {
+    if (selected.length === 0) return;
+    if (!confirm(`Excluir ${selected.length} instância(s) da Evolution API? Esta ação não pode ser desfeita.`)) return;
+    setBulkDeleting(true);
+    let ok = 0, fail = 0;
+    for (const name of selected) {
+      try {
+        const { error } = await supabase.functions.invoke('evolution-manager', {
+          body: { action: 'delete', instanceName: name },
+        });
+        if (error) throw error;
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkDeleting(false);
+    setSelected([]);
+    if (ok) toast.success(`${ok} instância(s) excluída(s)`);
+    if (fail) toast.error(`${fail} não puderam ser excluídas`);
+    load();
+  };
+
   const fixWebhook = async (name: string) => {
     setBusy(b => ({ ...b, [name]: true }));
     try {
@@ -219,6 +248,16 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {selected.length > 0 && (
+            <button
+              onClick={bulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+            >
+              {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir {selected.length}
+            </button>
+          )}
           <button
             onClick={load}
             disabled={loading}
@@ -248,6 +287,15 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
+            <label className="flex items-center gap-2 px-1 pb-1 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary cursor-pointer"
+                checked={selected.length > 0 && selected.length === instances.length}
+                onChange={e => setSelected(e.target.checked ? instances.map(getName).filter(Boolean) : [])}
+              />
+              Selecionar todas
+            </label>
             {instances.map((i, idx) => {
               const name = getName(i);
               const state = getState(i);
@@ -255,7 +303,13 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
               const profile = getProfile(i);
               const isBusy = busy[name];
               return (
-                <div key={`${name}-${idx}`} className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
+                <div key={`${name}-${idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-4">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary cursor-pointer"
+                    checked={selected.includes(name)}
+                    onChange={() => toggleSelect(name)}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-sm font-semibold text-foreground truncate">{name || '—'}</p>
