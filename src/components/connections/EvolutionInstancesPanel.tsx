@@ -303,7 +303,13 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
               const profile = getProfile(i);
               const isBusy = busy[name];
               return (
-                <div key={`${name}-${idx}`} className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
+                <div key={`${name}-${idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-4">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary cursor-pointer"
+                    checked={selected.includes(name)}
+                    onChange={() => toggleSelect(name)}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-sm font-semibold text-foreground truncate">{name || '—'}</p>
