@@ -141,6 +141,33 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
     }
   };
 
+  const toggleSelect = (name: string) => {
+    setSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  };
+
+  const bulkDelete = async () => {
+    if (selected.length === 0) return;
+    if (!confirm(`Excluir ${selected.length} instância(s) da Evolution API? Esta ação não pode ser desfeita.`)) return;
+    setBulkDeleting(true);
+    let ok = 0, fail = 0;
+    for (const name of selected) {
+      try {
+        const { error } = await supabase.functions.invoke('evolution-manager', {
+          body: { action: 'delete', instanceName: name },
+        });
+        if (error) throw error;
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkDeleting(false);
+    setSelected([]);
+    if (ok) toast.success(`${ok} instância(s) excluída(s)`);
+    if (fail) toast.error(`${fail} não puderam ser excluídas`);
+    load();
+  };
+
   const fixWebhook = async (name: string) => {
     setBusy(b => ({ ...b, [name]: true }));
     try {
