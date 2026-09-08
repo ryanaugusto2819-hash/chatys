@@ -248,6 +248,16 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {selected.length > 0 && (
+            <button
+              onClick={bulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+            >
+              {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir {selected.length}
+            </button>
+          )}
           <button
             onClick={load}
             disabled={loading}
