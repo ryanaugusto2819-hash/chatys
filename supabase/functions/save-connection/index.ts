@@ -165,78 +165,24 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "id is required for delete" }, 400);
       }
 
-      // Helper: delete in chunks to avoid query size limits
-      const CHUNK = 200;
-      const chunked = <T,>(arr: T[]): T[][] => {
-        const out: T[][] = [];
-        for (let i = 0; i < arr.length; i += CHUNK) out.push(arr.slice(i, i + CHUNK));
-        return out;
-      };
-
-      // 1. Get all conversation IDs linked to this connection (paginated to bypass 1000 row default)
-      const convoIds: string[] = [];
-      let from = 0;
-      const PAGE = 1000;
-      while (true) {
-        const { data: page, error: pageErr } = await serviceClient
-          .from("conversations")
-          .select("id")
-          .eq("connection_config_id", id)
-          .range(from, from + PAGE - 1);
-        if (pageErr) {
-          console.error("Error paginating conversations:", pageErr);
-          return jsonResponse({ error: `Failed to load conversations: ${pageErr.message}` }, 500);
-        }
-        if (!page || page.length === 0) break;
-        convoIds.push(...page.map((c: { id: string }) => c.id));
-        if (page.length < PAGE) break;
-        from += PAGE;
-      }
-
-      console.log(`[delete] Connection ${id} has ${convoIds.length} conversations to remove.`);
-
-      const tryDelete = async (table: string, column: string, ids: string[]) => {
-        for (const batch of chunked(ids)) {
-          const { error: delErr } = await serviceClient.from(table).delete().in(column, batch);
-          if (delErr) {
-            console.error(`[delete] Error deleting from ${table}.${column}:`, delErr.message);
-            throw new Error(`Failed cleaning ${table}: ${delErr.message}`);
-          }
-        }
-      };
+      let deletedConversations = 0;
 
       try {
-        if (convoIds.length > 0) {
-          // Get flow_execution IDs first (flow_step_logs depends on them)
-          const execIds: string[] = [];
-          for (const batch of chunked(convoIds)) {
-            const { data: execs } = await serviceClient
-              .from("flow_executions")
-              .select("id")
-              .in("conversation_id", batch);
-            if (execs) execIds.push(...execs.map((e: { id: string }) => e.id));
+        // Delete conversations (and all dependent rows) in small server-side batches
+        // to avoid statement timeouts on connections with many conversations.
+        for (let i = 0; i < 500; i++) {
+          const { data: removed, error: batchErr } = await serviceClient.rpc(
+            "delete_connection_conversations_batch",
+            { p_connection_id: id, p_limit: 100 }
+          );
+          if (batchErr) {
+            throw new Error(`Failed cleaning conversations: ${batchErr.message}`);
           }
-          if (execIds.length > 0) {
-            await tryDelete("flow_step_logs", "execution_id", execIds);
-          }
-
-          // Delete all conversation-dependent rows in batches
-          await tryDelete("flow_executions", "conversation_id", convoIds);
-          await tryDelete("messages", "conversation_id", convoIds);
-          await tryDelete("agent_assignment_history", "conversation_id", convoIds);
-          await tryDelete("follow_up_executions", "conversation_id", convoIds);
-          await tryDelete("manager_analyses", "conversation_id", convoIds);
-          await tryDelete("ai_usage_logs", "conversation_id", convoIds);
-          await tryDelete("conversion_events", "conversation_id", convoIds);
-          await tryDelete("conversion_leads", "conversation_id", convoIds);
-          await tryDelete("orders", "conversation_id", convoIds);
-          await tryDelete("pending_ai_replies", "conversation_id", convoIds);
-          await tryDelete("sales_orders", "conversation_id", convoIds);
-          await tryDelete("webhook_logs", "conversation_id", convoIds);
-
-          // Finally remove the conversations
-          await tryDelete("conversations", "id", convoIds);
+          const n = Number(removed ?? 0);
+          deletedConversations += n;
+          if (n === 0) break;
         }
+
 
         // Niche connections referencing this config
         const { error: ncErr } = await serviceClient
