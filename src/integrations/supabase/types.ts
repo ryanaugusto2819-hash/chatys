@@ -2544,6 +2544,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_connection_conversations_batch: {
+        Args: { p_connection_id: string; p_limit?: number }
+        Returns: number
+      }
       get_conversations_with_last_message: {
         Args: never
         Returns: {
