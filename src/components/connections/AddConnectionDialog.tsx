@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, Plus, Loader2, Eye, EyeOff, Zap, Puzzle } from 'lucide-react';
+import { MessageSquare, Plus, Loader2, Eye, EyeOff } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import EmbeddedSignup from './EmbeddedSignup';
 
 interface ExtensionDeviceOption {
   id: string;
@@ -14,13 +13,6 @@ interface ExtensionDeviceOption {
 }
 
 const PROVIDERS = [
-  {
-    id: 'embedded_signup',
-    name: 'WhatsApp Cloud API (Automático)',
-    description: 'Conecte com um clique via Facebook. Recomendado.',
-    fields: [],
-    isEmbedded: true,
-  },
   {
     id: 'zapi',
     name: 'Z-API (WhatsApp via QR Code)',
@@ -54,14 +46,6 @@ const PROVIDERS = [
       { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
     ],
     isEmbedded: false,
-  },
-  {
-    id: 'extension',
-    name: 'Extensão Chrome (WhatsApp Web)',
-    description: 'Use a extensão instalada em um computador como número.',
-    fields: [],
-    isEmbedded: false,
-    isExtension: true,
   },
 ];
 
