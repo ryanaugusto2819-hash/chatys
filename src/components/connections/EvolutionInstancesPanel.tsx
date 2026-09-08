@@ -34,6 +34,8 @@ export default function EvolutionInstancesPanel({ workspaceId }: Props) {
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
