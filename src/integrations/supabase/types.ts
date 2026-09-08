@@ -1148,6 +1148,7 @@ export type Database = {
           flows_analyzed: Json
           id: string
           issues: Json
+          mode: string
           overall_score: number
           response_quality_score: number
           suggestions: Json
@@ -1161,6 +1162,7 @@ export type Database = {
           flows_analyzed?: Json
           id?: string
           issues?: Json
+          mode?: string
           overall_score?: number
           response_quality_score?: number
           suggestions?: Json
@@ -1174,6 +1176,7 @@ export type Database = {
           flows_analyzed?: Json
           id?: string
           issues?: Json
+          mode?: string
           overall_score?: number
           response_quality_score?: number
           suggestions?: Json
@@ -2615,6 +2618,15 @@ export type Database = {
           role: string
           workspace_id: string
           workspace_name: string
+        }[]
+      }
+      get_messages_by_connection: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          connection_config_id: string
+          incoming: number
+          outgoing: number
+          total: number
         }[]
       }
       get_unread_conversations_count: {
