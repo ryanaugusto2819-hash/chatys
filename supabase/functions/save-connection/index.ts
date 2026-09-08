@@ -200,8 +200,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: msg }, 500);
       }
 
-      console.log(`[delete] Connection ${id} deleted with ${convoIds.length} conversations.`);
-      return jsonResponse({ success: true, deletedConversations: convoIds.length });
+      console.log(`[delete] Connection ${id} deleted with ${deletedConversations} conversations.`);
+      return jsonResponse({ success: true, deletedConversations });
     }
 
     if (action === "update") {
