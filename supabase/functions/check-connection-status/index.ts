@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
 
     const config = conn.config as Record<string, string>;
     let status = "unknown";
+    let evolutionState: string | null = null;
     let details: Record<string, unknown> = {};
 
     if (conn.connection_id === "whatsapp") {
