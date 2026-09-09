@@ -167,6 +167,7 @@ Deno.serve(async (req) => {
           });
           const data = await res.json();
           const state = data?.instance?.state || data?.state || "unknown";
+          evolutionState = state;
           if (state === "open") {
             status = "active";
             details = { state, instance: instanceName, server_url: serverUrl };
