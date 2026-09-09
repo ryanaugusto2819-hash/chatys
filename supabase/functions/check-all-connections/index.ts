@@ -17,11 +17,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get all active connections
+    // Active connections + all Evolution ones (so a reconnected instance is
+    // detected again after having been flagged as disconnected)
     const { data: connections, error } = await supabase
       .from("connection_configs")
       .select("id, connection_id, config, is_connected")
-      .eq("is_connected", true);
+      .or("is_connected.eq.true,connection_id.eq.evolution");
 
     if (error) throw error;
     if (!connections || connections.length === 0) {
