@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.get_messages_by_connection(timestamptz, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_messages_by_connection(timestamptz, timestamptz) TO authenticated;

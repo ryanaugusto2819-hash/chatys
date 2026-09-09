@@ -554,6 +554,32 @@ async function processMessageEvent(supabase: any, payload: any) {
     }
   }
 
+  // Outgoing message that was queued by the Chrome extension: reconcile instead
+  // of inserting a second row for the same message.
+  if (fromMe && content) {
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: queued } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .eq("sender_type", "agent")
+      .eq("content", content)
+      .is("provider_message_id", null)
+      .in("provider_status", ["queued", "sent"])
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (queued) {
+      await supabase
+        .from("messages")
+        .update({ status: "sent", provider_status: "sent", provider_message_id: providerMsgId })
+        .eq("id", queued.id);
+      console.log(`[evolution-webhook] reconciled extension message ${queued.id}`);
+      return;
+    }
+  }
+
   // If we got a source_id, try resolving the human ad name via meta-ad-lookup (best effort, async)
   if (hasAdReferral && adSourceId) {
     const supabaseUrlBg = Deno.env.get("SUPABASE_URL")!;

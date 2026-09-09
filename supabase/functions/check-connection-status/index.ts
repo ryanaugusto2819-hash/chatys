@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
 
     const config = conn.config as Record<string, string>;
     let status = "unknown";
+    let evolutionState: string | null = null;
     let details: Record<string, unknown> = {};
 
     if (conn.connection_id === "whatsapp") {
@@ -166,6 +167,7 @@ Deno.serve(async (req) => {
           });
           const data = await res.json();
           const state = data?.instance?.state || data?.state || "unknown";
+          evolutionState = state;
           if (state === "open") {
             status = "active";
             details = { state, instance: instanceName, server_url: serverUrl };
@@ -207,9 +209,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    const patch: Record<string, unknown> = { status, last_checked_at: new Date().toISOString() };
+
+    // Evolution: reflect the real session state on is_connected so disconnected
+    // numbers stop being offered for sending / routing.
+    if (conn.connection_id === "evolution" && evolutionState) {
+      if (evolutionState === "open") patch.is_connected = true;
+      else if (evolutionState === "close") patch.is_connected = false;
+    }
+
     await supabase
       .from("connection_configs")
-      .update({ status, last_checked_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", configId);
 
     return jsonResponse({ status, details });
