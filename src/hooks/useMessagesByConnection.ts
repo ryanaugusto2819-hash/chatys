@@ -39,39 +39,30 @@ export function useMessagesByConnection(period: LeadPeriod) {
   return useQuery<MessagesByConnection[]>({
     queryKey: ['messages-by-connection', period],
     queryFn: async () => {
-      // Fetch messages in range with joined conversation → connection
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          id, sender_type,
-          conversations!inner(
-            connection_config_id,
-            connection_configs!connection_config_id(id, label, connection_id, config)
-          )
-        `)
-        .gte('created_at', from)
-        .lte('created_at', to)
-        .limit(50000);
+      // Aggregate server-side (avoids pulling tens of thousands of rows)
+      const [{ data, error }, { data: configs }] = await Promise.all([
+        (supabase.rpc as any)('get_messages_by_connection', { p_from: from, p_to: to }),
+        supabase.from('connection_configs').select('id, label, connection_id, config'),
+      ]);
 
       if (error) throw error;
 
-      const buckets = new Map<string, MessagesByConnection>();
+      const byId = new Map<string, any>((configs ?? []).map((c: any) => [c.id, c]));
 
-      (data ?? []).forEach((row: any) => {
-        const cc = row.conversations?.connection_configs;
-        const id = cc?.id ?? 'none';
-        const name = labelFor(cc);
-        if (!buckets.has(id)) {
-          buckets.set(id, { connectionId: id, name, total: 0, incoming: 0, outgoing: 0 });
-        }
-        const bucket = buckets.get(id)!;
-        bucket.total += 1;
-        if (row.sender_type === 'customer') bucket.incoming += 1;
-        else bucket.outgoing += 1;
-      });
-
-      return Array.from(buckets.values()).sort((a, b) => b.incoming - a.incoming);
+      return ((data ?? []) as any[])
+        .map((row) => {
+          const cc = row.connection_config_id ? byId.get(row.connection_config_id) : null;
+          return {
+            connectionId: row.connection_config_id ?? 'none',
+            name: labelFor(cc),
+            total: Number(row.total) || 0,
+            incoming: Number(row.incoming) || 0,
+            outgoing: Number(row.outgoing) || 0,
+          };
+        })
+        .sort((a, b) => b.incoming - a.incoming);
     },
     staleTime: 30_000,
   });
 }
+
