@@ -3,6 +3,9 @@
   const DEFAULT_GATEWAY =
     "https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/extension-gateway";
   const PENDING_KEY = "chatys_pending_command_v2";
+  // Phone whose conversation is currently open in this tab (avoids reloading
+  // WhatsApp Web for every message sent to the same contact)
+  const OPEN_KEY = "chatys_open_chat_phone_v2";
 
   if (globalThis.__chatysDirectWorkerVersion === VERSION) return;
   globalThis.__chatysDirectWorkerVersion = VERSION;
@@ -89,13 +92,18 @@
     const phone = digits(command?.payload?.phone);
     if (!phone) throw new Error("Número do contato inválido");
     const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
-    if (pending?.id === command.id || currentUrlPhone() === phone) {
+    const openPhone = digits(localStorage.getItem(OPEN_KEY) || "");
+    const alreadyOpen = openPhone === phone && !!findComposer();
+
+    if (pending?.id === command.id || currentUrlPhone() === phone || alreadyOpen) {
       const composer = await waitFor(findComposer, 45000);
       if (!composer) throw new Error("A conversa não abriu no WhatsApp Web");
+      localStorage.setItem(OPEN_KEY, phone);
       return composer;
     }
 
     localStorage.setItem(PENDING_KEY, JSON.stringify(command));
+    localStorage.removeItem(OPEN_KEY);
     location.assign(`https://web.whatsapp.com/send?phone=${phone}&type=phone_number&app_absent=0`);
     return null;
   }
