@@ -1237,9 +1237,50 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
               {/* Register Sale */}
               <div>
                 {saleRegisteredAt ? (
-                  <div className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-green-800 text-white py-1.5 px-3 text-xs font-medium">
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    Venda Registrada
+                  <div className="space-y-2">
+                    <div className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-green-800 text-white py-1.5 px-3 text-xs font-medium">
+                      <CheckCheck className="h-3.5 w-3.5" />
+                      Venda Registrada
+                    </div>
+                    {showUpsellDialog ? (
+                      <div className="rounded-lg border border-border bg-background p-3 space-y-2.5">
+                        <p className="text-xs font-semibold text-card-foreground">Adicionar Upsell</p>
+                        <div>
+                          <label className="text-[11px] text-muted-foreground">Valor adicional *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={upsellValue}
+                            onChange={(e) => setUpsellValue(e.target.value)}
+                            placeholder="50.00"
+                            className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setShowUpsellDialog(false); setUpsellValue(''); }}
+                            className="flex-1 rounded-lg border border-border py-1.5 text-xs text-muted-foreground hover:bg-secondary transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={handleSendUpsell}
+                            disabled={!upsellValue || sendingUpsell}
+                            className="flex-1 rounded-lg bg-green-600 hover:bg-green-700 text-white py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                          >
+                            {sendingUpsell ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'Somar Upsell'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowUpsellDialog(true)}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-muted hover:bg-muted/80 text-foreground py-1.5 px-3 text-xs font-medium transition-colors"
+                      >
+                        <DollarSign className="h-3.5 w-3.5" />
+                        Adicionar Upsell
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button
