@@ -518,7 +518,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (!id) return;
     const { data } = await supabase
       .from('conversations')
-      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id, sector')
+      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id, sector, workspace_id')
       .eq('id', id)
       .single();
     if (data) {
