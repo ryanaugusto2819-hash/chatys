@@ -915,6 +915,26 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       });
       if (soErr) throw new Error(`Falha ao salvar a venda: ${soErr.message}`);
 
+      // Meta Conversions API (separado do webhook de métricas): dispara evento de Purchase no Pixel selecionado
+      let capiWarning: string | null = null;
+      if (selectedPixelId) {
+        try {
+          const { data: capiRes, error: capiErr } = await supabase.functions.invoke('meta-capi-send', {
+            body: {
+              conversationId,
+              pixelRefId: selectedPixelId,
+              eventName: 'Purchase',
+              value: payload.revenue,
+              currency: payload.currency,
+            },
+          });
+          if (capiErr || !capiRes?.success) {
+            capiWarning = capiRes?.error || capiErr?.message || 'Falha ao enviar evento ao Pixel';
+          }
+        } catch (e: any) {
+          capiWarning = e?.message || 'Falha ao enviar evento ao Pixel';
+        }
+      }
 
       if (webhookWarning) {
         toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
