@@ -382,18 +382,19 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [selectedPixelId, setSelectedPixelId] = useState('');
 
   // Load Meta CAPI pixels (Conversions API) — independent from the metrics webhook
+  const workspaceId = conversation?.workspace_id;
   useEffect(() => {
-    if (!currentWorkspace?.id) return;
+    if (!workspaceId) return;
     supabase
       .from('meta_capi_pixels' as any)
       .select('id, name, is_active')
-      .eq('workspace_id', currentWorkspace.id)
+      .eq('workspace_id', workspaceId)
       .eq('is_active', true)
       .then(({ data }) => {
         setCapiPixels((data as any) ?? []);
         if (data && (data as any[]).length === 1) setSelectedPixelId((data as any[])[0].id);
       });
-  }, [currentWorkspace?.id]);
+  }, [workspaceId]);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
