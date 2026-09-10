@@ -1248,6 +1248,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                       <CheckCheck className="h-3.5 w-3.5" />
                       Venda Registrada
                     </div>
+                    {upsellSentAt && (
+                      <div className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600/20 border border-emerald-600/40 text-emerald-400 py-1.5 px-3 text-xs font-medium">
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Upsell Enviado
+                      </div>
+                    )}
                     {showUpsellDialog ? (
                       <div className="rounded-lg border border-border bg-background p-3 space-y-2.5">
                         <p className="text-xs font-semibold text-card-foreground">Adicionar Upsell</p>
