@@ -819,11 +819,44 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
   }, []);
 
+  const SALES_WEBHOOK_URL = 'https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales?key=a7731ebc3828aa8973c5cefafac399cb';
+
+  const postSalesWebhook = async (body: Record<string, unknown>): Promise<string | null> => {
+    try {
+      const res = await fetch(SALES_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        return `Webhook externo retornou ${res.status}: ${txt.slice(0, 200)}`;
+      }
+      return null;
+    } catch (e: any) {
+      return `Falha ao chamar webhook externo: ${e?.message || e}`;
+    }
+  };
+
   const handleSendSale = async () => {
     if (!saleData.valor || sendingSale) return;
     setSendingSale(true);
     try {
+      const adParts = conversation?.ad_title?.split(' › ') || [];
+      const creative = adParts.length > 1 ? adParts[adParts.length - 1] : null;
+      const orderId = `CRM-${(conversationId || '').slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
       const payload = {
+        // identificador do pedido (permite upsell/atualização posterior)
+        order_id: orderId,
+        external_id: orderId,
+        // formato novo
+        campaign: saleData.campanha || 'direto',
+        creative,
+        revenue: parseFloat(saleData.valor) || 0,
+        country: saleData.pais || 'brasil',
+        currency: saleData.moeda || 'BRL',
+        phone: conversation?.contact_phone || null,
+        // formato legado (compatibilidade)
         campanha: saleData.campanha || 'direto',
         valor: parseFloat(saleData.valor) || 0,
         pais: saleData.pais || 'brasil',
@@ -831,21 +864,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         vendas: 1,
       };
 
-      let webhookWarning: string | null = null;
-      try {
-        const res = await fetch('https://simuftsgwryjubmkbnaj.supabase.co/functions/v1/webhookSales?key=a7731ebc3828aa8973c5cefafac399cb', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          webhookWarning = `Webhook externo retornou ${res.status}: ${txt.slice(0, 200)}`;
-        }
-      } catch (e: any) {
-        webhookWarning = `Falha ao chamar webhook externo: ${e?.message || e}`;
-      }
-
+      const webhookWarning = await postSalesWebhook(payload);
 
       // Persist sale registration in the database
       const now = new Date().toISOString();
@@ -872,6 +891,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         pais: payload.pais,
         moeda: payload.moeda,
         campanha: payload.campanha,
+        external_id: orderId,
       });
       if (soErr) throw new Error(`Falha ao salvar a venda: ${soErr.message}`);
 
@@ -892,6 +912,59 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
     } finally {
       setSendingSale(false);
+    }
+  };
+
+  const handleSendUpsell = async () => {
+    const add = parseFloat(upsellValue);
+    if (!add || add <= 0 || sendingUpsell) return;
+    setSendingUpsell(true);
+    try {
+      const { data: order, error: findErr } = await supabase
+        .from('sales_orders' as any)
+        .select('id, valor, external_id, quantidade')
+        .eq('conversation_id', conversationId!)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (findErr) throw new Error(findErr.message);
+      const existing = order as any;
+      if (!existing) throw new Error('Nenhuma venda encontrada para esta conversa.');
+
+      let orderId: string | null = existing.external_id || null;
+      if (!orderId) {
+        orderId = `CRM-${(conversationId || '').slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
+        await supabase.from('sales_orders' as any).update({ external_id: orderId }).eq('id', existing.id);
+      }
+
+      const webhookWarning = await postSalesWebhook({
+        order_id: orderId,
+        external_id: orderId,
+        upsell: add,
+        revenue_add: add,
+        mode: 'add',
+        action: 'upsell',
+      });
+
+      const { error: updErr } = await supabase
+        .from('sales_orders' as any)
+        .update({ valor: Number(existing.valor || 0) + add })
+        .eq('id', existing.id);
+      if (updErr) throw new Error(`Falha ao atualizar a venda: ${updErr.message}`);
+
+      if (webhookWarning) {
+        toast.warning(`Upsell salvo, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
+      } else {
+        toast.success('Upsell registrado com sucesso!');
+      }
+      setUpsellValue('');
+      setShowUpsellDialog(false);
+    } catch (err: any) {
+      console.error('Upsell webhook error:', err);
+      toast.error(err?.message || 'Erro ao registrar upsell');
+    } finally {
+      setSendingUpsell(false);
     }
   };
 
