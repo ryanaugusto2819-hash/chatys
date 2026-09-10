@@ -936,8 +936,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         }
       }
 
-      if (webhookWarning) {
-        toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
+      if (webhookWarning || capiWarning) {
+        const parts = [webhookWarning && `Webhook externo falhou: ${webhookWarning}`, capiWarning && `Pixel falhou: ${capiWarning}`].filter(Boolean).join(' · ');
+        toast.warning(`Venda registrada, mas: ${parts}`, { duration: 8000 });
       } else {
         toast.success('Venda registrada com sucesso!');
       }
