@@ -1895,6 +1895,7 @@ export type Database = {
           campanha: string | null
           conversation_id: string | null
           created_at: string | null
+          external_id: string | null
           id: string
           moeda: string
           nome: string | null
@@ -1909,6 +1910,7 @@ export type Database = {
           campanha?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          external_id?: string | null
           id?: string
           moeda?: string
           nome?: string | null
@@ -1923,6 +1925,7 @@ export type Database = {
           campanha?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          external_id?: string | null
           id?: string
           moeda?: string
           nome?: string | null
