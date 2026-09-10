@@ -32,6 +32,7 @@ interface ConversationData {
   source_id: string | null;
   ad_title: string | null;
   sector: string | null;
+  workspace_id: string | null;
 }
 
 interface ContactTag {
