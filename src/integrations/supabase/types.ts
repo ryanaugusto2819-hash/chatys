@@ -1902,6 +1902,8 @@ export type Database = {
           pais: string
           produto: string | null
           quantidade: number | null
+          upsell_sent: boolean
+          upsell_sent_at: string | null
           valor: number | null
           vendedor: string
           workspace_id: string | null
@@ -1917,6 +1919,8 @@ export type Database = {
           pais?: string
           produto?: string | null
           quantidade?: number | null
+          upsell_sent?: boolean
+          upsell_sent_at?: string | null
           valor?: number | null
           vendedor?: string
           workspace_id?: string | null
@@ -1932,6 +1936,8 @@ export type Database = {
           pais?: string
           produto?: string | null
           quantidade?: number | null
+          upsell_sent?: boolean
+          upsell_sent_at?: string | null
           valor?: number | null
           vendedor?: string
           workspace_id?: string | null

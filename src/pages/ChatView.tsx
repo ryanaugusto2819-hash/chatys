@@ -377,6 +377,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [showUpsellDialog, setShowUpsellDialog] = useState(false);
   const [upsellValue, setUpsellValue] = useState('');
   const [sendingUpsell, setSendingUpsell] = useState(false);
+  const [upsellSentAt, setUpsellSentAt] = useState<string | null>(null);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
@@ -506,6 +507,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (data) {
       setConversation(data);
       setSaleRegisteredAt((data as any).sale_registered_at || null);
+
+      supabase.from('sales_orders' as any).select('upsell_sent, upsell_sent_at').eq('conversation_id', id).eq('upsell_sent', true).order('upsell_sent_at', { ascending: false }).limit(1).maybeSingle()
+        .then(({ data: ups }: any) => setUpsellSentAt(ups?.upsell_sent_at || null));
 
       const [agentResult, tagsResult, historyResult] = await Promise.all([
         data.assigned_agent_id
@@ -947,11 +951,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         action: 'upsell',
       });
 
+      const upsellAt = new Date().toISOString();
       const { error: updErr } = await supabase
         .from('sales_orders' as any)
-        .update({ valor: Number(existing.valor || 0) + add })
+        .update({ valor: Number(existing.valor || 0) + add, upsell_sent: true, upsell_sent_at: upsellAt } as any)
         .eq('id', existing.id);
       if (updErr) throw new Error(`Falha ao atualizar a venda: ${updErr.message}`);
+      setUpsellSentAt(upsellAt);
 
       if (webhookWarning) {
         toast.warning(`Upsell salvo, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
@@ -1242,6 +1248,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                       <CheckCheck className="h-3.5 w-3.5" />
                       Venda Registrada
                     </div>
+                    {upsellSentAt && (
+                      <div className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600/20 border border-emerald-600/40 text-emerald-400 py-1.5 px-3 text-xs font-medium">
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Upsell Enviado
+                      </div>
+                    )}
                     {showUpsellDialog ? (
                       <div className="rounded-lg border border-border bg-background p-3 space-y-2.5">
                         <p className="text-xs font-semibold text-card-foreground">Adicionar Upsell</p>
