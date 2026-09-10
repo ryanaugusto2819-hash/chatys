@@ -1415,6 +1415,24 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     </div>
                   </div>
 
+                  {capiPixels.length > 0 && (
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Pixel Meta (Conversions API)</label>
+                      <select
+                        value={selectedPixelId}
+                        onChange={(e) => setSelectedPixelId(e.target.value)}
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Não disparar no Pixel</option>
+                        {capiPixels.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Dispara o evento de Purchase no Pixel da Meta — separado do webhook de métricas.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <button
