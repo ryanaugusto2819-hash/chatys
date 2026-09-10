@@ -374,6 +374,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [campaignLookupLoading, setCampaignLookupLoading] = useState(false);
   const [sendingSale, setSendingSale] = useState(false);
   const [saleRegisteredAt, setSaleRegisteredAt] = useState<string | null>(null);
+  const [showUpsellDialog, setShowUpsellDialog] = useState(false);
+  const [upsellValue, setUpsellValue] = useState('');
+  const [sendingUpsell, setSendingUpsell] = useState(false);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
