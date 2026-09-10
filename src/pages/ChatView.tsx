@@ -32,6 +32,7 @@ interface ConversationData {
   source_id: string | null;
   ad_title: string | null;
   sector: string | null;
+  workspace_id: string | null;
 }
 
 interface ContactTag {
@@ -378,6 +379,23 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [upsellValue, setUpsellValue] = useState('');
   const [sendingUpsell, setSendingUpsell] = useState(false);
   const [upsellSentAt, setUpsellSentAt] = useState<string | null>(null);
+  const [capiPixels, setCapiPixels] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
+  const [selectedPixelId, setSelectedPixelId] = useState('');
+
+  // Load Meta CAPI pixels (Conversions API) — independent from the metrics webhook
+  const workspaceId = conversation?.workspace_id;
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('meta_capi_pixels' as any)
+      .select('id, name, is_active')
+      .eq('workspace_id', workspaceId)
+      .eq('is_active', true)
+      .then(({ data }) => {
+        setCapiPixels((data as any) ?? []);
+        if (data && (data as any[]).length === 1) setSelectedPixelId((data as any[])[0].id);
+      });
+  }, [workspaceId]);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
@@ -501,7 +519,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (!id) return;
     const { data } = await supabase
       .from('conversations')
-      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id, sector')
+      .select('id, contact_name, contact_phone, status, tags, updated_at, created_at, assigned_agent_id, ctwa_clid, source_id, ad_title, sale_registered_at, niche_id, sector, workspace_id')
       .eq('id', id)
       .single();
     if (data) {
@@ -899,9 +917,30 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       });
       if (soErr) throw new Error(`Falha ao salvar a venda: ${soErr.message}`);
 
+      // Meta Conversions API (separado do webhook de métricas): dispara evento de Purchase no Pixel selecionado
+      let capiWarning: string | null = null;
+      if (selectedPixelId) {
+        try {
+          const { data: capiRes, error: capiErr } = await supabase.functions.invoke('meta-capi-send', {
+            body: {
+              conversationId,
+              pixelRefId: selectedPixelId,
+              eventName: 'Purchase',
+              value: payload.revenue,
+              currency: payload.currency,
+            },
+          });
+          if (capiErr || !capiRes?.success) {
+            capiWarning = capiRes?.error || capiErr?.message || 'Falha ao enviar evento ao Pixel';
+          }
+        } catch (e: any) {
+          capiWarning = e?.message || 'Falha ao enviar evento ao Pixel';
+        }
+      }
 
-      if (webhookWarning) {
-        toast.warning(`Venda registrada, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
+      if (webhookWarning || capiWarning) {
+        const parts = [webhookWarning && `Webhook externo falhou: ${webhookWarning}`, capiWarning && `Pixel falhou: ${capiWarning}`].filter(Boolean).join(' · ');
+        toast.warning(`Venda registrada, mas: ${parts}`, { duration: 8000 });
       } else {
         toast.success('Venda registrada com sucesso!');
       }
@@ -1378,6 +1417,24 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                     </div>
                   </div>
 
+                  {capiPixels.length > 0 && (
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Pixel Meta (Conversions API)</label>
+                      <select
+                        value={selectedPixelId}
+                        onChange={(e) => setSelectedPixelId(e.target.value)}
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Não disparar no Pixel</option>
+                        {capiPixels.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Dispara o evento de Purchase no Pixel da Meta — separado do webhook de métricas.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <button
