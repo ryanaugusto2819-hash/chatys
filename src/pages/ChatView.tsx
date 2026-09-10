@@ -377,6 +377,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   const [showUpsellDialog, setShowUpsellDialog] = useState(false);
   const [upsellValue, setUpsellValue] = useState('');
   const [sendingUpsell, setSendingUpsell] = useState(false);
+  const [upsellSentAt, setUpsellSentAt] = useState<string | null>(null);
 
   // Termo state
   const [showTermoDialog, setShowTermoDialog] = useState(false);
@@ -506,6 +507,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     if (data) {
       setConversation(data);
       setSaleRegisteredAt((data as any).sale_registered_at || null);
+
+      supabase.from('sales_orders' as any).select('upsell_sent, upsell_sent_at').eq('conversation_id', id).eq('upsell_sent', true).order('upsell_sent_at', { ascending: false }).limit(1).maybeSingle()
+        .then(({ data: ups }: any) => setUpsellSentAt(ups?.upsell_sent_at || null));
 
       const [agentResult, tagsResult, historyResult] = await Promise.all([
         data.assigned_agent_id
