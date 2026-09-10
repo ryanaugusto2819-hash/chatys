@@ -951,11 +951,13 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         action: 'upsell',
       });
 
+      const upsellAt = new Date().toISOString();
       const { error: updErr } = await supabase
         .from('sales_orders' as any)
-        .update({ valor: Number(existing.valor || 0) + add })
+        .update({ valor: Number(existing.valor || 0) + add, upsell_sent: true, upsell_sent_at: upsellAt } as any)
         .eq('id', existing.id);
       if (updErr) throw new Error(`Falha ao atualizar a venda: ${updErr.message}`);
+      setUpsellSentAt(upsellAt);
 
       if (webhookWarning) {
         toast.warning(`Upsell salvo, mas o webhook externo falhou. ${webhookWarning}`, { duration: 8000 });
