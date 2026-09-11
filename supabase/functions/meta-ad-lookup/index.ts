@@ -3,11 +3,39 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function tryFetchAd(sourceId: string, accessToken: string) {
-  const url = `https://graph.facebook.com/v21.0/${sourceId}?fields=name,campaign{name},adset{name},status,creative{title,body}&access_token=${accessToken}`;
-  const res = await fetch(url);
+async function fetchMetaObject(objectId: string, fields: string, accessToken: string) {
+  const url = new URL(`https://graph.facebook.com/v21.0/${encodeURIComponent(objectId)}`);
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("access_token", accessToken);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
   return await res.json();
+}
+
+async function tryFetchAd(sourceId: string, accessToken: string) {
+  const ad = await fetchMetaObject(
+    sourceId,
+    "name,campaign_id,adset_id,status,creative{title,body}",
+    accessToken,
+  );
+  if (!ad) return null;
+
+  // Fetch hierarchy objects directly by ID. Nested campaign{name} responses can
+  // keep the old label for a while after a rename in Ads Manager.
+  const [campaign, adset] = await Promise.all([
+    ad.campaign_id
+      ? fetchMetaObject(ad.campaign_id, "name", accessToken)
+      : Promise.resolve(null),
+    ad.adset_id
+      ? fetchMetaObject(ad.adset_id, "name", accessToken)
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    ...ad,
+    campaign: campaign?.name ? campaign : null,
+    adset: adset?.name ? adset : null,
+  };
 }
 
 Deno.serve(async (req) => {
