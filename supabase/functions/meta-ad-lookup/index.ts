@@ -4,10 +4,18 @@ const corsHeaders = {
 };
 
 async function fetchMetaObject(objectId: string, fields: string, accessToken: string) {
-  const url = new URL(`https://graph.facebook.com/v21.0/${encodeURIComponent(objectId)}`);
+  const url = new URL(`https://graph.facebook.com/v24.0/${encodeURIComponent(objectId)}`);
   url.searchParams.set("fields", fields);
   url.searchParams.set("access_token", accessToken);
-  const res = await fetch(url, { cache: "no-store" });
+  // Avoid intermediary caches after an object is renamed in Ads Manager.
+  url.searchParams.set("_refresh", Date.now().toString());
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
+    },
+  });
   if (!res.ok) return null;
   return await res.json();
 }

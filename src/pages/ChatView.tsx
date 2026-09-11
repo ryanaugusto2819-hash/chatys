@@ -1337,7 +1337,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   <button
                     onClick={async () => {
                       const adParts = conversation.ad_title?.split(' › ') || [];
-                      setSaleData({ valor: '', campanha: adParts[0] || '', pais: 'brasil', moeda: 'BRL' });
+                      setSaleData({ valor: '', campanha: conversation.source_id ? '' : (adParts[0] || ''), pais: 'brasil', moeda: 'BRL' });
                       setShowSaleDialog(true);
                       if (conversation.source_id) {
                         setCampaignLookupLoading(true);
@@ -1349,7 +1349,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                             setSaleData(prev => ({ ...prev, campanha: data.campaignName }));
                           }
                         } catch {
-                          // mantém fallback do ad_title
+                          setSaleData(prev => ({ ...prev, campanha: adParts[0] || '' }));
                         } finally {
                           setCampaignLookupLoading(false);
                         }
