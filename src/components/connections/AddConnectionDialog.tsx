@@ -39,6 +39,16 @@ const PROVIDERS = [
       { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
     ],
   },
+  {
+    id: 'uazapigo',
+    name: 'uazapiGO (WhatsApp)',
+    description: 'Receba e envie mensagens, mídias, áudios e atualizações pela uazapiGO.',
+    fields: [
+      { key: 'server_url', label: 'URL da uazapiGO', placeholder: 'https://sua-instancia.uazapi.com', sensitive: false },
+      { key: 'token', label: 'Token da instância', placeholder: 'Token fornecido pela uazapiGO', sensitive: true },
+      { key: 'instance_name', label: 'Nome da instância', placeholder: 'Ex: numero-vendas', sensitive: false },
+    ],
+  },
 ];
 
 interface AddConnectionDialogProps {
