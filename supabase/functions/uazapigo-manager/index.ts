@@ -35,13 +35,13 @@ Deno.serve(async (req) => {
       set_webhook: { path: "/webhook/set", method: "POST" },
     };
     const target = actionPaths[parsed.data.action];
-    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook`;
+    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook?configId=${encodeURIComponent(connection.id)}`;
     const response = await fetch(`${serverUrl}${target.path}`, {
       method: target.method,
       headers: { "Content-Type": "application/json", token },
       body: target.method === "GET" || target.method === "DELETE" ? undefined : JSON.stringify(
         parsed.data.action === "set_webhook"
-          ? { url: webhookUrl, events: ["connection", "messages", "messages_update"], excludeMessages: ["wasSentByApi"] }
+          ? { url: webhookUrl, events: ["connection", "messages", "messages_update"], addUrlEvents: false, addUrlTypesMessages: false }
           : {},
       ),
     });

@@ -185,7 +185,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const effectiveStatus = isStale ? 'unknown' : connection.status;
 
   const statusInfo = STATUS_MAP[effectiveStatus] || STATUS_MAP.unknown;
-  const webhookUrl = WEBHOOK_URLS[connection.connection_id];
+  const webhookUrl = connection.config?.webhook_url || WEBHOOK_URLS[connection.connection_id];
 
   const formatDiagnosticValue = (value: unknown) => {
     if (typeof value === 'boolean') return value ? 'Sim' : 'Não';

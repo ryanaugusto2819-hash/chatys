@@ -302,6 +302,33 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to create connection" }, 500);
     }
 
+    if (connectionId === "uazapigo") {
+      const serverUrl = String(connectionConfig.server_url || "").replace(/\/+$/, "");
+      const token = String(connectionConfig.token || "");
+      const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook?configId=${encodeURIComponent(data.id)}`;
+      try {
+        const webhookResponse = await fetch(`${serverUrl}/webhook/set`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token },
+          body: JSON.stringify({
+            url: webhookUrl,
+            events: ["connection", "messages", "messages_update"],
+            addUrlEvents: false,
+            addUrlTypesMessages: false,
+          }),
+        });
+        const webhookResult = await webhookResponse.json().catch(() => ({}));
+        if (!webhookResponse.ok || webhookResult?.error) {
+          diagnostics = { ...(diagnostics || {}), webhook_configured: false, webhook_error: webhookResult?.error || webhookResult?.message || `HTTP ${webhookResponse.status}` };
+        } else {
+          diagnostics = { ...(diagnostics || {}), webhook_configured: true };
+          await serviceClient.from("connection_configs").update({ config: { ...connectionConfig, webhook_url: webhookUrl } }).eq("id", data.id);
+        }
+      } catch (webhookError) {
+        diagnostics = { ...(diagnostics || {}), webhook_configured: false, webhook_error: webhookError instanceof Error ? webhookError.message : String(webhookError) };
+      }
+    }
+
     return jsonResponse({ success: true, id: data.id, status, diagnostics });
   } catch (error) {
     console.error("Save connection error:", error);

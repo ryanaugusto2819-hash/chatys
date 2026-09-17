@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
   try {
     const payload = await req.json();
+    const requestedConfigId = new URL(req.url).searchParams.get("configId");
     const event = String(payload?.event ?? payload?.type ?? "messages").toLowerCase();
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -69,7 +70,7 @@ Deno.serve(async (req) => {
       const instanceId = first(payload?.instance, payload?.instanceId, payload?.data?.instance, payload?.data?.instanceId);
       const state = String(payload?.data?.status ?? payload?.status ?? payload?.data?.state ?? "").toLowerCase();
       const { data: configs } = await supabase.from("connection_configs").select("id, config").eq("connection_id", "uazapigo");
-      const matched = (configs || []).find((row: any) => (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
+      const matched = (configs || []).find((row: any) => row.id === requestedConfigId || (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
       if (matched) await supabase.from("connection_configs").update({ is_connected: ["connected", "open"].includes(state), status: ["connected", "open"].includes(state) ? "active" : "error", last_checked_at: new Date().toISOString() }).eq("id", matched.id);
       return json({ success: true });
     }
@@ -81,7 +82,7 @@ Deno.serve(async (req) => {
       const token = first(payload?.token, payload?.instance?.token, item?.token);
       const instanceId = first(payload?.instance, payload?.instanceId, item?.instance, item?.instanceId);
       const { data: configs } = await supabase.from("connection_configs").select("id, workspace_id, sector, is_connected, config").eq("connection_id", "uazapigo");
-      const connection = (configs || []).find((row: any) => (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
+      const connection = (configs || []).find((row: any) => row.id === requestedConfigId || (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
       if (!connection) { console.error("[uazapigo-webhook] conexão não encontrada"); continue; }
       if (!connection.is_connected) await supabase.from("connection_configs").update({ is_connected: true, status: "active" }).eq("id", connection.id);
 
