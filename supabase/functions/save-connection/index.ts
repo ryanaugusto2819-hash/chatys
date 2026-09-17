@@ -267,6 +267,22 @@ Deno.serve(async (req) => {
       diagnostics = validation.diagnostics;
     } else if (connectionId === "extension") {
       status = "active";
+    } else if (connectionId === "uazapigo") {
+      const serverUrl = String(connectionConfig.server_url || "").replace(/\/+$/, "");
+      const token = String(connectionConfig.token || "").trim();
+      if (!serverUrl || !token) return jsonResponse({ error: "URL e token da uazapiGO são obrigatórios" }, 400);
+      const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } }).catch(() => null);
+      const result = response ? await response.json().catch(() => ({})) : {};
+      const state = String(result?.status ?? result?.state ?? result?.instance?.status ?? result?.instance?.state ?? "unknown").toLowerCase();
+      const connected = Boolean(response?.ok && ["connected", "open"].includes(state));
+      status = connected ? "active" : "error";
+      connectionConfig = {
+        ...connectionConfig,
+        server_url: serverUrl,
+        token,
+        webhook_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook`,
+      };
+      diagnostics = { state, connected };
     }
 
     const { data, error: insertError } = await serviceClient
@@ -275,7 +291,7 @@ Deno.serve(async (req) => {
         connection_id: connectionId,
         config: connectionConfig,
         label: normalizeLabel(label),
-        is_connected: true,
+        is_connected: connectionId === "uazapigo" ? status === "active" : true,
         status,
       })
       .select("id")

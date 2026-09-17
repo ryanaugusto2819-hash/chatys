@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ZApiQrCodePanel from './ZApiQrCodePanel';
+import UazapiQrCodePanel from './UazapiQrCodePanel';
 import {
   AlertCircle,
   ChevronDown,
@@ -56,6 +57,7 @@ const WEBHOOK_URLS: Record<string, string> = {
   whatsapp: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/whatsapp-webhook`,
   zapi: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/zapi-webhook`,
   evolution: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/evolution-webhook`,
+  uazapigo: `https://glceihfavfvebaaxgsnq.supabase.co/functions/v1/uazapigo-webhook`,
 };
 
 const PROVIDER_CONFIG: Record<string, {
@@ -95,6 +97,16 @@ const PROVIDER_CONFIG: Record<string, {
       { key: 'api_key', label: 'API Key (apikey)', placeholder: 'B6D711FCDE...', sensitive: true },
     ],
   },
+  uazapigo: {
+    name: 'uazapiGO',
+    color: 'bg-primary/10 text-primary',
+    docsUrl: 'https://docs.uazapi.com',
+    fields: [
+      { key: 'server_url', label: 'URL da uazapiGO', placeholder: 'https://sua-instancia.uazapi.com', sensitive: false },
+      { key: 'token', label: 'Token da instância', placeholder: 'Token fornecido pela uazapiGO', sensitive: true },
+      { key: 'instance_name', label: 'Nome da instância', placeholder: 'Ex: numero-vendas', sensitive: false },
+    ],
+  },
   extension: {
     name: 'Extensão Chrome (WhatsApp Web)',
     color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
@@ -128,7 +140,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
   const [restarting, setRestarting] = useState(false);
   const [devices, setDevices] = useState<{ id: string; name: string; status: string }[]>([]);
 
-  const supportsExtensionSending = ['evolution', 'zapi', 'whatsapp'].includes(connection.connection_id);
+  const supportsExtensionSending = ['evolution', 'zapi', 'whatsapp', 'uazapigo'].includes(connection.connection_id);
 
   useEffect(() => {
     if (!expanded || !supportsExtensionSending) return;
@@ -292,7 +304,7 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {connection.connection_id === 'zapi' && (
+            {(connection.connection_id === 'zapi' || connection.connection_id === 'uazapigo') && (
               <button
                 onClick={() => setShowQrPanel(!showQrPanel)}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg border border-input bg-background text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ${showQrPanel ? 'bg-primary/10 text-primary border-primary/30' : ''}`}
@@ -338,6 +350,12 @@ export default function ConnectionCard({ connection, onDeleted, onUpdated }: Con
               onUpdated();
             }}
           />
+        </div>
+      )}
+
+      {showQrPanel && connection.connection_id === 'uazapigo' && (
+        <div className="border-t border-border px-5 py-4">
+          <UazapiQrCodePanel configId={connection.id} onConnected={onUpdated} />
         </div>
       )}
 

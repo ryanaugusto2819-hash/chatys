@@ -540,9 +540,9 @@ Gere a mensagem de follow-up:`,
               .eq("id", nicheConn.connection_config_id)
               .single();
 
-            if (connConfig?.connection_id?.startsWith("zapi")) {
-              sendFunction = "zapi-send";
-            }
+            if (connConfig?.connection_id?.startsWith("zapi")) sendFunction = "zapi-send";
+            else if (connConfig?.connection_id === "evolution") sendFunction = "evolution-send";
+            else if (connConfig?.connection_id === "uazapigo") sendFunction = "uazapigo-send";
           }
         }
 
@@ -562,6 +562,12 @@ Gere a mensagem de follow-up:`,
             const cfg = (cc?.config as Record<string, unknown>) || {};
             if (cfg.send_via_extension === "1" || cc?.connection_id === "extension") {
               sendFunction = "extension-send";
+            } else if (cc?.connection_id === "zapi") {
+              sendFunction = "zapi-send";
+            } else if (cc?.connection_id === "evolution") {
+              sendFunction = "evolution-send";
+            } else if (cc?.connection_id === "uazapigo") {
+              sendFunction = "uazapigo-send";
             }
           }
         }
