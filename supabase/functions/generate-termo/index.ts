@@ -268,6 +268,8 @@ Deno.serve(async (req) => {
           functionName = "zapi-send";
         } else if (connConfig?.connection_id === "evolution") {
           functionName = "evolution-send";
+        } else if (connConfig?.connection_id === "uazapigo") {
+          functionName = "uazapigo-send";
         }
       }
 

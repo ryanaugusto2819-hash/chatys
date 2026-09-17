@@ -277,97 +277,23 @@ async function handleProcess(conversationId: string) {
     return jsonResponse({ error: "Empty AI response" }, 500);
   }
 
-  let phoneNumberId: string | null = null;
-
+  let sendFunction = "whatsapp-send";
   if (conversation.connection_config_id) {
-    const { data: connConfig } = await supabase
-      .from("connection_configs")
-      .select("config")
-      .eq("id", conversation.connection_config_id)
-      .single();
-    const cfg = connConfig?.config as Record<string, unknown> | null;
-    if (typeof cfg?.phone_number_id === "string" && cfg.phone_number_id.trim()) {
-      phoneNumberId = cfg.phone_number_id;
-    }
+    const { data: connection } = await supabase.from("connection_configs").select("connection_id, config").eq("id", conversation.connection_config_id).maybeSingle();
+    const config = (connection?.config || {}) as Record<string, unknown>;
+    if (config.send_via_extension === "1" || connection?.connection_id === "extension") sendFunction = "extension-send";
+    else if (connection?.connection_id === "zapi") sendFunction = "zapi-send";
+    else if (connection?.connection_id === "evolution") sendFunction = "evolution-send";
+    else if (connection?.connection_id === "uazapigo") sendFunction = "uazapigo-send";
   }
-
-  if (!phoneNumberId && nicheId) {
-    const { data: nicheData } = await supabase
-      .from("niches")
-      .select("whatsapp_phone_number_id")
-      .eq("id", nicheId)
-      .single();
-    phoneNumberId = nicheData?.whatsapp_phone_number_id || null;
-  }
-
-  if (!phoneNumberId) {
-    phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || null;
-  }
-
-  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-
-  await Promise.all([
-    supabase.from("messages").insert({
-      conversation_id: conversationId,
-      content: replyContent,
-      sender_type: "agent",
-      message_type: "text",
-      status: phoneNumberId && accessToken ? "pending" : "failed",
-      sender_label: "ia-auto-reply",
-    }),
-    supabase
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId),
-  ]);
-
-  if (!phoneNumberId || !accessToken) {
-    console.error("WhatsApp credentials missing for auto-reply");
-    return jsonResponse({ error: "WhatsApp not configured, but message saved", reply: replyContent }, 500);
-  }
-
-  const waResponse = await fetch(
-    `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: conversation.contact_phone,
-        type: "text",
-        text: { body: replyContent },
-      }),
-    }
-  );
-
-  const waResult = await waResponse.json();
-
-  if (!waResponse.ok) {
-    console.error("WhatsApp send error:", waResult);
-    await supabase
-      .from("messages")
-      .update({ status: "failed", provider_error: JSON.stringify(waResult.error || waResult) })
-      .eq("conversation_id", conversationId)
-      .eq("sender_label", "ia-auto-reply")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    return jsonResponse({ error: "Failed to send auto-reply", reply: replyContent, details: waResult }, 502);
-  }
-
-  await supabase
-    .from("messages")
-    .update({ status: "sent", provider_message_id: waResult.messages?.[0]?.id })
-    .eq("conversation_id", conversationId)
-    .eq("sender_label", "ia-auto-reply")
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  return jsonResponse({ success: true, reply: replyContent });
+  const sendResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${sendFunction}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ conversationId, message: replyContent, type: "text", senderLabel: "ia-auto-reply" }),
+  });
+  const sendResult = await sendResponse.json().catch(() => ({}));
+  if (!sendResponse.ok || sendResult?.success === false) return jsonResponse({ error: sendResult?.error || "Falha ao enviar resposta automática", reply: replyContent, details: sendResult }, 502);
+  return jsonResponse({ success: true, reply: replyContent, provider: sendFunction });
 }
 
 Deno.serve(async (req) => {

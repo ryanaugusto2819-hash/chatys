@@ -138,11 +138,12 @@ function ConnectionBadge({ conn }: { conn: ConnectionInfo | null }) {
   if (!conn) return null;
   const isMeta = conn.connection_id === 'whatsapp';
   const isEvolution = conn.connection_id === 'evolution';
+  const isUazapi = conn.connection_id === 'uazapigo';
   const Icon = isMeta ? Globe : Smartphone;
-  const providerLabel = isMeta ? 'Meta Cloud API' : isEvolution ? 'Evolution' : 'Z-API';
+  const providerLabel = isMeta ? 'Meta Cloud API' : isEvolution ? 'Evolution' : isUazapi ? 'uazapiGO' : 'Z-API';
   const colorClass = isMeta
     ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-    : isEvolution
+    : isEvolution || isUazapi
     ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
     : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
 
@@ -720,7 +721,7 @@ export default function Conversations({ embedded, selectedId, onSelectConversati
                             }}
                             className="rounded border-input text-primary focus:ring-ring h-3.5 w-3.5"
                           />
-                          <span className="text-xs text-foreground">{c.label} ({c.connection_id === 'whatsapp' ? 'Meta' : c.connection_id === 'evolution' ? 'Evolution' : 'Z-API'})</span>
+                          <span className="text-xs text-foreground">{c.label} ({c.connection_id === 'whatsapp' ? 'Meta' : c.connection_id === 'evolution' ? 'Evolution' : c.connection_id === 'uazapigo' ? 'uazapiGO' : 'Z-API'})</span>
                         </label>
                       );
                     }) : (

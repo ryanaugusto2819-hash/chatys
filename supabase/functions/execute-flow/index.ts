@@ -296,6 +296,7 @@ Deno.serve(async (req) => {
     let resolvedConnection: Record<string, unknown> | null = null;
     let useZapi = false;
     let useEvolution = false;
+    let useUazapi = false;
 
     if (conversation.connection_config_id) {
       const { data: directConfig } = await supabase
@@ -309,6 +310,7 @@ Deno.serve(async (req) => {
         resolvedConnection = directConfig.config as Record<string, unknown>;
         useZapi = directConfig.connection_id === "zapi";
         useEvolution = directConfig.connection_id === "evolution";
+        useUazapi = directConfig.connection_id === "uazapigo";
       }
     }
 
@@ -329,6 +331,7 @@ Deno.serve(async (req) => {
         const zapiConn = configs?.find((c: any) => c.connection_id === "zapi");
         const evoConn = configs?.find((c: any) => c.connection_id === "evolution");
         const waConn = configs?.find((c: any) => c.connection_id === "whatsapp");
+        const uazapiConn = configs?.find((c: any) => c.connection_id === "uazapigo");
 
         if (zapiConn) {
           resolvedConnection = zapiConn.config as Record<string, unknown>;
@@ -336,6 +339,9 @@ Deno.serve(async (req) => {
         } else if (evoConn) {
           resolvedConnection = evoConn.config as Record<string, unknown>;
           useEvolution = true;
+        } else if (uazapiConn) {
+          resolvedConnection = uazapiConn.config as Record<string, unknown>;
+          useUazapi = true;
         } else if (waConn) {
           resolvedConnection = waConn.config as Record<string, unknown>;
         }
@@ -347,12 +353,13 @@ Deno.serve(async (req) => {
       const { data: connections } = await supabase
         .from("connection_configs")
         .select("connection_id, config, is_connected")
-        .in("connection_id", ["zapi", "evolution", "whatsapp"])
+        .in("connection_id", ["zapi", "evolution", "uazapigo", "whatsapp"])
         .eq("is_connected", true);
 
       const zapiConnection = connections?.find((c: any) => c.connection_id === "zapi");
       const evoConnection = connections?.find((c: any) => c.connection_id === "evolution");
       const waConnection = connections?.find((c: any) => c.connection_id === "whatsapp");
+      const uazapiConnection = connections?.find((c: any) => c.connection_id === "uazapigo");
 
       if (zapiConnection) {
         resolvedConnection = zapiConnection.config as Record<string, unknown>;
@@ -360,6 +367,9 @@ Deno.serve(async (req) => {
       } else if (evoConnection) {
         resolvedConnection = evoConnection.config as Record<string, unknown>;
         useEvolution = true;
+      } else if (uazapiConnection) {
+        resolvedConnection = uazapiConnection.config as Record<string, unknown>;
+        useUazapi = true;
       } else if (waConnection) {
         resolvedConnection = waConnection.config as Record<string, unknown>;
       }
@@ -386,10 +396,10 @@ Deno.serve(async (req) => {
       ? ((resolvedConnection?.api_key as string) || Deno.env.get("EVOLUTION_API_KEY") || "")
       : "";
 
-    const phoneNumberId = (!useZapi && !useEvolution)
+    const phoneNumberId = (!useZapi && !useEvolution && !useUazapi)
       ? (resolvedConnection?.phone_number_id as string) || Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")
       : null;
-    const accessToken = (!useZapi && !useEvolution)
+    const accessToken = (!useZapi && !useEvolution && !useUazapi)
       ? (resolvedConnection?.access_token as string) || Deno.env.get("WHATSAPP_ACCESS_TOKEN")
       : null;
 
@@ -401,7 +411,7 @@ Deno.serve(async (req) => {
       return createJsonResponse({ error: "Evolution not configured" }, 500);
     }
 
-    if (!useExtension && !useZapi && !useEvolution && (!phoneNumberId || !accessToken)) {
+    if (!useExtension && !useZapi && !useEvolution && !useUazapi && (!phoneNumberId || !accessToken)) {
       return createJsonResponse({ error: "WhatsApp not configured" }, 500);
     }
 
@@ -416,7 +426,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : useEvolution ? "Evolution" : "WA Cloud"}`);
+    console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : useEvolution ? "Evolution" : useUazapi ? "uazapiGO" : "WA Cloud"}`);
 
     const { data: nodes } = await supabase
       .from("automation_nodes")
@@ -769,6 +779,30 @@ Deno.serve(async (req) => {
             errorDetail: extResp.ok ? undefined : ((waResult as Record<string, unknown>)?.error as string) || "Falha ao enviar comando para a extensão",
           };
           messageSavedExternally = extResp.ok && !!(waResult as Record<string, any>)?.savedMessage?.id;
+        } else if (useUazapi) {
+          let uazapiText = "";
+          let uazapiMedia: string | null = null;
+          let uazapiType = "text";
+          if (["image", "video", "audio"].includes(node.node_type)) {
+            uazapiType = node.node_type;
+            uazapiMedia = (config.media_url as string) || null;
+            uazapiText = node.node_type === "audio" ? "" : replaceVariables((config.caption as string) || "");
+          } else if (node.node_type === "call_button") {
+            uazapiText = `${replaceVariables((config.content as string) || "")}\n\n📞 ${(config.call_button_text as string) || "Ligar agora"}: ${(config.call_phone as string) || ""}`;
+          } else {
+            const textBody = (waPayload as Record<string, unknown>).text as Record<string, unknown> | undefined;
+            const interactiveBody = (waPayload as Record<string, unknown>).interactive as Record<string, unknown> | undefined;
+            uazapiText = (textBody?.body as string) || (((interactiveBody?.body as Record<string, unknown>)?.text as string) || "");
+          }
+          const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ conversationId, message: uazapiText, mediaUrl: uazapiMedia, type: uazapiType, senderLabel: requestedLabel || "fluxo" }),
+          });
+          waResult = await response.json().catch(() => ({}));
+          waResponse = new Response(JSON.stringify(waResult), { status: response.status });
+          sendValidation = { success: response.ok && (waResult as any)?.success !== false, errorDetail: (waResult as any)?.error };
+          messageSavedExternally = Boolean((waResult as any)?.savedMessage?.id);
         } else if (useZapi) {
           let zapiEndpoint: string;
           let zapiBody: Record<string, unknown>;
@@ -914,7 +948,7 @@ Deno.serve(async (req) => {
 
         // Validate response body beyond just HTTP status
         if (!useExtension) {
-          sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution, node.id);
+          sendValidation = validateSendResponse(waResponse, waResult, useZapi || useEvolution || useUazapi, node.id);
         }
       } catch (error) {
         console.error("[execute-flow] Send exception for node", node.id, ":", error);
@@ -964,7 +998,7 @@ Deno.serve(async (req) => {
 
         const providerErrorPayload = JSON.stringify({
           code: waResponse.status,
-          title: useEvolution ? "Evolution API" : useZapi ? "Z-API" : "WhatsApp",
+          title: useEvolution ? "Evolution API" : useUazapi ? "uazapiGO" : useZapi ? "Z-API" : "WhatsApp",
           message: errorDetail,
           error_data: {
             attempts: providerAttempts,

@@ -207,6 +207,27 @@ Deno.serve(async (req) => {
         status = "error";
         details = { error: "Missing instance_id or token" };
       }
+    } else if (conn.connection_id === "uazapigo") {
+      const serverUrl = (config.server_url || "").replace(/\/+$/, "");
+      const token = config.token || "";
+      if (!serverUrl || !token) {
+        status = "error";
+        details = { error: "URL ou token da uazapiGO ausente" };
+      } else {
+        try {
+          const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } });
+          const data = await response.json().catch(() => ({}));
+          const state = String(data?.status ?? data?.state ?? data?.instance?.status ?? data?.instance?.state ?? "unknown").toLowerCase();
+          const connected = response.ok && ["connected", "open"].includes(state);
+          status = connected ? "active" : "error";
+          details = connected
+            ? { state, phone: data?.phone ?? data?.instance?.phone ?? null, instance: config.instance_name || null }
+            : { error: data?.error || data?.message || `Estado da instância: ${state}`, state };
+        } catch (e) {
+          status = "error";
+          details = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
     }
 
     const patch: Record<string, unknown> = { status, last_checked_at: new Date().toISOString() };
@@ -217,6 +238,7 @@ Deno.serve(async (req) => {
       if (evolutionState === "open") patch.is_connected = true;
       else if (evolutionState === "close") patch.is_connected = false;
     }
+    if (conn.connection_id === "uazapigo") patch.is_connected = status === "active";
 
     await supabase
       .from("connection_configs")

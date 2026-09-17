@@ -56,6 +56,8 @@ export async function sendWhatsAppMessage(
       functionName = "zapi-send";
     } else if (connConfig?.connection_id === "evolution") {
       functionName = "evolution-send";
+    } else if (connConfig?.connection_id === "uazapigo") {
+      functionName = "uazapigo-send";
     } else if (connConfig?.connection_id === "extension") {
       functionName = "extension-send";
     }
@@ -64,12 +66,12 @@ export async function sendWhatsAppMessage(
     const { data: connections } = await supabase
       .from("connection_configs")
       .select("connection_id")
-      .in("connection_id", ["zapi", "evolution"])
+      .in("connection_id", ["zapi", "evolution", "uazapigo"])
       .eq("is_connected", true)
       .limit(1);
 
     if (connections && connections.length > 0) {
-      functionName = connections[0].connection_id === "evolution" ? "evolution-send" : "zapi-send";
+      functionName = connections[0].connection_id === "evolution" ? "evolution-send" : connections[0].connection_id === "uazapigo" ? "uazapigo-send" : "zapi-send";
     }
   }
 

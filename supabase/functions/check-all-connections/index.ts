@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     const { data: connections, error } = await supabase
       .from("connection_configs")
       .select("id, connection_id, config, is_connected")
-      .or("is_connected.eq.true,connection_id.eq.evolution");
+      .or("is_connected.eq.true,connection_id.eq.evolution,connection_id.eq.uazapigo");
 
     if (error) throw error;
     if (!connections || connections.length === 0) {

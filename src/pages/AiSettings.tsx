@@ -98,8 +98,8 @@ export default function AiSettings() {
       : supabase.from('automation_flows').select('id, name, description, is_active, niche_id').order('name');
 
     const connectionsQuery = wsId
-      ? (supabase.from('connection_configs') as any).select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi', 'evolution']).eq('workspace_id', wsId).order('created_at')
-      : supabase.from('connection_configs').select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi', 'evolution']).order('created_at');
+      ? (supabase.from('connection_configs') as any).select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi', 'evolution', 'uazapigo']).eq('workspace_id', wsId).order('created_at')
+      : supabase.from('connection_configs').select('id, connection_id, label, status, is_connected').in('connection_id', ['whatsapp', 'zapi', 'evolution', 'uazapigo']).order('created_at');
 
     const [nichesRes, flowsRes, connectionsRes] = await Promise.all([
       nichesQuery,
