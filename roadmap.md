@@ -7,4 +7,4 @@
 - [x] Integrar cartão da conexão e QR Code
 - [x] Integrar status periódico
 - [x] Integrar automações, IA, follow-ups e termos
-- [ ] Confirmar visualmente a opção na tela autenticada
+- [x] Confirmar visualmente a opção na tela autenticada
