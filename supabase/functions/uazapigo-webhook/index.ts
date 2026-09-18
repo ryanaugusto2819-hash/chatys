@@ -38,6 +38,35 @@ function extractMessage(payload: any) {
   };
 }
 
+async function resolveIncomingMedia(
+  serverUrl: string,
+  token: string,
+  messageId: string | null,
+  currentUrl: string | null,
+  type: string,
+) {
+  if (currentUrl || type === "text" || !messageId) return currentUrl;
+  try {
+    const response = await fetch(`${serverUrl.replace(/\/+$/, "")}/message/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: JSON.stringify({ id: messageId, return_link: true, return_base64: false, generate_mp3: true }),
+    });
+    const raw = await response.text();
+    let result: any = {};
+    try { result = raw ? JSON.parse(raw) : {}; } catch { result = {}; }
+    const fileUrl = first(result?.fileURL, result?.fileUrl, result?.url, result?.data?.fileURL, result?.data?.fileUrl, result?.data?.url);
+    if (!response.ok || !fileUrl) {
+      console.error(`[uazapigo-webhook] media download failed [${response.status}]: ${raw.slice(0, 500)}`);
+      return null;
+    }
+    return fileUrl;
+  } catch (error) {
+    console.error("[uazapigo-webhook] media download error:", error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
 async function triggerAutomations(conversationId: string) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -87,6 +116,13 @@ Deno.serve(async (req) => {
       const connection = (configs || []).find((row: any) => row.id === requestedConfigId || (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
       if (!connection) { console.error("[uazapigo-webhook] conexão não encontrada"); continue; }
       if (!connection.is_connected) await supabase.from("connection_configs").update({ is_connected: true, status: "active" }).eq("id", connection.id);
+
+      const connectionConfig = (connection.config || {}) as Record<string, unknown>;
+      const serverUrl = String(connectionConfig.server_url || Deno.env.get("UAZAPIGO_SERVER_URL") || "").trim();
+      const connectionToken = String(connectionConfig.token || token || "").trim();
+      if (!message.mediaUrl && message.type !== "text" && serverUrl && connectionToken) {
+        message.mediaUrl = await resolveIncomingMedia(serverUrl, connectionToken, message.id, null, message.type);
+      }
 
        let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (!conversation) {
