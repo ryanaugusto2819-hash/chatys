@@ -230,7 +230,11 @@ Deno.serve(async (req) => {
       if (message.id) {
         const { data: duplicate } = await supabase.from("messages").select("id").eq("provider_message_id", message.id).maybeSingle();
         if (duplicate) { 
-          if (message.fromMe) await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id); 
+          if (message.fromMe) {
+            await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id);
+          } else if (message.mediaUrl) {
+            await supabase.from("messages").update({ media_url: message.mediaUrl }).eq("id", duplicate.id);
+          }
           continue; 
         }
       }
