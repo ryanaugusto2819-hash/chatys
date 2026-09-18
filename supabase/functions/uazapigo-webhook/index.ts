@@ -79,6 +79,96 @@ function extractMessage(payload: any) {
   };
 }
 
+function decodeBase64(value: string) {
+  const clean = value.includes(",") ? value.slice(value.indexOf(",") + 1) : value;
+  const binary = atob(clean);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function extensionFor(type: string, mimeType: string) {
+  if (mimeType.includes("png")) return "png";
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("gif")) return "gif";
+  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("mpeg")) return type === "audio" ? "mp3" : "mpeg";
+  if (mimeType.includes("pdf")) return "pdf";
+  return type === "image" ? "jpg" : type === "audio" ? "ogg" : type === "video" ? "mp4" : "bin";
+}
+
+async function persistIncomingMedia(
+  supabase: any,
+  serverUrl: string,
+  token: string,
+  messageId: string,
+  type: string,
+) {
+  const downloadUrl = new URL(`${serverUrl.replace(/\/+$/, "")}/message/download`);
+  downloadUrl.searchParams.set("token", token);
+  const response = await fetch(downloadUrl.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", token },
+    body: JSON.stringify({ id: messageId, messageid: messageId, return_link: true, return_base64: true, generate_mp3: true }),
+  });
+  const responseType = response.headers.get("content-type") || "";
+  if (response.ok && !responseType.includes("json")) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length) return null;
+    const mimeType = responseType.split(";")[0] || "application/octet-stream";
+    const path = `uazapigo/${messageId}.${extensionFor(type, mimeType)}`;
+    const { error } = await supabase.storage.from("chat-media").upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+    });
+    if (error) {
+      console.error("[uazapigo-webhook] binary media storage failed:", error.message);
+      return null;
+    }
+    return supabase.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
+  }
+
+  const raw = await response.text();
+  let result: any = {};
+  try { result = raw ? JSON.parse(raw) : {}; } catch { result = {}; }
+  if (!response.ok) {
+    console.error(`[uazapigo-webhook] media download failed [${response.status}]: ${raw.slice(0, 500)}`);
+    return null;
+  }
+
+  const source = result?.data ?? result;
+  const base64 = first(source?.base64Data, source?.base64, result?.base64Data, result?.base64);
+  const remoteUrl = first(source?.fileURL, source?.fileUrl, source?.url, result?.fileURL, result?.fileUrl, result?.url);
+  let bytes: Uint8Array | null = null;
+  let mimeType = first(source?.mimetype, source?.mimeType, result?.mimetype, result?.mimeType) || "application/octet-stream";
+
+  if (base64) {
+    bytes = decodeBase64(base64);
+    const dataMime = base64.match(/^data:([^;]+);base64,/i)?.[1];
+    if (dataMime) mimeType = dataMime;
+  } else if (remoteUrl) {
+    const mediaResponse = await fetch(remoteUrl, { headers: { token } });
+    if (mediaResponse.ok) {
+      bytes = new Uint8Array(await mediaResponse.arrayBuffer());
+      mimeType = mediaResponse.headers.get("content-type")?.split(";")[0] || mimeType;
+    } else {
+      console.error(`[uazapigo-webhook] returned media URL failed [${mediaResponse.status}]`);
+    }
+  }
+
+  if (!bytes?.length) return null;
+  const path = `uazapigo/${messageId}.${extensionFor(type, mimeType)}`;
+  const { error } = await supabase.storage.from("chat-media").upload(path, bytes, {
+    contentType: mimeType,
+    upsert: true,
+  });
+  if (error) {
+    console.error("[uazapigo-webhook] media storage failed:", error.message);
+    return null;
+  }
+  return supabase.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
+}
+
 async function triggerAutomations(conversationId: string) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -133,17 +223,15 @@ Deno.serve(async (req) => {
       if (!connection) { console.error("[uazapigo-webhook] conexão não encontrada"); continue; }
       if (!connection.is_connected) await supabase.from("connection_configs").update({ is_connected: true, status: "active" }).eq("id", connection.id);
 
-      // Construct download URL if mediaUrl is missing or points to internal WhatsApp servers
+      // Copy provider media into our storage. Provider URLs require authentication
+      // and cannot be rendered directly by the browser.
       if (message.type !== "text" && message.id) {
-        const isInternalUrl = !message.mediaUrl || message.mediaUrl.includes("whatsapp.net");
-        if (isInternalUrl) {
-          const config = (connection.config || {}) as any;
-          const serverUrl = String(config.server_url || "").replace(/\/+$/, "");
-          const instanceToken = String(config.token || "");
-          if (serverUrl && instanceToken) {
-            // Using uazapiGO download endpoint
-            message.mediaUrl = `${serverUrl}/message/download?token=${instanceToken}&messageid=${message.id}`;
-          }
+        const config = (connection.config || {}) as any;
+        const serverUrl = String(config.server_url || Deno.env.get("UAZAPIGO_SERVER_URL") || "").trim();
+        const instanceToken = String(config.token || token || "").trim();
+        if (serverUrl && instanceToken) {
+          const storedUrl = await persistIncomingMedia(supabase, serverUrl, instanceToken, message.id, message.type);
+          if (storedUrl) message.mediaUrl = storedUrl;
         }
       }
 
@@ -161,7 +249,11 @@ Deno.serve(async (req) => {
       if (message.id) {
         const { data: duplicate } = await supabase.from("messages").select("id").eq("provider_message_id", message.id).maybeSingle();
         if (duplicate) { 
-          if (message.fromMe) await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id); 
+          if (message.fromMe) {
+            await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id);
+          } else if (message.mediaUrl) {
+            await supabase.from("messages").update({ media_url: message.mediaUrl }).eq("id", duplicate.id);
+          }
           continue; 
         }
       }
