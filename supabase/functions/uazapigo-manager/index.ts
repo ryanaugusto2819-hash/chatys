@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       connect: { path: "/instance/connect", method: "POST" },
       disconnect: { path: "/instance/disconnect", method: "POST" },
       delete: { path: "/instance", method: "DELETE" },
-      set_webhook: { path: "/webhook/set", method: "POST" },
+      set_webhook: { path: "/webhook", method: "POST" },
     };
     const target = actionPaths[parsed.data.action];
     const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook?configId=${encodeURIComponent(connection.id)}`;
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json", token },
       body: target.method === "GET" || target.method === "DELETE" ? undefined : JSON.stringify(
         parsed.data.action === "set_webhook"
-          ? { url: webhookUrl, events: ["connection", "messages", "messages_update"], addUrlEvents: false, addUrlTypesMessages: false }
+          ? { enabled: true, url: webhookUrl, events: ["connection", "messages", "messages_update"], addUrlEvents: false, addUrlTypesMessages: false }
           : {},
       ),
     });

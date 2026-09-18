@@ -326,10 +326,11 @@ Deno.serve(async (req) => {
       const token = String(connectionConfig.token || "");
       const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook?configId=${encodeURIComponent(data.id)}`;
       try {
-        const webhookResponse = await fetch(`${serverUrl}/webhook/set`, {
+        const webhookResponse = await fetch(`${serverUrl}/webhook`, {
           method: "POST",
           headers: { "Content-Type": "application/json", token },
           body: JSON.stringify({
+            enabled: true,
             url: webhookUrl,
             events: ["connection", "messages", "messages_update"],
             addUrlEvents: false,
