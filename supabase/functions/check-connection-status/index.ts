@@ -43,6 +43,13 @@ async function getSubscribedApps(wabaId: string, accessToken: string, metaAppId?
   };
 }
 
+const getUazapiState = (data: any) => {
+  if (data?.status?.connected === true || data?.status?.loggedIn === true) return "connected";
+  const candidates = [data?.instance?.status, data?.instance?.state, data?.state, data?.status];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return String(value || "unknown").toLowerCase();
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -217,7 +224,7 @@ Deno.serve(async (req) => {
         try {
           const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } });
           const data = await response.json().catch(() => ({}));
-          const state = String(data?.status ?? data?.state ?? data?.instance?.status ?? data?.instance?.state ?? "unknown").toLowerCase();
+          const state = getUazapiState(data);
           const connected = response.ok && ["connected", "open"].includes(state);
           status = connected ? "active" : "error";
           details = connected

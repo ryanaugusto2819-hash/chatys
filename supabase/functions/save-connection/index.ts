@@ -21,6 +21,13 @@ const getWebhookUrl = (connectionId: string) =>
     ? `${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`
     : `${Deno.env.get("SUPABASE_URL")}/functions/v1/zapi-webhook`;
 
+const getUazapiState = (data: any) => {
+  if (data?.status?.connected === true || data?.status?.loggedIn === true) return "connected";
+  const candidates = [data?.instance?.status, data?.instance?.state, data?.state, data?.status];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return String(value || "unknown").toLowerCase();
+};
+
 async function graphRequest(path: string, accessToken: string, init?: RequestInit) {
   const separator = path.includes("?") ? "&" : "?";
   const response = await fetch(`${GRAPH_API}${path}${separator}access_token=${encodeURIComponent(accessToken)}`, init);
@@ -291,7 +298,7 @@ Deno.serve(async (req) => {
 
       const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } }).catch(() => null);
       const result = response ? await response.json().catch(() => ({})) : {};
-      const state = String(result?.status ?? result?.state ?? result?.instance?.status ?? result?.instance?.state ?? "unknown").toLowerCase();
+      const state = getUazapiState(result);
       const connected = Boolean(response?.ok && ["connected", "open"].includes(state));
       status = connected ? "active" : "error";
       connectionConfig = {

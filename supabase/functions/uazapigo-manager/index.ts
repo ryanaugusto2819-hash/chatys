@@ -8,6 +8,13 @@ const BodySchema = z.object({
 });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+const getInstanceState = (data: any) => {
+  if (data?.status?.connected === true || data?.status?.loggedIn === true) return "connected";
+  const candidates = [data?.instance?.status, data?.instance?.state, data?.state, data?.status];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return String(value || "unknown").toLowerCase();
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -50,7 +57,7 @@ Deno.serve(async (req) => {
     try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text.slice(0, 800) }; }
     if (!response.ok || data?.error) return json({ error: data?.error || data?.message || `HTTP ${response.status}`, details: data }, response.status || 502);
 
-    const state = String(data?.status ?? data?.state ?? data?.instance?.status ?? data?.instance?.state ?? "").toLowerCase();
+    const state = getInstanceState(data);
     if (parsed.data.action === "status") {
       const connected = state === "connected" || state === "open";
       await service.from("connection_configs").update({ is_connected: connected, status: connected ? "active" : "error", last_checked_at: new Date().toISOString() }).eq("id", connection.id);
