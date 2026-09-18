@@ -39,6 +39,37 @@ function providerMessageId(data: any): string | null {
   return value ? String(value) : null;
 }
 
+function normalizeRecipient(value: unknown): string {
+  const recipient = String(value || "").trim();
+  if (/@(?:s\.whatsapp\.net|lid|g\.us|newsletter)$/.test(recipient)) return recipient;
+  return recipient.replace(/\D/g, "");
+}
+
+async function resolveRecipient(serverUrl: string, token: string, phone: string, storedChatId: unknown) {
+  const stored = normalizeRecipient(storedChatId);
+  if (stored) return stored;
+
+  try {
+    const response = await fetch(`${serverUrl}/chat/find`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: JSON.stringify({ operator: "OR", limit: 10, wa_chatid: `~${phone}` }),
+    });
+    const raw = await response.text();
+    if (!response.ok) {
+      console.warn(`[uazapigo-send] chat lookup failed [${response.status}]: ${raw.slice(0, 500)}`);
+      return phone;
+    }
+    const body = raw ? JSON.parse(raw) : {};
+    const chats = Array.isArray(body?.chats) ? body.chats : [];
+    const match = chats.find((chat: any) => String(chat?.wa_chatid || "").replace(/\D/g, "").includes(phone));
+    return normalizeRecipient(match?.wa_chatid) || phone;
+  } catch (error) {
+    console.warn("[uazapigo-send] chat lookup error:", error instanceof Error ? error.message : String(error));
+    return phone;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -50,7 +81,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: conversation, error: conversationError } = await supabase
       .from("conversations")
-      .select("contact_phone, connection_config_id")
+      .select("contact_phone, provider_chat_id, connection_config_id")
       .eq("id", conversationId)
       .single();
     if (conversationError || !conversation) return json({ error: "Conversa não encontrada" }, 404);
@@ -77,18 +108,23 @@ Deno.serve(async (req) => {
     if (!serverUrl || !token) return json({ error: "URL ou token da uazapiGO não configurado" }, 500);
 
     const phone = String(conversation.contact_phone || "").replace(/\D/g, "");
+    const recipient = await resolveRecipient(serverUrl, token, phone, conversation.provider_chat_id);
+    if (!recipient) return json({ error: "Destinatário da conversa não encontrado" }, 422);
+    if (recipient !== conversation.provider_chat_id) {
+      await supabase.from("conversations").update({ provider_chat_id: recipient }).eq("id", conversationId);
+    }
     const signedMediaUrl = await downloadableMediaUrl(supabase, mediaUrl);
     const endpoint = signedMediaUrl ? "/send/media" : "/send/text";
     const payload: Record<string, unknown> = signedMediaUrl
       ? {
-          number: phone,
+          number: recipient,
           type: type === "audio" ? "myaudio" : type,
           file: signedMediaUrl,
           text: message || undefined,
           caption: message || undefined,
           docName: type === "document" ? (message || "Documento") : undefined,
         }
-      : { number: phone, text: message };
+      : { number: recipient, text: message };
 
     const providerResponse = await fetch(`${serverUrl}${endpoint}`, {
       method: "POST",

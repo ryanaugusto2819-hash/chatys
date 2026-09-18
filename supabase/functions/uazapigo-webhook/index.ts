@@ -17,7 +17,7 @@ function normalizeStatus(value: unknown) {
 function extractMessage(payload: any) {
   const data = payload?.data ?? payload?.message ?? payload;
   const message = data?.message ?? data;
-  const chatId = first(data?.chatid, data?.chatId, message?.chatid, message?.chatId, data?.key?.remoteJid, data?.remoteJid) || "";
+  const chatId = first(data?.chatid, data?.chatId, data?.wa_chatid, message?.chatid, message?.chatId, message?.wa_chatid, data?.key?.remoteJid, data?.remoteJid) || "";
   const phone = String(first(data?.sender, message?.sender, data?.phone, message?.phone, chatId) || "").split("@")[0].replace(/\D/g, "");
   const typeRaw = String(first(data?.messageType, data?.type, message?.messageType, message?.type) || "text").toLowerCase();
   const fileUrl = first(data?.fileURL, data?.fileUrl, data?.mediaUrl, data?.url, message?.fileURL, message?.fileUrl, message?.mediaUrl, message?.url) || null;
@@ -86,12 +86,12 @@ Deno.serve(async (req) => {
       if (!connection) { console.error("[uazapigo-webhook] conexão não encontrada"); continue; }
       if (!connection.is_connected) await supabase.from("connection_configs").update({ is_connected: true, status: "active" }).eq("id", connection.id);
 
-      let { data: conversation } = await supabase.from("conversations").select("id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+       let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (!conversation) {
-        const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null }).select("id").single();
+         const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, provider_chat_id: message.chatId || null, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null }).select("id, provider_chat_id").single();
         conversation = created.data;
       } else {
-        await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active" }).eq("id", conversation.id);
+         await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active", ...(message.chatId ? { provider_chat_id: message.chatId } : {}) }).eq("id", conversation.id);
       }
       if (!conversation?.id) continue;
 
