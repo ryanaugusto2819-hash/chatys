@@ -104,11 +104,30 @@ async function persistIncomingMedia(
   messageId: string,
   type: string,
 ) {
-  const response = await fetch(`${serverUrl.replace(/\/+$/, "")}/message/download`, {
+  const downloadUrl = new URL(`${serverUrl.replace(/\/+$/, "")}/message/download`);
+  downloadUrl.searchParams.set("token", token);
+  const response = await fetch(downloadUrl.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json", token },
-    body: JSON.stringify({ id: messageId, return_link: true, return_base64: true, generate_mp3: true }),
+    body: JSON.stringify({ id: messageId, messageid: messageId, return_link: true, return_base64: true, generate_mp3: true }),
   });
+  const responseType = response.headers.get("content-type") || "";
+  if (response.ok && !responseType.includes("json")) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length) return null;
+    const mimeType = responseType.split(";")[0] || "application/octet-stream";
+    const path = `uazapigo/${messageId}.${extensionFor(type, mimeType)}`;
+    const { error } = await supabase.storage.from("chat-media").upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+    });
+    if (error) {
+      console.error("[uazapigo-webhook] binary media storage failed:", error.message);
+      return null;
+    }
+    return supabase.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
+  }
+
   const raw = await response.text();
   let result: any = {};
   try { result = raw ? JSON.parse(raw) : {}; } catch { result = {}; }
