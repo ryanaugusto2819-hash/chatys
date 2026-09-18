@@ -18,19 +18,60 @@ function extractMessage(payload: any) {
   const data = payload?.data ?? payload?.message ?? payload;
   const message = data?.message ?? data;
   const chat = data?.chat ?? message?.chat ?? {};
+  
   const senderJid = first(data?.sender, message?.sender);
-  const chatId = first(data?.chatid, data?.chatId, data?.wa_chatid, message?.chatid, message?.chatId, message?.wa_chatid, chat?.wa_chatid, chat?.chatid, chat?.id, data?.key?.remoteJid, data?.remoteJid, senderJid?.includes("@") ? senderJid : undefined) || "";
-  const phone = String(first(data?.phone, message?.phone, chat?.phone, data?.sender_pn, message?.sender_pn, data?.sender, message?.sender, chatId) || "").split("@")[0].replace(/\D/g, "");
-  const typeRaw = String(first(data?.messageType, data?.type, message?.messageType, message?.type) || "text").toLowerCase();
-  const fileUrl = first(data?.fileURL, data?.fileUrl, data?.mediaUrl, data?.url, message?.fileURL, message?.fileUrl, message?.mediaUrl, message?.url) || null;
-  const text = first(data?.text, data?.body, data?.caption, message?.text, message?.body, message?.caption) || "";
-  const type = /image|photo/.test(typeRaw) ? "image" : /video/.test(typeRaw) ? "video" : /audio|ptt|voice/.test(typeRaw) ? "audio" : /document|file/.test(typeRaw) ? "document" : "text";
+  const chatId = first(
+    data?.chatid, data?.chatId, data?.wa_chatid, 
+    message?.chatid, message?.chatId, message?.wa_chatid, 
+    chat?.wa_chatid, chat?.chatid, chat?.id, 
+    data?.key?.remoteJid, data?.remoteJid, 
+    senderJid?.includes("@") ? senderJid : undefined
+  ) || "";
+  
+  const phone = String(first(
+    data?.phone, message?.phone, chat?.phone, 
+    data?.sender_pn, message?.sender_pn, 
+    data?.sender, message?.sender, chatId
+  ) || "").split("@")[0].replace(/\D/g, "");
+
+  const typeRaw = String(
+    first(data?.messageType, data?.type, message?.messageType, message?.type) || "text"
+  ).toLowerCase();
+
+  const type = /image|photo/.test(typeRaw) ? "image" : 
+               /video/.test(typeRaw) ? "video" : 
+               /audio|ptt|voice/.test(typeRaw) ? "audio" : 
+               /document|file/.test(typeRaw) ? "document" : "text";
+
+  // Try to find the file URL in various possible fields used by uazapi and other providers
+  const fileUrl = first(
+    data?.fileURL, data?.fileUrl, data?.mediaUrl, data?.url, data?.file, data?.base64, data?.arquivo,
+    message?.fileURL, message?.fileUrl, message?.mediaUrl, message?.url, message?.file, message?.base64, message?.arquivo,
+    message?.imageMessage?.url, message?.videoMessage?.url, message?.audioMessage?.url, message?.documentMessage?.url,
+    message?.image?.url, message?.video?.url, message?.audio?.url, message?.document?.url,
+    data?.image?.url, data?.video?.url, data?.audio?.url, data?.document?.url
+  ) || null;
+
+  // Try to find the text/caption in various possible fields
+  const text = first(
+    data?.text, data?.body, data?.caption, 
+    message?.text, message?.body, message?.caption,
+    message?.conversation, message?.extendedTextMessage?.text,
+    message?.imageMessage?.caption, message?.videoMessage?.caption, message?.documentMessage?.caption,
+    message?.image?.caption, message?.video?.caption, message?.document?.caption,
+    data?.image?.caption, data?.video?.caption, data?.document?.caption
+  ) || "";
+
   return {
     data,
     phone,
     chatId,
     fromMe: data?.fromMe === true || message?.fromMe === true,
-    id: first(data?.messageid, data?.messageId, data?.id, message?.messageid, message?.messageId, message?.id, data?.key?.id) || null,
+    id: first(
+      data?.messageid, data?.messageId, data?.id, 
+      message?.messageid, message?.messageId, message?.id, 
+      data?.key?.id
+    ) || null,
     name: first(data?.senderName, data?.pushName, data?.chatName, message?.senderName, message?.pushName) || phone,
     type,
     content: text || (type === "image" ? "[Imagem]" : type === "video" ? "[Vídeo]" : type === "document" ? "[Documento]" : type === "audio" ? "" : "[Mensagem]"),
@@ -50,6 +91,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") return json({ status: "ok", provider: "uazapiGO" });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
+  
   try {
     const payload = await req.json();
     const requestedConfigId = new URL(req.url).searchParams.get("configId");
@@ -81,32 +123,66 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const message = extractMessage({ ...payload, data: item });
       if (!message.phone || message.chatId.includes("@g.us") || message.chatId === "status@broadcast") continue;
+      
       const token = first(payload?.token, payload?.instance?.token, item?.token);
       const instanceId = first(payload?.instance, payload?.instanceId, item?.instance, item?.instanceId);
+      
       const { data: configs } = await supabase.from("connection_configs").select("id, workspace_id, sector, is_connected, config").eq("connection_id", "uazapigo");
       const connection = (configs || []).find((row: any) => row.id === requestedConfigId || (token && row.config?.token === token) || (instanceId && [row.config?.instance_id, row.config?.instance_name].includes(instanceId)));
+      
       if (!connection) { console.error("[uazapigo-webhook] conexão não encontrada"); continue; }
       if (!connection.is_connected) await supabase.from("connection_configs").update({ is_connected: true, status: "active" }).eq("id", connection.id);
 
-       let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      // Construct download URL if mediaUrl is missing or points to internal WhatsApp servers
+      if (message.type !== "text" && message.id) {
+        const isInternalUrl = !message.mediaUrl || message.mediaUrl.includes("whatsapp.net");
+        if (isInternalUrl) {
+          const config = (connection.config || {}) as any;
+          const serverUrl = String(config.server_url || "").replace(/\/+$/, "");
+          const instanceToken = String(config.token || "");
+          if (serverUrl && instanceToken) {
+            // Using uazapiGO download endpoint
+            message.mediaUrl = `${serverUrl}/message/download?token=${instanceToken}&messageid=${message.id}`;
+          }
+        }
+      }
+
+      let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      
       if (!conversation) {
-         const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, provider_chat_id: message.chatId || null, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null }).select("id, provider_chat_id").single();
+        const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, provider_chat_id: message.chatId || null, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null }).select("id, provider_chat_id").single();
         conversation = created.data;
       } else {
-         await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active", ...(message.chatId ? { provider_chat_id: message.chatId } : {}) }).eq("id", conversation.id);
+        await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active", ...(message.chatId ? { provider_chat_id: message.chatId } : {}) }).eq("id", conversation.id);
       }
+      
       if (!conversation?.id) continue;
 
       if (message.id) {
         const { data: duplicate } = await supabase.from("messages").select("id").eq("provider_message_id", message.id).maybeSingle();
-        if (duplicate) { if (message.fromMe) await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id); continue; }
+        if (duplicate) { 
+          if (message.fromMe) await supabase.from("messages").update({ status: "sent", provider_status: "sent" }).eq("id", duplicate.id); 
+          continue; 
+        }
       }
+      
       if (message.fromMe && message.content) {
         const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data: queued } = await supabase.from("messages").select("id").eq("conversation_id", conversation.id).eq("sender_type", "agent").eq("content", message.content).is("provider_message_id", null).gte("created_at", since).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (queued) { await supabase.from("messages").update({ status: "sent", provider_status: "sent", provider_message_id: message.id }).eq("id", queued.id); continue; }
       }
-      const { error } = await supabase.from("messages").insert({ conversation_id: conversation.id, content: message.content, sender_type: message.fromMe ? "agent" : "customer", sender_label: message.fromMe ? "whatsapp" : null, message_type: message.type, media_url: message.mediaUrl, status: message.fromMe ? "sent" : "delivered", provider_message_id: message.id });
+      
+      const { error } = await supabase.from("messages").insert({ 
+        conversation_id: conversation.id, 
+        content: message.content, 
+        sender_type: message.fromMe ? "agent" : "customer", 
+        sender_label: message.fromMe ? "whatsapp" : null, 
+        message_type: message.type, 
+        media_url: message.mediaUrl, 
+        status: message.fromMe ? "sent" : "delivered", 
+        provider_message_id: message.id 
+      });
+      
       if (!error && !message.fromMe) await triggerAutomations(conversation.id);
     }
     return json({ success: true });
