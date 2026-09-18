@@ -17,8 +17,9 @@ function normalizeStatus(value: unknown) {
 function extractMessage(payload: any) {
   const data = payload?.data ?? payload?.message ?? payload;
   const message = data?.message ?? data;
-  const chatId = first(data?.chatid, data?.chatId, data?.wa_chatid, message?.chatid, message?.chatId, message?.wa_chatid, data?.key?.remoteJid, data?.remoteJid) || "";
-  const phone = String(first(data?.sender, message?.sender, data?.phone, message?.phone, chatId) || "").split("@")[0].replace(/\D/g, "");
+  const chat = data?.chat ?? message?.chat ?? {};
+  const chatId = first(data?.chatid, data?.chatId, data?.wa_chatid, message?.chatid, message?.chatId, message?.wa_chatid, chat?.wa_chatid, chat?.chatid, chat?.id, data?.key?.remoteJid, data?.remoteJid) || "";
+  const phone = String(first(data?.phone, message?.phone, chat?.phone, data?.sender_pn, message?.sender_pn, data?.sender, message?.sender, chatId) || "").split("@")[0].replace(/\D/g, "");
   const typeRaw = String(first(data?.messageType, data?.type, message?.messageType, message?.type) || "text").toLowerCase();
   const fileUrl = first(data?.fileURL, data?.fileUrl, data?.mediaUrl, data?.url, message?.fileURL, message?.fileUrl, message?.mediaUrl, message?.url) || null;
   const text = first(data?.text, data?.body, data?.caption, message?.text, message?.body, message?.caption) || "";

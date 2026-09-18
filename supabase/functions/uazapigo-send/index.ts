@@ -45,29 +45,63 @@ function normalizeRecipient(value: unknown): string {
   return recipient.replace(/\D/g, "");
 }
 
+function extractChats(body: any): any[] {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.chats)) return body.chats;
+  if (Array.isArray(body?.data)) return body.data;
+  if (Array.isArray(body?.data?.chats)) return body.data.chats;
+  return [];
+}
+
+function chatRecipient(chat: any): string {
+  return normalizeRecipient(
+    chat?.wa_chatid ?? chat?.waChatId ?? chat?.chatid ?? chat?.chatId ??
+    chat?.remoteJid ?? chat?.jid ?? chat?.id,
+  );
+}
+
 async function resolveRecipient(serverUrl: string, token: string, phone: string, storedChatId: unknown) {
   const stored = normalizeRecipient(storedChatId);
-  if (stored) return stored;
+  // A complete JID is safe to reuse. A digits-only value may be a LID that the
+  // old webhook stripped, so it must be resolved against uazapiGO first.
+  if (stored.includes("@")) return stored;
 
-  try {
-    const response = await fetch(`${serverUrl}/chat/find`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify({ operator: "OR", limit: 10, wa_chatid: `~${phone}` }),
-    });
-    const raw = await response.text();
-    if (!response.ok) {
-      console.warn(`[uazapigo-send] chat lookup failed [${response.status}]: ${raw.slice(0, 500)}`);
-      return phone;
+  const lookupValue = stored || phone;
+  const filters = [
+    { operator: "OR", limit: 20, wa_chatid: `~${lookupValue}` },
+    { operator: "OR", limit: 20, phone: `~${phone}` },
+  ];
+
+  for (const filter of filters) {
+    try {
+      const response = await fetch(`${serverUrl}/chat/find`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token },
+        body: JSON.stringify(filter),
+      });
+      const raw = await response.text();
+      if (!response.ok) {
+        console.warn(`[uazapigo-send] chat lookup failed [${response.status}]: ${raw.slice(0, 500)}`);
+        continue;
+      }
+      const body = raw ? JSON.parse(raw) : {};
+      const chats = extractChats(body);
+      const exact = chats.find((chat: any) => {
+        const recipient = chatRecipient(chat);
+        const chatPhone = String(chat?.phone ?? chat?.wa_phone ?? "").replace(/\D/g, "");
+        return recipient.replace(/\D/g, "") === lookupValue || chatPhone === phone;
+      });
+      const recipient = chatRecipient(exact ?? chats[0]);
+      if (recipient.includes("@")) {
+        console.info(`[uazapigo-send] resolved recipient suffix: ${recipient.split("@")[1]}`);
+        return recipient;
+      }
+    } catch (error) {
+      console.warn("[uazapigo-send] chat lookup error:", error instanceof Error ? error.message : String(error));
     }
-    const body = raw ? JSON.parse(raw) : {};
-    const chats = Array.isArray(body?.chats) ? body.chats : [];
-    const match = chats.find((chat: any) => String(chat?.wa_chatid || "").replace(/\D/g, "").includes(phone));
-    return normalizeRecipient(match?.wa_chatid) || phone;
-  } catch (error) {
-    console.warn("[uazapigo-send] chat lookup error:", error instanceof Error ? error.message : String(error));
-    return phone;
   }
+
+  return stored || phone;
 }
 
 Deno.serve(async (req) => {
