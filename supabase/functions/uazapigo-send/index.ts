@@ -45,29 +45,75 @@ function normalizeRecipient(value: unknown): string {
   return recipient.replace(/\D/g, "");
 }
 
+function extractChats(body: any): any[] {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.chats)) return body.chats;
+  if (Array.isArray(body?.data)) return body.data;
+  if (Array.isArray(body?.data?.chats)) return body.data.chats;
+  return [];
+}
+
+function chatRecipient(chat: any): string {
+  return normalizeRecipient(
+    chat?.wa_chatid ?? chat?.waChatId ?? chat?.chatid ?? chat?.chatId ??
+    chat?.remoteJid ?? chat?.jid ?? chat?.id,
+  );
+}
+
+async function sendToProvider(serverUrl: string, token: string, endpoint: string, payload: Record<string, unknown>) {
+  const response = await fetch(`${serverUrl}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", token },
+    body: JSON.stringify(payload),
+  });
+  const responseText = await response.text();
+  let result: any = {};
+  try { result = responseText ? JSON.parse(responseText) : {}; } catch { result = { raw: responseText.slice(0, 800) }; }
+  return { response, result };
+}
+
 async function resolveRecipient(serverUrl: string, token: string, phone: string, storedChatId: unknown) {
   const stored = normalizeRecipient(storedChatId);
-  if (stored) return stored;
+  // A complete JID is safe to reuse. A digits-only value may be a LID that the
+  // old webhook stripped, so it must be resolved against uazapiGO first.
+  if (stored.includes("@")) return stored;
 
-  try {
-    const response = await fetch(`${serverUrl}/chat/find`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify({ operator: "OR", limit: 10, wa_chatid: `~${phone}` }),
-    });
-    const raw = await response.text();
-    if (!response.ok) {
-      console.warn(`[uazapigo-send] chat lookup failed [${response.status}]: ${raw.slice(0, 500)}`);
-      return phone;
+  const lookupValue = stored || phone;
+  const filters = [
+    { operator: "OR", limit: 20, wa_chatid: `~${lookupValue}` },
+    { operator: "OR", limit: 20, phone: `~${phone}` },
+  ];
+
+  for (const filter of filters) {
+    try {
+      const response = await fetch(`${serverUrl}/chat/find`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token },
+        body: JSON.stringify(filter),
+      });
+      const raw = await response.text();
+      if (!response.ok) {
+        console.warn(`[uazapigo-send] chat lookup failed [${response.status}]: ${raw.slice(0, 500)}`);
+        continue;
+      }
+      const body = raw ? JSON.parse(raw) : {};
+      const chats = extractChats(body);
+      const exact = chats.find((chat: any) => {
+        const recipient = chatRecipient(chat);
+        const chatPhone = String(chat?.phone ?? chat?.wa_phone ?? "").replace(/\D/g, "");
+        return recipient.replace(/\D/g, "") === lookupValue || chatPhone === phone;
+      });
+      const recipient = chatRecipient(exact ?? chats[0]);
+      if (recipient.includes("@")) {
+        console.info(`[uazapigo-send] resolved recipient suffix: ${recipient.split("@")[1]}`);
+        return recipient;
+      }
+    } catch (error) {
+      console.warn("[uazapigo-send] chat lookup error:", error instanceof Error ? error.message : String(error));
     }
-    const body = raw ? JSON.parse(raw) : {};
-    const chats = Array.isArray(body?.chats) ? body.chats : [];
-    const match = chats.find((chat: any) => String(chat?.wa_chatid || "").replace(/\D/g, "").includes(phone));
-    return normalizeRecipient(match?.wa_chatid) || phone;
-  } catch (error) {
-    console.warn("[uazapigo-send] chat lookup error:", error instanceof Error ? error.message : String(error));
-    return phone;
   }
+
+  return stored || phone;
 }
 
 Deno.serve(async (req) => {
@@ -115,7 +161,7 @@ Deno.serve(async (req) => {
     }
     const signedMediaUrl = await downloadableMediaUrl(supabase, mediaUrl);
     const endpoint = signedMediaUrl ? "/send/media" : "/send/text";
-    const payload: Record<string, unknown> = signedMediaUrl
+    let payload: Record<string, unknown> = signedMediaUrl
       ? {
           number: recipient,
           type: type === "audio" ? "myaudio" : type,
@@ -126,14 +172,21 @@ Deno.serve(async (req) => {
         }
       : { number: recipient, text: message };
 
-    const providerResponse = await fetch(`${serverUrl}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify(payload),
-    });
-    const responseText = await providerResponse.text();
-    let result: any = {};
-    try { result = responseText ? JSON.parse(responseText) : {}; } catch { result = { raw: responseText.slice(0, 800) }; }
+    let { response: providerResponse, result } = await sendToProvider(serverUrl, token, endpoint, payload);
+    const firstError = String(result?.error?.message || result?.error || result?.message || "");
+    let finalRecipient = recipient;
+
+    // Older webhook records may contain a bare LID as if it were a phone
+    // number. uazapiGO explicitly reports this case before sending anything,
+    // so retry once with the original WhatsApp LID suffix.
+    if (!providerResponse.ok && !recipient.includes("@") && /failed to resolve LID for PN/i.test(firstError)) {
+      finalRecipient = `${recipient}@lid`;
+      payload = { ...payload, number: finalRecipient };
+      ({ response: providerResponse, result } = await sendToProvider(serverUrl, token, endpoint, payload));
+      if (providerResponse.ok && !result?.error && result?.success !== false) {
+        await supabase.from("conversations").update({ provider_chat_id: finalRecipient }).eq("id", conversationId);
+      }
+    }
     const messageId = providerMessageId(result);
     const providerReportedError = result?.error || result?.success === false;
     const succeeded = providerResponse.ok && !providerReportedError;

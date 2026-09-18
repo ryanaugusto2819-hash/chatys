@@ -8,4 +8,4 @@
 - [x] Integrar status periódico
 - [x] Integrar automações, IA, follow-ups e termos
 - [x] Confirmar visualmente a opção na tela autenticada
-- [ ] Confirmar envio real pela uazapiGO após preservar o identificador LID
+- [ ] Confirmar envio real pela uazapiGO após resolver o JID completo da conversa
