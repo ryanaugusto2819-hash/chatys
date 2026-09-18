@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json", token },
       body: target.method === "GET" || target.method === "DELETE" ? undefined : JSON.stringify(
         parsed.data.action === "set_webhook"
-          ? { enabled: true, url: webhookUrl, events: ["connection", "messages", "messages_update"], addUrlEvents: false, addUrlTypesMessages: false }
+          ? { enabled: true, url: webhookUrl, events: ["connection", "messages", "messages_update"], addUrlEvents: true, addUrlTypesMessages: true }
           : {},
       ),
     });
