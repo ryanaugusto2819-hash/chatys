@@ -268,9 +268,27 @@ Deno.serve(async (req) => {
     } else if (connectionId === "extension") {
       status = "active";
     } else if (connectionId === "uazapigo") {
-      const serverUrl = String(connectionConfig.server_url || "").replace(/\/+$/, "");
-      const token = String(connectionConfig.token || "").trim();
-      if (!serverUrl || !token) return jsonResponse({ error: "URL e token da uazapiGO são obrigatórios" }, 400);
+      const serverUrl = String(Deno.env.get("UAZAPIGO_SERVER_URL") || connectionConfig.server_url || "").replace(/\/+$/, "");
+      const adminToken = String(Deno.env.get("UAZAPIGO_ADMIN_TOKEN") || "").trim();
+      const instanceName = String(connectionConfig.instance_name || normalizeLabel(label)).trim();
+      let token = String(connectionConfig.token || "").trim();
+      if (!serverUrl || !adminToken) return jsonResponse({ error: "Servidor ou Admin Token da uazapiGO não configurado" }, 500);
+      if (!instanceName) return jsonResponse({ error: "Nome da instância é obrigatório" }, 400);
+
+      if (!token) {
+        const initResponse = await fetch(`${serverUrl}/instance/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", admintoken: adminToken },
+          body: JSON.stringify({ name: instanceName }),
+        }).catch(() => null);
+        const initResult = initResponse ? await initResponse.json().catch(() => ({})) : {};
+        token = String(initResult?.token ?? initResult?.instance?.token ?? initResult?.data?.token ?? "").trim();
+        if (!initResponse?.ok || !token) {
+          const detail = initResult?.error?.message || initResult?.error || initResult?.message || "A uazapiGO não retornou o token da instância";
+          return jsonResponse({ error: `Não foi possível criar a instância: ${detail}`, diagnostics: { provider_status: initResponse?.status || 0 } }, 400);
+        }
+      }
+
       const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } }).catch(() => null);
       const result = response ? await response.json().catch(() => ({})) : {};
       const state = String(result?.status ?? result?.state ?? result?.instance?.status ?? result?.instance?.state ?? "unknown").toLowerCase();
@@ -280,6 +298,7 @@ Deno.serve(async (req) => {
         ...connectionConfig,
         server_url: serverUrl,
         token,
+        instance_name: instanceName,
         webhook_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook`,
       };
       diagnostics = { state, connected };
