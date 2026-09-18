@@ -612,26 +612,62 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
   };
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const selectFile = useCallback((file: File) => {
     const maxSize = 16 * 1024 * 1024; // 16MB
     if (file.size > maxSize) {
       toast.error('Arquivo muito grande. Máximo 16MB.');
-      return;
+      return false;
     }
 
     setSelectedFile(file);
     if (file.type.startsWith('image/')) {
       const url = URL.createObjectURL(file);
-      setFilePreview(url);
+      setFilePreview(currentPreview => {
+        if (currentPreview) URL.revokeObjectURL(currentPreview);
+        return url;
+      });
     } else {
-      setFilePreview(null);
+      setFilePreview(currentPreview => {
+        if (currentPreview) URL.revokeObjectURL(currentPreview);
+        return null;
+      });
     }
+    return true;
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    selectFile(file);
     // Reset input so same file can be re-selected
     e.target.value = '';
-  }, []);
+  }, [selectFile]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageItem = Array.from(e.clipboardData.items).find(
+      item => item.kind === 'file' && item.type.startsWith('image/'),
+    );
+    if (!imageItem) return;
+
+    const pastedImage = imageItem.getAsFile();
+    if (!pastedImage) {
+      toast.error('Não foi possível ler a imagem copiada.');
+      return;
+    }
+
+    e.preventDefault();
+    const extension = pastedImage.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+    const imageFile = new File(
+      [pastedImage],
+      `imagem-colada-${Date.now()}.${extension}`,
+      { type: pastedImage.type || 'image/png' },
+    );
+
+    if (selectFile(imageFile)) {
+      toast.success('Imagem colada e pronta para enviar.');
+    }
+  }, [selectFile]);
 
   const clearSelectedFile = useCallback(() => {
     if (filePreview) URL.revokeObjectURL(filePreview);
@@ -1220,6 +1256,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 data-chat-input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onPaste={handlePaste}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
                 placeholder={selectedFile ? "Legenda (opcional)..." : "Digite uma mensagem..."}
                 rows={1}
