@@ -483,6 +483,7 @@ export type Database = {
           funnel_stage: string
           id: string
           niche_id: string | null
+          provider_chat_id: string | null
           resolved_at: string | null
           sale_registered_at: string | null
           sector: string | null
@@ -507,6 +508,7 @@ export type Database = {
           funnel_stage?: string
           id?: string
           niche_id?: string | null
+          provider_chat_id?: string | null
           resolved_at?: string | null
           sale_registered_at?: string | null
           sector?: string | null
@@ -531,6 +533,7 @@ export type Database = {
           funnel_stage?: string
           id?: string
           niche_id?: string | null
+          provider_chat_id?: string | null
           resolved_at?: string | null
           sale_registered_at?: string | null
           sector?: string | null
