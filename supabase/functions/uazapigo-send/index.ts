@@ -60,6 +60,18 @@ function chatRecipient(chat: any): string {
   );
 }
 
+async function sendToProvider(serverUrl: string, token: string, endpoint: string, payload: Record<string, unknown>) {
+  const response = await fetch(`${serverUrl}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", token },
+    body: JSON.stringify(payload),
+  });
+  const responseText = await response.text();
+  let result: any = {};
+  try { result = responseText ? JSON.parse(responseText) : {}; } catch { result = { raw: responseText.slice(0, 800) }; }
+  return { response, result };
+}
+
 async function resolveRecipient(serverUrl: string, token: string, phone: string, storedChatId: unknown) {
   const stored = normalizeRecipient(storedChatId);
   // A complete JID is safe to reuse. A digits-only value may be a LID that the
@@ -149,7 +161,7 @@ Deno.serve(async (req) => {
     }
     const signedMediaUrl = await downloadableMediaUrl(supabase, mediaUrl);
     const endpoint = signedMediaUrl ? "/send/media" : "/send/text";
-    const payload: Record<string, unknown> = signedMediaUrl
+    let payload: Record<string, unknown> = signedMediaUrl
       ? {
           number: recipient,
           type: type === "audio" ? "myaudio" : type,
@@ -160,14 +172,21 @@ Deno.serve(async (req) => {
         }
       : { number: recipient, text: message };
 
-    const providerResponse = await fetch(`${serverUrl}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify(payload),
-    });
-    const responseText = await providerResponse.text();
-    let result: any = {};
-    try { result = responseText ? JSON.parse(responseText) : {}; } catch { result = { raw: responseText.slice(0, 800) }; }
+    let { response: providerResponse, result } = await sendToProvider(serverUrl, token, endpoint, payload);
+    const firstError = String(result?.error?.message || result?.error || result?.message || "");
+    let finalRecipient = recipient;
+
+    // Older webhook records may contain a bare LID as if it were a phone
+    // number. uazapiGO explicitly reports this case before sending anything,
+    // so retry once with the original WhatsApp LID suffix.
+    if (!providerResponse.ok && !recipient.includes("@") && /failed to resolve LID for PN/i.test(firstError)) {
+      finalRecipient = `${recipient}@lid`;
+      payload = { ...payload, number: finalRecipient };
+      ({ response: providerResponse, result } = await sendToProvider(serverUrl, token, endpoint, payload));
+      if (providerResponse.ok && !result?.error && result?.success !== false) {
+        await supabase.from("conversations").update({ provider_chat_id: finalRecipient }).eq("id", conversationId);
+      }
+    }
     const messageId = providerMessageId(result);
     const providerReportedError = result?.error || result?.success === false;
     const succeeded = providerResponse.ok && !providerReportedError;
