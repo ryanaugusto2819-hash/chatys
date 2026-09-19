@@ -26,4 +26,7 @@
 
 - [x] Criar e publicar webhook público de diagnóstico
 - [x] Validar recebimento e registro do JSON completo
-- [ ] Mapear o payload real enviado pelo DataCrazy
+- [x] Mapear o payload real enviado pelo DataCrazy (`amount` e `phone`)
+- [x] Localizar a conversa mais recente pelo telefone
+- [x] Gerar voucher OXXO e retornar URL do código de barras e referência
+- [ ] Validar uma geração real iniciada pelo DataCrazy
