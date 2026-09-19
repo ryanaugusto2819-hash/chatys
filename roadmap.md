@@ -32,3 +32,7 @@
 - [x] Localizar a conversa mais recente pelo telefone
 - [x] Gerar voucher OXXO e retornar URL do código de barras e referência
 - [ ] Validar uma geração real iniciada pelo DataCrazy
+
+# Atalhos de automação na conversa
+
+- [x] Permitir buscar, anexar e remover fluxos diretamente no bloco de atalhos
