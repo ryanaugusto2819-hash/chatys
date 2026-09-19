@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, BrainCircuit, CheckCircle2, CircleDashed, GitBranch, Headphones,
-  Loader2, Megaphone, PackageCheck, Play, Save, ShieldCheck, ShoppingBag,
+  Link2, Loader2, Megaphone, PackageCheck, Play, Save, ShieldCheck, ShoppingBag,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -26,6 +27,9 @@ type AgentConfig = {
   blocking_rules: Json;
 };
 type Conversation = { id: string; contact_name: string | null; contact_phone: string; funnel_stage: string | null; updated_at: string };
+type Connection = { id: string; label: string; connection_id: string; status: string; is_connected: boolean };
+type Flow = { id: string; name: string; description: string | null; is_active: boolean };
+type AgentFlow = { flow_id: string; send_when: string };
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
   blockers: string[]; operation_mode: string; status: string; created_at: string;
@@ -65,6 +69,10 @@ export default function AiOrchestration() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState('');
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [flows, setFlows] = useState<Flow[]>([]);
+  const [connectionSelections, setConnectionSelections] = useState<Record<AgentKey, string[]>>({} as Record<AgentKey, string[]>);
+  const [flowSelections, setFlowSelections] = useState<AgentFlow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -74,15 +82,29 @@ export default function AiOrchestration() {
   const loadData = async () => {
     if (!currentWorkspace?.id) return;
     setLoading(true);
-    const [configsResult, conversationsResult, decisionsResult] = await Promise.all([
+    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult] = await Promise.all([
       supabase.from('ai_agent_configs').select('*').eq('workspace_id', currentWorkspace.id).is('niche_id', null),
       supabase.from('conversations').select('id, contact_name, contact_phone, funnel_stage, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(50),
       supabase.from('ai_orchestration_decisions').select('id, selected_agent, action, reason, confidence, blockers, operation_mode, status, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(30),
+      supabase.from('connection_configs').select('id, label, connection_id, status, is_connected').eq('workspace_id', currentWorkspace.id).in('connection_id', ['whatsapp', 'zapi', 'evolution', 'uazapigo']).order('created_at'),
+      supabase.from('automation_flows').select('id, name, description, is_active').eq('workspace_id', currentWorkspace.id).order('name'),
+      supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
+      supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when'),
     ]);
 
     if (configsResult.error) toast.error('Não foi possível carregar os Atendentes de IA');
     const stored = (configsResult.data || []) as unknown as AgentConfig[];
     setConfigs(defaults().map((fallback) => stored.find((item) => item.agent_key === fallback.agent_key) ?? fallback));
+    const selections = {} as Record<AgentKey, string[]>;
+    AGENTS.forEach((agent) => {
+      const configId = stored.find((item) => item.agent_key === agent.key)?.id;
+      selections[agent.key] = (agentConnectionsResult.data || []).filter((link) => link.agent_config_id === configId).map((link) => link.connection_config_id);
+    });
+    const selectorId = stored.find((item) => item.agent_key === 'flow_selector')?.id;
+    setConnectionSelections(selections);
+    setFlowSelections((agentFlowsResult.data || []).filter((link) => link.agent_config_id === selectorId).map((link) => ({ flow_id: link.flow_id, send_when: link.send_when })));
+    setConnections((connectionsResult.data || []) as Connection[]);
+    setFlows((flowsResult.data || []) as Flow[]);
     setConversations((conversationsResult.data || []) as Conversation[]);
     setDecisions((decisionsResult.data || []) as unknown as Decision[]);
     if (conversationsResult.data?.[0]) setConversationId(conversationsResult.data[0].id);
@@ -93,6 +115,23 @@ export default function AiOrchestration() {
 
   const updateSelected = (patch: Partial<AgentConfig>) => {
     setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? { ...config, ...patch } : config));
+  };
+
+  const toggleConnection = (connectionId: string) => {
+    setConnectionSelections((current) => {
+      const selectedIds = current[selectedKey] || [];
+      return { ...current, [selectedKey]: selectedIds.includes(connectionId) ? selectedIds.filter((id) => id !== connectionId) : [...selectedIds, connectionId] };
+    });
+  };
+
+  const toggleFlow = (flowId: string) => {
+    setFlowSelections((current) => current.some((item) => item.flow_id === flowId)
+      ? current.filter((item) => item.flow_id !== flowId)
+      : [...current, { flow_id: flowId, send_when: '' }]);
+  };
+
+  const updateFlowDescription = (flowId: string, sendWhen: string) => {
+    setFlowSelections((current) => current.map((item) => item.flow_id === flowId ? { ...item, send_when: sendWhen } : item));
   };
 
   const saveConfig = async () => {
@@ -112,9 +151,28 @@ export default function AiOrchestration() {
     const result = selected.id
       ? await supabase.from('ai_agent_configs').update(payload).eq('id', selected.id).select().single()
       : await supabase.from('ai_agent_configs').insert(payload).select().single();
+    if (result.error) { setSaving(false); toast.error(result.error.message); return; }
+    const savedConfig = result.data as unknown as AgentConfig;
+    if (!savedConfig.id) { setSaving(false); toast.error('Não foi possível identificar a configuração salva'); return; }
+
+    const selectedConnections = connectionSelections[selectedKey] || [];
+    const { error: clearConnectionsError } = await supabase.from('ai_agent_connections').delete().eq('agent_config_id', savedConfig.id);
+    if (clearConnectionsError) { setSaving(false); toast.error('A IA foi salva, mas as conexões não foram atualizadas'); return; }
+    if (selectedConnections.length) {
+      const { error: connectionError } = await supabase.from('ai_agent_connections').insert(selectedConnections.map((connectionId) => ({ agent_config_id: savedConfig.id, connection_config_id: connectionId })));
+      if (connectionError) { setSaving(false); toast.error('A IA foi salva, mas não foi possível anexar as conexões'); return; }
+    }
+
+    if (selectedKey === 'flow_selector') {
+      const { error: clearFlowsError } = await supabase.from('ai_agent_flows').delete().eq('agent_config_id', savedConfig.id);
+      if (clearFlowsError) { setSaving(false); toast.error('A IA foi salva, mas os fluxos não foram atualizados'); return; }
+      if (flowSelections.length) {
+        const { error: flowError } = await supabase.from('ai_agent_flows').insert(flowSelections.map((flow) => ({ agent_config_id: savedConfig.id, flow_id: flow.flow_id, send_when: flow.send_when.trim() })));
+        if (flowError) { setSaving(false); toast.error('A IA foi salva, mas não foi possível anexar os fluxos'); return; }
+      }
+    }
     setSaving(false);
-    if (result.error) { toast.error(result.error.message); return; }
-    setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? result.data as unknown as AgentConfig : config));
+    setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? savedConfig : config));
     toast.success(`${AGENT_LABELS[selectedKey]} salva`);
   };
 
@@ -195,6 +253,40 @@ export default function AiOrchestration() {
                 <Textarea value={selected?.instructions ?? ''} onChange={(event) => updateSelected({ instructions: event.target.value })} rows={selectedKey === 'orchestrator' ? 9 : 7} placeholder="Escreva como esta IA deve decidir, quando pode agir e quando deve parar..." />
                 <p className="text-xs text-muted-foreground">Estas regras ficam separadas das regras das outras IAs.</p>
               </div>
+
+              <div className="mt-6 space-y-3 border-t border-border pt-5">
+                <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Conexões em que esta IA funciona</p><p className="text-xs text-muted-foreground">Ela só poderá atuar nas conexões marcadas.</p></div></div>
+                {connections.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhuma conexão disponível.</div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {connections.map((connection) => {
+                      const checked = (connectionSelections[selectedKey] || []).includes(connection.id);
+                      return <label key={connection.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-muted/20 p-3">
+                        <Checkbox checked={checked} onCheckedChange={() => toggleConnection(connection.id)} />
+                        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{connection.label}</span><span className="block text-xs text-muted-foreground">{connection.connection_id} · {connection.is_connected ? 'Conectada' : 'Desconectada'}</span></span>
+                        <span className={`h-2 w-2 rounded-full ${connection.is_connected ? 'bg-success' : 'bg-muted-foreground'}`} />
+                      </label>;
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {selectedKey === 'flow_selector' && (
+                <div className="mt-6 space-y-3 border-t border-border pt-5">
+                  <div><p className="text-sm font-medium text-foreground">Fluxos que a Seletora pode enviar</p><p className="text-xs text-muted-foreground">Anexe os fluxos permitidos e explique claramente quando usar cada um.</p></div>
+                  {flows.length === 0 ? <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum fluxo disponível.</div> : flows.map((flow) => {
+                    const linked = flowSelections.find((item) => item.flow_id === flow.id);
+                    return <div key={flow.id} className={`rounded-md border p-4 ${linked ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'}`}>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <Checkbox className="mt-0.5" checked={Boolean(linked)} onCheckedChange={() => toggleFlow(flow.id)} />
+                        <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-sm font-medium text-foreground">{flow.name}{!flow.is_active && <Badge variant="secondary">Pausado</Badge>}</span>{flow.description && <span className="mt-1 block text-xs text-muted-foreground">{flow.description}</span>}</span>
+                      </label>
+                      {linked && <div className="ml-7 mt-3"><label className="mb-1.5 block text-xs font-medium text-foreground">Quando este fluxo deve ser enviado?</label><Textarea value={linked.send_when} onChange={(event) => updateFlowDescription(flow.id, event.target.value)} rows={3} placeholder="Ex.: Enviar quando o lead perguntar o preço pela primeira vez e ainda não tiver recebido a oferta." /></div>}
+                    </div>;
+                  })}
+                </div>
+              )}
 
               {selectedKey === 'orchestrator' && (
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
