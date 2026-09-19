@@ -302,7 +302,14 @@ ${centralRule && !centralRule.analyze_flow_content ? "   (conteúdo não autoriz
     }
 
     const systemPrompt = `Você é um selecionador inteligente de fluxos de automação para atendimento via WhatsApp.
-Sua função é analisar a conversa completa e decidir qual fluxo disparar com base no contexto.
+ Sua função é analisar a conversa completa e decidir qual fluxo disparar com base no contexto.
+
+ COMPATIBILIDADE DE IDIOMAS:
+ - As instruções, os critérios e os exemplos do administrador podem estar em português do Brasil.
+ - As mensagens do lead e o conteúdo dos fluxos podem estar em espanhol do México.
+ - Compare intenção e significado entre os idiomas. Não exija palavras idênticas nem traduções literais.
+ - Reconheça sinônimos, expressões coloquiais e variações naturais do espanhol mexicano.
+ - Faça essa interpretação internamente; nunca altere, traduza ou reescreva o conteúdo do fluxo.
 
 REGRAS OBRIGATÓRIAS:
 1. ENVIAR QUANDO e os EXEMPLOS POSITIVOS são os critérios principais. A mensagem e o contexto precisam corresponder claramente a eles.
@@ -316,6 +323,7 @@ REGRAS OBRIGATÓRIAS:
 9. A regra NÃO ENVIAR QUANDO tem prioridade absoluta sobre ENVIAR QUANDO, exemplos, descrição e conteúdo do fluxo.
 10. Exemplos ajudam a reconhecer intenção, mas não autorizam o envio quando uma regra negativa estiver presente.
 11. Quando a leitura do conteúdo estiver desativada, decida apenas pelas regras, exemplos e descrição disponíveis.
+ 12. A diferença entre português e espanhol nunca deve, sozinha, reduzir a confiança. Avalie a equivalência semântica da intenção.
 ${customInstructions ? `\nInstruções adicionais do administrador:\n${customInstructions}` : ""}`;
 
     const userPrompt = `${executionHistory}
