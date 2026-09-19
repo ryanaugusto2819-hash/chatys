@@ -29,8 +29,8 @@ type AgentConfig = {
 };
 type Conversation = { id: string; contact_name: string | null; contact_phone: string; funnel_stage: string | null; updated_at: string };
 type Connection = { id: string; label: string; connection_id: string; status: string; is_connected: boolean };
-type Flow = { id: string; name: string; description: string | null; is_active: boolean };
-type AgentFlow = { flow_id: string; send_when: string };
+type Flow = { id: string; name: string; description: string | null; is_active: boolean; manual_only: boolean };
+type AgentFlow = { flow_id: string; send_when: string; do_not_send_when: string; trigger_examples: string; analyze_flow_content: boolean };
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
   blockers: string[]; operation_mode: string; status: string; created_at: string;
@@ -89,9 +89,9 @@ export default function AiOrchestration() {
       supabase.from('conversations').select('id, contact_name, contact_phone, funnel_stage, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(50),
       supabase.from('ai_orchestration_decisions').select('id, selected_agent, action, reason, confidence, blockers, operation_mode, status, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(30),
       supabase.from('connection_configs').select('id, label, connection_id, status, is_connected').eq('workspace_id', currentWorkspace.id).in('connection_id', ['whatsapp', 'zapi', 'evolution', 'uazapigo']).order('created_at'),
-      supabase.from('automation_flows').select('id, name, description, is_active').eq('workspace_id', currentWorkspace.id).order('name'),
+      supabase.from('automation_flows').select('id, name, description, is_active, manual_only').eq('workspace_id', currentWorkspace.id).order('name'),
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
-      supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when'),
+      supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
     ]);
 
     if (configsResult.error) toast.error('Não foi possível carregar os Atendentes de IA');
@@ -104,7 +104,13 @@ export default function AiOrchestration() {
     });
     const selectorId = stored.find((item) => item.agent_key === 'flow_selector')?.id;
     setConnectionSelections(selections);
-    setFlowSelections((agentFlowsResult.data || []).filter((link) => link.agent_config_id === selectorId).map((link) => ({ flow_id: link.flow_id, send_when: link.send_when })));
+    setFlowSelections((agentFlowsResult.data || []).filter((link) => link.agent_config_id === selectorId).map((link) => ({
+      flow_id: link.flow_id,
+      send_when: link.send_when,
+      do_not_send_when: link.do_not_send_when,
+      trigger_examples: link.trigger_examples,
+      analyze_flow_content: link.analyze_flow_content,
+    })));
     setConnections((connectionsResult.data || []) as Connection[]);
     setFlows((flowsResult.data || []) as Flow[]);
     setConversations((conversationsResult.data || []) as Conversation[]);
@@ -129,11 +135,11 @@ export default function AiOrchestration() {
   const toggleFlow = (flowId: string) => {
     setFlowSelections((current) => current.some((item) => item.flow_id === flowId)
       ? current.filter((item) => item.flow_id !== flowId)
-      : [...current, { flow_id: flowId, send_when: '' }]);
+      : [...current, { flow_id: flowId, send_when: '', do_not_send_when: '', trigger_examples: '', analyze_flow_content: false }]);
   };
 
-  const updateFlowDescription = (flowId: string, sendWhen: string) => {
-    setFlowSelections((current) => current.map((item) => item.flow_id === flowId ? { ...item, send_when: sendWhen } : item));
+  const updateFlowRule = (flowId: string, patch: Partial<AgentFlow>) => {
+    setFlowSelections((current) => current.map((item) => item.flow_id === flowId ? { ...item, ...patch } : item));
   };
 
   const saveConfig = async () => {
@@ -143,9 +149,9 @@ export default function AiOrchestration() {
       return;
     }
     if (selectedKey === 'flow_selector') {
-      const incompleteFlow = flowSelections.some((flow) => !flow.send_when.trim());
+      const incompleteFlow = flowSelections.some((flow) => !flow.send_when.trim() || !flow.do_not_send_when.trim() || !flow.trigger_examples.trim());
       if (incompleteFlow) {
-        toast.error('Descreva quando cada fluxo anexado deve ser enviado');
+        toast.error('Preencha quando enviar, quando não enviar e os exemplos de cada fluxo');
         return;
       }
     }
@@ -180,7 +186,14 @@ export default function AiOrchestration() {
       const { error: clearFlowsError } = await supabase.from('ai_agent_flows').delete().eq('agent_config_id', savedConfig.id);
       if (clearFlowsError) { setSaving(false); toast.error('A IA foi salva, mas os fluxos não foram atualizados'); return; }
       if (flowSelections.length) {
-        const { error: flowError } = await supabase.from('ai_agent_flows').insert(flowSelections.map((flow) => ({ agent_config_id: savedConfig.id, flow_id: flow.flow_id, send_when: flow.send_when.trim() })));
+        const { error: flowError } = await supabase.from('ai_agent_flows').insert(flowSelections.map((flow) => ({
+          agent_config_id: savedConfig.id,
+          flow_id: flow.flow_id,
+          send_when: flow.send_when.trim(),
+          do_not_send_when: flow.do_not_send_when.trim(),
+          trigger_examples: flow.trigger_examples.trim(),
+          analyze_flow_content: flow.analyze_flow_content,
+        })));
         if (flowError) { setSaving(false); toast.error('A IA foi salva, mas não foi possível anexar os fluxos'); return; }
       }
     }
@@ -299,9 +312,17 @@ export default function AiOrchestration() {
                     return <div key={flow.id} className={`rounded-md border p-4 ${linked ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'}`}>
                       <label className="flex cursor-pointer items-start gap-3">
                         <Checkbox className="mt-0.5" checked={Boolean(linked)} onCheckedChange={() => toggleFlow(flow.id)} />
-                        <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-sm font-medium text-foreground">{flow.name}{!flow.is_active && <Badge variant="secondary">Pausado</Badge>}</span>{flow.description && <span className="mt-1 block text-xs text-muted-foreground">{flow.description}</span>}</span>
+                        <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">{flow.name}{!flow.is_active && <Badge variant="secondary">Pausado</Badge>}{flow.manual_only && <Badge variant="outline">Somente manual</Badge>}</span>{flow.description && <span className="mt-1 block text-xs text-muted-foreground">{flow.description}</span>}</span>
                       </label>
-                      {linked && <div className="ml-7 mt-3"><label className="mb-1.5 block text-xs font-medium text-foreground">Quando este fluxo deve ser enviado?</label><Textarea value={linked.send_when} onChange={(event) => updateFlowDescription(flow.id, event.target.value)} rows={3} placeholder="Ex.: Enviar quando o lead perguntar o preço pela primeira vez e ainda não tiver recebido a oferta." /></div>}
+                      {linked && <div className="ml-7 mt-4 space-y-4 border-t border-border pt-4">
+                        <div><label className="mb-1.5 block text-xs font-medium text-foreground">Quando este fluxo deve ser enviado?</label><Textarea value={linked.send_when} onChange={(event) => updateFlowRule(flow.id, { send_when: event.target.value })} rows={3} placeholder="Ex.: Quando o lead perguntar o preço pela primeira vez e ainda não tiver recebido a oferta." /></div>
+                        <div><label className="mb-1.5 block text-xs font-medium text-foreground">Quando este fluxo não deve ser enviado?</label><Textarea value={linked.do_not_send_when} onChange={(event) => updateFlowRule(flow.id, { do_not_send_when: event.target.value })} rows={3} placeholder="Ex.: Não enviar se o lead já recebeu esta oferta, já comprou ou estiver pedindo suporte." /></div>
+                        <div><label className="mb-1.5 block text-xs font-medium text-foreground">Exemplos de mensagens que devem acionar este fluxo</label><Textarea value={linked.trigger_examples} onChange={(event) => updateFlowRule(flow.id, { trigger_examples: event.target.value })} rows={4} placeholder={'Um exemplo por linha:\nQuanto custa?\nQuais são as formas de pagamento?\nPode me explicar a oferta?'} /></div>
+                        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-background p-3">
+                          <Switch checked={linked.analyze_flow_content} onCheckedChange={(checked) => updateFlowRule(flow.id, { analyze_flow_content: checked })} />
+                          <span><span className="block text-sm font-medium text-foreground">Analisar o conteúdo deste fluxo</span><span className="mt-0.5 block text-xs text-muted-foreground">A IA poderá ler as mensagens e condições dos blocos para entender melhor quando usar este fluxo.</span></span>
+                        </label>
+                      </div>}
                     </div>;
                   })}
                 </div>

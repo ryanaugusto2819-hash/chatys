@@ -58,3 +58,5 @@
 - [x] Permitir anexar conexões específicas a cada Atendente de IA
 - [x] Permitir anexar fluxos à Seletora com uma descrição de quando usar cada um
 - [x] Fazer a Orquestradora respeitar conexões e fluxos permitidos no modo de teste
+- [x] Adicionar regras de quando não enviar e exemplos por fluxo na Seletora
+- [x] Permitir que a Seletora analise opcionalmente o conteúdo dos blocos de cada fluxo
