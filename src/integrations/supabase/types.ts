@@ -2653,6 +2653,15 @@ export type Database = {
         Args: { p_connection_id: string; p_limit?: number }
         Returns: number
       }
+      find_latest_conversation_by_phone: {
+        Args: { p_phone: string }
+        Returns: {
+          contact_name: string
+          contact_phone: string
+          id: string
+          workspace_id: string
+        }[]
+      }
       get_conversations_with_last_message: {
         Args: never
         Returns: {
