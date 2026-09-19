@@ -11,3 +11,12 @@
 - [ ] Confirmar envio real pela uazapiGO após resolver o JID completo da conversa
 - [ ] Confirmar carregamento real de novas imagens recebidas pela uazapiGO
 - [x] Permitir colar capturas com Ctrl+V no campo da conversa e enviá-las como imagem
+
+# Integração OXXO / XPag
+
+- [ ] Criar armazenamento seguro das cobranças OXXO
+- [ ] Criar geração de voucher pela XPag
+- [ ] Criar webhook de confirmação idempotente
+- [ ] Adicionar geração e histórico dentro da conversa
+- [ ] Configurar credenciais XPag com segurança
+- [ ] Validar criação, código de barras e confirmação
