@@ -87,6 +87,53 @@ Deno.serve(async (req) => {
       return jsonResponse({ skipped: true, reason: "Sale already registered" });
     }
 
+    const { data: centralSelector, error: centralSelectorError } = await supabase
+      .from("ai_agent_configs")
+      .select("id, enabled, operation_mode, instructions")
+      .eq("workspace_id", conversation.workspace_id)
+      .eq("agent_key", "flow_selector")
+      .is("niche_id", null)
+      .maybeSingle();
+    if (centralSelectorError) {
+      return jsonResponse({ error: `Failed loading central selector: ${centralSelectorError.message}` }, 500);
+    }
+    if (centralSelector && !centralSelector.enabled) {
+      return jsonResponse({ skipped: true, reason: "Central flow selector disabled" });
+    }
+
+    let centralFlowRules: Array<{
+      flow_id: string;
+      send_when: string;
+      do_not_send_when: string;
+      trigger_examples: string;
+      analyze_flow_content: boolean;
+    }> = [];
+    if (centralSelector) {
+      const { data: connectionPermission, error: connectionPermissionError } = await supabase
+        .from("ai_agent_connections")
+        .select("id")
+        .eq("agent_config_id", centralSelector.id)
+        .eq("connection_config_id", conversation.connection_config_id)
+        .maybeSingle();
+      if (connectionPermissionError) {
+        return jsonResponse({ error: `Failed validating selector connection: ${connectionPermissionError.message}` }, 500);
+      }
+      if (!connectionPermission) {
+        return jsonResponse({ skipped: true, reason: "Flow selector is not attached to this connection" });
+      }
+      const { data: ruleRows, error: ruleRowsError } = await supabase
+        .from("ai_agent_flows")
+        .select("flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content")
+        .eq("agent_config_id", centralSelector.id);
+      if (ruleRowsError) {
+        return jsonResponse({ error: `Failed loading selector rules: ${ruleRowsError.message}` }, 500);
+      }
+      centralFlowRules = ruleRows || [];
+      if (!centralFlowRules.length) {
+        return jsonResponse({ skipped: true, reason: "No flows attached to central selector" });
+      }
+    }
+
     const nicheId = await resolveConversationNiche({
       supabase,
       conversationId,
@@ -128,6 +175,10 @@ Deno.serve(async (req) => {
       customInstructions = (selectorConfig?.instructions as string) || "";
     }
 
+    if (centralSelector) {
+      customInstructions = [customInstructions, centralSelector.instructions].filter(Boolean).join("\n");
+    }
+
     if (!selectorEnabled) {
       return jsonResponse({ skipped: true, reason: "Flow selector disabled" });
     }
@@ -144,6 +195,9 @@ Deno.serve(async (req) => {
     } else {
       flowQuery = flowQuery.is("niche_id", null);
     }
+    if (centralSelector) {
+      flowQuery = flowQuery.in("id", centralFlowRules.map((rule) => rule.flow_id));
+    }
 
     const { data: flows } = await flowQuery;
 
@@ -151,12 +205,15 @@ Deno.serve(async (req) => {
       return jsonResponse({ skipped: true, reason: "No active flows" });
     }
 
-    // Fetch ALL nodes for active flows
+    // Read node contents only for flows explicitly authorized by the administrator.
     const flowIds = flows.map((f) => f.id);
+    const readableFlowIds = centralSelector
+      ? centralFlowRules.filter((rule) => rule.analyze_flow_content).map((rule) => rule.flow_id)
+      : flowIds;
     const { data: allNodes } = await supabase
       .from("automation_nodes")
       .select("flow_id, node_type, label, config, sort_order")
-      .in("flow_id", flowIds)
+      .in("flow_id", readableFlowIds.length ? readableFlowIds : ["00000000-0000-0000-0000-000000000000"])
       .order("sort_order", { ascending: true });
 
     const nodesByFlow: Record<string, typeof allNodes> = {};
@@ -192,6 +249,7 @@ Deno.serve(async (req) => {
     // Build flow descriptions
     const flowDescriptions = flows.map((f, i) => {
       const nodes = nodesByFlow[f.id] || [];
+      const centralRule = centralFlowRules.find((rule) => rule.flow_id === f.id);
       const nodeDetails = nodes.map((n) => {
         const cfg = n.config as Record<string, unknown>;
         let detail = `  - [${n.node_type}] ${n.label}`;
@@ -212,8 +270,12 @@ Deno.serve(async (req) => {
 
       return `${i + 1}. "${f.name}" ${alreadySent ? "[JÁ ENVIADO]" : "[DISPONÍVEL]"}
    Descrição: ${f.description || "Sem descrição"}
+    ENVIAR QUANDO: ${centralRule?.send_when || f.description || "Sem critério positivo"}
+    NÃO ENVIAR QUANDO (TEM PRIORIDADE): ${centralRule?.do_not_send_when || "Sem critério negativo específico"}
+    EXEMPLOS DE MENSAGENS QUE DEVEM ACIONAR: ${centralRule?.trigger_examples || "Sem exemplos específicos"}
+    Leitura do conteúdo: ${centralRule ? (centralRule.analyze_flow_content ? "autorizada" : "desativada") : "legado"}
    Etapas do fluxo:
-${nodeDetails || "   (sem etapas)"}`;
+${centralRule && !centralRule.analyze_flow_content ? "   (conteúdo não autorizado para análise)" : (nodeDetails || "   (sem etapas)")}`;
     }).join("\n\n");
 
     const recentMessages = messages
@@ -239,7 +301,7 @@ ${nodeDetails || "   (sem etapas)"}`;
 Sua função é analisar a conversa completa e decidir qual fluxo disparar com base no contexto.
 
 REGRAS OBRIGATÓRIAS:
-1. A DESCRIÇÃO DE CADA FLUXO É O CRITÉRIO PRINCIPAL DE SELEÇÃO. Cada fluxo tem uma descrição que explica EXATAMENTE quando ele deve ser disparado. Leia a descrição com atenção e SÓ selecione o fluxo se a situação descrita corresponder ao momento atual da conversa. Se a descrição diz "Quando o cliente perguntar sobre X", o cliente PRECISA ter perguntado sobre X.
+1. ENVIAR QUANDO e os EXEMPLOS POSITIVOS são os critérios principais. A mensagem e o contexto precisam corresponder claramente a eles.
 2. NUNCA selecione um fluxo que já foi enviado nesta conversa (marcado como [JÁ ENVIADO]).
 3. RESPEITE A ORDEM DE PRIORIDADE: Se existem fluxos numerados por etapas (Etapa 1, Etapa 2, Etapa 3...), NUNCA envie uma etapa posterior sem que as anteriores já tenham sido enviadas.
 4. Analise o CONTEÚDO COMPLETO de cada fluxo (todas as mensagens, perguntas e mídias das etapas) para entender o que cada fluxo faz antes de decidir.
@@ -247,6 +309,9 @@ REGRAS OBRIGATÓRIAS:
 6. Se nenhum fluxo se encaixar ou se todos os fluxos aplicáveis já foram enviados, retorne null. NA DÚVIDA, retorne null. É melhor não enviar nada do que enviar o fluxo errado.
 7. Seja MUITO criterioso: só selecione um fluxo se a descrição dele corresponder CLARAMENTE ao que o cliente está pedindo ou ao momento da conversa.
 8. NÃO envie fluxos apenas porque o cliente respondeu com uma saudação simples (ex: "bom dia", "oi", "olá"). Uma saudação NÃO é motivo para disparar um fluxo, a menos que seja a primeira mensagem do lead vinda de um anúncio.
+9. A regra NÃO ENVIAR QUANDO tem prioridade absoluta sobre ENVIAR QUANDO, exemplos, descrição e conteúdo do fluxo.
+10. Exemplos ajudam a reconhecer intenção, mas não autorizam o envio quando uma regra negativa estiver presente.
+11. Quando a leitura do conteúdo estiver desativada, decida apenas pelas regras, exemplos e descrição disponíveis.
 ${customInstructions ? `\nInstruções adicionais do administrador:\n${customInstructions}` : ""}`;
 
     const userPrompt = `${executionHistory}
@@ -346,6 +411,16 @@ Qual fluxo deve ser disparado agora?`;
     if (executedFlowIds.includes(selectedFlow.id)) {
       console.log(`Flow "${selectedFlow.name}" already executed, skipping.`);
       return jsonResponse({ skipped: true, reason: `Flow "${selectedFlow.name}" already sent` });
+    }
+
+    if (centralSelector?.operation_mode !== "live") {
+      return jsonResponse({
+        success: true,
+        executed: false,
+        testMode: true,
+        selectedFlow: { id: selectedFlow.id, name: selectedFlow.name },
+        reason: selection.reason,
+      });
     }
 
     console.log(`Executing flow "${selectedFlow.name}" (${selectedFlow.id}). Reason: ${selection.reason}`);
