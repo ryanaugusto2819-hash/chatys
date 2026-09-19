@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { GitBranch, Loader2, Pin, Zap } from 'lucide-react';
+import { GitBranch, Loader2, Pin, Search, Settings2, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 interface PinnedFlow {
   id: string;
@@ -31,6 +35,9 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
     try { return localStorage.getItem(lsKey); } catch { return null; }
   });
   const [executing, setExecuting] = useState<string | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [flowSearch, setFlowSearch] = useState('');
+  const [savingIds, setSavingIds] = useState<string[]>([]);
 
   const selectCategory = (label: string) => {
     setActiveCategory(label);
@@ -42,7 +49,6 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
     let query: any = supabase
       .from('automation_flows')
       .select('id, name, category, is_active, pinned_sectors')
-      .eq('is_pinned_sidebar', true)
       .order('name');
 
     if (currentWorkspace) {
@@ -79,6 +85,43 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
       return sectors.includes(activeSector);
     });
   }, [flows, activeSector]);
+
+  const searchedFlows = useMemo(() => {
+    const term = flowSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!term) return flows;
+    return flows.filter((flow) =>
+      `${flow.name} ${flow.category || ''}`.toLocaleLowerCase('pt-BR').includes(term),
+    );
+  }, [flowSearch, flows]);
+
+  const togglePinnedFlow = async (flow: PinnedFlow) => {
+    if (savingIds.includes(flow.id)) return;
+
+    const currentSectors = flow.pinned_sectors || [];
+    const isPinned = currentSectors.includes(activeSector);
+    const nextSectors = isPinned
+      ? currentSectors.filter((item) => item !== activeSector)
+      : [...currentSectors, activeSector];
+
+    setSavingIds((current) => [...current, flow.id]);
+    const { error } = await supabase
+      .from('automation_flows')
+      .update({
+        pinned_sectors: nextSectors,
+        is_pinned_sidebar: nextSectors.length > 0,
+      } as any)
+      .eq('id', flow.id);
+
+    if (error) {
+      toast.error('Não foi possível atualizar o atalho');
+    } else {
+      setFlows((current) => current.map((item) => (
+        item.id === flow.id ? { ...item, pinned_sectors: nextSectors } : item
+      )));
+      toast.success(isPinned ? 'Fluxo removido dos atalhos' : 'Fluxo anexado aos atalhos');
+    }
+    setSavingIds((current) => current.filter((id) => id !== flow.id));
+  };
 
   const grouped = useMemo(() => {
     const map: Record<string, PinnedFlow[]> = {};
@@ -130,9 +173,24 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
 
   return (
     <div>
-      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-        <Zap className="h-3 w-3" /> Atalhos de Automação
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Zap className="h-3 w-3" /> Atalhos de Automação
+        </p>
+        {!loading && flows.length > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            onClick={() => setManageOpen(true)}
+            title="Escolher fluxos"
+            aria-label="Escolher fluxos"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
 
       {loading ? (
         <div className="rounded-lg border border-border bg-background/50 p-4 flex items-center justify-center">
@@ -141,11 +199,10 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
       ) : sectorFlows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-background/30 p-4 text-center">
           <Pin className="h-4 w-4 text-muted-foreground/40 mx-auto mb-1.5" />
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Nenhum fluxo fixado para este setor. Vá em <span className="font-medium text-foreground">Automação</span> e escolha
-            <span className="font-medium text-foreground"> {activeSector === 'cobranca' ? 'Cobrança' : activeSector === 'pos_venda' ? 'Pós-Venda' : 'Comercial'} </span>
-            no seletor de setores do fluxo.
-          </p>
+          <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">Nenhum fluxo anexado neste setor.</p>
+          <Button type="button" size="sm" className="h-8 text-xs" onClick={() => setManageOpen(true)}>
+            <Pin className="h-3.5 w-3.5" /> Escolher fluxos
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-background/50 p-2 space-y-2">
@@ -195,6 +252,60 @@ export default function PinnedFlowShortcuts({ conversationId, sector }: Props) {
           </div>
         </div>
       )}
+
+      <Dialog open={manageOpen} onOpenChange={(open) => {
+        setManageOpen(open);
+        if (!open) setFlowSearch('');
+      }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md gap-3 p-4 sm:p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base">Escolher fluxos</DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecione os atalhos que aparecerão em {activeSector === 'cobranca' ? 'Cobrança' : activeSector === 'pos_venda' ? 'Pós-Venda' : 'Comercial'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={flowSearch}
+              onChange={(event) => setFlowSearch(event.target.value)}
+              placeholder="Buscar fluxo ou categoria..."
+              className="h-9 pl-9 text-sm"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-[min(420px,55vh)] space-y-1 overflow-y-auto pr-1">
+            {searchedFlows.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                {flows.length === 0 ? 'Nenhum fluxo criado.' : 'Nenhum fluxo encontrado.'}
+              </div>
+            ) : searchedFlows.map((flow) => {
+              const checked = (flow.pinned_sectors || []).includes(activeSector);
+              const saving = savingIds.includes(flow.id);
+              return (
+                <label
+                  key={flow.id}
+                  className="flex min-h-12 cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-secondary/60"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                  ) : (
+                    <Checkbox checked={checked} onCheckedChange={() => togglePinnedFlow(flow)} />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">{flow.name}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {flow.category?.trim() || 'Sem categoria'}{flow.is_active ? '' : ' · Inativo'}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
