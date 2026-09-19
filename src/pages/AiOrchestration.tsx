@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
+  BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
   Link2, Loader2, Megaphone, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
@@ -31,6 +31,7 @@ type Conversation = { id: string; contact_name: string | null; contact_phone: st
 type Connection = { id: string; label: string; connection_id: string; status: string; is_connected: boolean };
 type Flow = { id: string; name: string; description: string | null; is_active: boolean; manual_only: boolean };
 type AgentFlow = { flow_id: string; send_when: string; do_not_send_when: string; trigger_examples: string; analyze_flow_content: boolean };
+type SupportFaq = { question: string; answer: string };
 type PaymentRules = { payment_information: string; receipt_flow_id: string; prices: Array<{ quantity: number; amount: number }> };
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
@@ -92,6 +93,7 @@ export default function AiOrchestration() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [connectionSelections, setConnectionSelections] = useState<Record<AgentKey, string[]>>({} as Record<AgentKey, string[]>);
   const [flowSelections, setFlowSelections] = useState<AgentFlow[]>([]);
+  const [supportFaqs, setSupportFaqs] = useState<SupportFaq[]>([]);
   const [flowSearch, setFlowSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -102,7 +104,7 @@ export default function AiOrchestration() {
   const loadData = async () => {
     if (!currentWorkspace?.id) return;
     setLoading(true);
-    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult] = await Promise.all([
+    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult, supportFaqsResult] = await Promise.all([
       supabase.from('ai_agent_configs').select('*').eq('workspace_id', currentWorkspace.id).is('niche_id', null),
       supabase.from('conversations').select('id, contact_name, contact_phone, funnel_stage, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(50),
       supabase.from('ai_orchestration_decisions').select('id, selected_agent, action, reason, confidence, blockers, operation_mode, status, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(30),
@@ -110,6 +112,7 @@ export default function AiOrchestration() {
       supabase.from('automation_flows').select('id, name, description, is_active, manual_only').eq('workspace_id', currentWorkspace.id).order('name'),
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
+      supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
     ]);
 
     if (configsResult.error) toast.error('Não foi possível carregar os Atendentes de IA');
@@ -121,6 +124,7 @@ export default function AiOrchestration() {
       selections[agent.key] = (agentConnectionsResult.data || []).filter((link) => link.agent_config_id === configId).map((link) => link.connection_config_id);
     });
     const selectorId = stored.find((item) => item.agent_key === 'flow_selector')?.id;
+    const supportId = stored.find((item) => item.agent_key === 'support')?.id;
     setConnectionSelections(selections);
     setFlowSelections((agentFlowsResult.data || []).filter((link) => link.agent_config_id === selectorId).map((link) => ({
       flow_id: link.flow_id,
@@ -129,6 +133,7 @@ export default function AiOrchestration() {
       trigger_examples: link.trigger_examples,
       analyze_flow_content: link.analyze_flow_content,
     })));
+    setSupportFaqs((supportFaqsResult.data || []).filter((item) => item.agent_config_id === supportId).map((item) => ({ question: item.question, answer: item.answer })));
     setConnections((connectionsResult.data || []) as Connection[]);
     setFlows((flowsResult.data || []) as Flow[]);
     setConversations((conversationsResult.data || []) as Conversation[]);
@@ -186,6 +191,10 @@ export default function AiOrchestration() {
         return;
       }
     }
+    if (selectedKey === 'support' && supportFaqs.some((item) => !item.question.trim() || !item.answer.trim())) {
+      toast.error('Preencha a pergunta e a resposta de cada item da base de conhecimento');
+      return;
+    }
     setSaving(true);
     const payload = {
       workspace_id: currentWorkspace.id,
@@ -226,6 +235,19 @@ export default function AiOrchestration() {
           analyze_flow_content: flow.analyze_flow_content,
         })));
         if (flowError) { setSaving(false); toast.error('A IA foi salva, mas não foi possível anexar os fluxos'); return; }
+      }
+    }
+    if (selectedKey === 'support') {
+      const { error: clearFaqsError } = await supabase.from('ai_agent_faqs').delete().eq('agent_config_id', savedConfig.id);
+      if (clearFaqsError) { setSaving(false); toast.error('A IA foi salva, mas a base de conhecimento não foi atualizada'); return; }
+      if (supportFaqs.length) {
+        const { error: faqError } = await supabase.from('ai_agent_faqs').insert(supportFaqs.map((item, index) => ({
+          agent_config_id: savedConfig.id,
+          question: item.question.trim(),
+          answer: item.answer.trim(),
+          sort_order: index,
+        })));
+        if (faqError) { setSaving(false); toast.error('A IA foi salva, mas não foi possível salvar as perguntas e respostas'); return; }
       }
     }
     setSaving(false);
@@ -356,6 +378,21 @@ export default function AiOrchestration() {
                       </div>}
                     </div>;
                   })}
+                </div>
+              )}
+
+              {selectedKey === 'support' && (
+                <div className="mt-6 space-y-4 border-t border-border pt-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2"><BookOpen className="mt-0.5 h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Base de conhecimento</p><p className="text-xs text-muted-foreground">Cadastre perguntas frequentes e respostas oficiais. Você pode escrever em português; a IA entende perguntas equivalentes em espanhol mexicano.</p></div></div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setSupportFaqs((current) => [...current, { question: '', answer: '' }])}><Plus className="mr-2 h-4 w-4" />Adicionar pergunta</Button>
+                  </div>
+                  {supportFaqs.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma pergunta cadastrada.</div> : supportFaqs.map((item, index) => <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-foreground">Pergunta {index + 1}</p><Button type="button" variant="ghost" size="icon" title="Excluir pergunta" onClick={() => setSupportFaqs((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>
+                    <div><label className="mb-1.5 block text-xs font-medium text-foreground">Pergunta frequente</label><Textarea value={item.question} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, question: event.target.value } : faq))} rows={2} placeholder="Ex.: Quanto tempo demora a entrega?" /></div>
+                    <div><label className="mb-1.5 block text-xs font-medium text-foreground">Resposta oficial</label><Textarea value={item.answer} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, answer: event.target.value } : faq))} rows={4} placeholder="Escreva a resposta correta e completa que a IA deverá usar como referência." /></div>
+                  </div>)}
+                  <p className="text-xs text-muted-foreground">A base responde dúvidas específicas; ela não confirma pagamentos, altera etiquetas ou executa fluxos.</p>
                 </div>
               )}
 

@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     if (conversationError) return json({ error: conversationError.message }, 500);
     if (!conversation) return json({ error: "Conversa não encontrada neste workspace" }, 404);
 
-    const [configResult, messagesResult, executionsResult, tagsResult, saleResult, connectionLinksResult, flowLinksResult] = await Promise.all([
+    const [configResult, messagesResult, executionsResult, tagsResult, saleResult, connectionLinksResult, flowLinksResult, supportFaqsResult] = await Promise.all([
       service.from("ai_agent_configs").select("id, agent_key, enabled, operation_mode, priority, instructions, entry_criteria, blocking_rules").eq("workspace_id", workspaceId).is("niche_id", null),
       service.from("messages").select("id, sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(30),
       service.from("flow_executions").select("status, created_at, automation_flows(name)").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(20),
@@ -76,6 +76,7 @@ Deno.serve(async (req) => {
       service.from("sales_orders").select("valor, moeda, upsell_sent, upsell_sent_at, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(5),
       service.from("ai_agent_connections").select("agent_config_id, connection_config_id, ai_agent_configs!inner(id, workspace_id, agent_key)").eq("ai_agent_configs.workspace_id", workspaceId),
       service.from("ai_agent_flows").select("agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content, ai_agent_configs!inner(id, workspace_id, agent_key), automation_flows!inner(id, name, description, is_active, manual_only)").eq("ai_agent_configs.workspace_id", workspaceId),
+      service.from("ai_agent_faqs").select("agent_config_id, question, answer, sort_order, ai_agent_configs!inner(id, workspace_id, agent_key)").eq("ai_agent_configs.workspace_id", workspaceId).eq("ai_agent_configs.agent_key", "support").order("sort_order").limit(100),
     ]);
 
     const configs = configResult.data || [];
@@ -149,6 +150,13 @@ Deno.serve(async (req) => {
       return `- FLUXO: ${flow?.name || link.flow_id}\n  DISPONIBILIDADE: ${availability}\n  ENVIAR QUANDO: ${link.send_when || "não definido"}\n  NÃO ENVIAR QUANDO (TEM PRIORIDADE): ${link.do_not_send_when || "não definido"}\n  EXEMPLOS POSITIVOS: ${link.trigger_examples || "nenhum"}\n  DESCRIÇÃO: ${flow?.description || "sem descrição"}\n  CONTEÚDO DOS BLOCOS: ${content}`;
     }).join("\n");
 
+    const supportConfig = configs.find((item) => item.agent_key === "support");
+    const supportKnowledge = (supportFaqsResult.data || [])
+      .filter((item) => item.agent_config_id === supportConfig?.id)
+      .map((item, index) => `${index + 1}. PERGUNTA: ${item.question}\n   RESPOSTA OFICIAL: ${item.answer}`)
+      .join("\n")
+      .slice(0, 30000);
+
     const prompt = `Você é a IA ORQUESTRADORA de um CRM de WhatsApp. Você nunca fala com o lead e nunca escreve a resposta final. Sua única função é escolher exatamente um Atendente de IA ou nenhuma ação.
 
  COMPATIBILIDADE DE IDIOMAS:
@@ -181,6 +189,8 @@ REGRAS INVIOLÁVEIS:
  13. A diferença de idioma nunca deve, sozinha, reduzir a confiança; avalie a equivalência semântica da intenção.
 14. Escolha payment quando houver intenção clara de pagar, quantidade de amostras para OXXO, dúvida específica sobre pagamento ou uma imagem/documento que possa ser comprovante.
 15. Um possível comprovante nunca confirma pagamento; a confirmação oficial continua externa à IA.
+16. Escolha support somente quando a dúvida específica estiver coberta pelas instruções ou pela base de conhecimento oficial da IA de Atendimento.
+17. A base de conhecimento é referência factual. Ela não autoriza confirmar pagamento, alterar etiquetas, executar fluxos ou ignorar os bloqueios do funil.
 
 INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}
@@ -189,7 +199,10 @@ ESTADO DOS ATENDENTES:
 ${availableAgents}
 
 FLUXOS PERMITIDOS PARA A SELETORA:
-${allowedFlows || "Nenhum fluxo anexado. Não escolha flow_selector."}`;
+${allowedFlows || "Nenhum fluxo anexado. Não escolha flow_selector."}
+
+BASE DE CONHECIMENTO DA IA DE ATENDIMENTO:
+${supportKnowledge || "Nenhuma pergunta e resposta cadastrada. Use somente as instruções explícitas da IA de Atendimento."}`;
 
     const context = `LEAD: ${conversation.contact_name || "Sem nome"}
 ETAPA: ${conversation.funnel_stage || "não definida"}

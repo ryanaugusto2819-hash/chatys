@@ -64,3 +64,5 @@
 - [x] Adicionar IA de Pagamento com conexões, informações oficiais e tabela de valores OXXO
 - [x] Permitir escolher o fluxo para possível comprovante sem confirmar pagamento pela IA
 - [x] Incluir Pagamento nas decisões seguras da Orquestradora
+- [x] Adicionar perguntas frequentes e respostas oficiais à IA de Atendimento
+- [x] Usar a base de conhecimento da IA de Atendimento na decisão segura da Orquestradora
