@@ -136,6 +136,17 @@ export default function AiOrchestration() {
 
   const saveConfig = async () => {
     if (!currentWorkspace?.id || !selected) return;
+    if (selected.enabled && (connectionSelections[selectedKey] || []).length === 0) {
+      toast.error('Selecione ao menos uma conexão antes de ativar esta IA');
+      return;
+    }
+    if (selectedKey === 'flow_selector') {
+      const incompleteFlow = flowSelections.some((flow) => !flow.send_when.trim());
+      if (incompleteFlow) {
+        toast.error('Descreva quando cada fluxo anexado deve ser enviado');
+        return;
+      }
+    }
     setSaving(true);
     const payload = {
       workspace_id: currentWorkspace.id,
@@ -255,7 +266,7 @@ export default function AiOrchestration() {
               </div>
 
               <div className="mt-6 space-y-3 border-t border-border pt-5">
-                <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Conexões em que esta IA funciona</p><p className="text-xs text-muted-foreground">Ela só poderá atuar nas conexões marcadas.</p></div></div>
+                <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Conexões em que esta IA funciona</p><p className="text-xs text-muted-foreground">Ela só poderá atuar nas conexões marcadas. Se estiver ativa, selecione ao menos uma.</p></div></div>
                 {connections.length === 0 ? (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhuma conexão disponível.</div>
                 ) : (
