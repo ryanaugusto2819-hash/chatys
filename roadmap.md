@@ -14,9 +14,9 @@
 
 # Integração OXXO / XPag
 
-- [ ] Criar armazenamento seguro das cobranças OXXO
-- [ ] Criar geração de voucher pela XPag
-- [ ] Criar webhook de confirmação idempotente
-- [ ] Adicionar geração e histórico dentro da conversa
-- [ ] Configurar credenciais XPag com segurança
-- [ ] Validar criação, código de barras e confirmação
+- [x] Criar armazenamento seguro das cobranças OXXO
+- [x] Criar geração de voucher pela XPag
+- [x] Criar webhook de confirmação idempotente
+- [x] Adicionar geração e histórico dentro da conversa
+- [x] Configurar credenciais XPag com segurança
+- [ ] Validar um voucher real e a confirmação após pagamento em loja
