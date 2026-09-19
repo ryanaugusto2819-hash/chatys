@@ -193,6 +193,84 @@ export type Database = {
           },
         ]
       }
+      ai_agent_connections: {
+        Row: {
+          agent_config_id: string
+          connection_config_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          agent_config_id: string
+          connection_config_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          agent_config_id?: string
+          connection_config_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_connections_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_connections_connection_config_id_fkey"
+            columns: ["connection_config_id"]
+            isOneToOne: false
+            referencedRelation: "connection_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_flows: {
+        Row: {
+          agent_config_id: string
+          created_at: string
+          flow_id: string
+          id: string
+          send_when: string
+          updated_at: string
+        }
+        Insert: {
+          agent_config_id: string
+          created_at?: string
+          flow_id: string
+          id?: string
+          send_when?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_config_id?: string
+          created_at?: string
+          flow_id?: string
+          id?: string
+          send_when?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_flows_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_flows_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_configs: {
         Row: {
           auto_reply_enabled: boolean
