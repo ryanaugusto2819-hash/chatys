@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bot, BrainCircuit, CheckCircle2, CircleDashed, GitBranch, Headphones,
-  DollarSign, GitBranch, Headphones, Link2, Loader2, Megaphone, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
+  Link2, Loader2, Megaphone, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
