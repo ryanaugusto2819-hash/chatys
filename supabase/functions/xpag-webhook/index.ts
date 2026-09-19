@@ -45,8 +45,9 @@ const applyPaidTag = async (service: any, charge: ChargeRecord) => {
     .in("name", ["OXXO", "PAGO"]);
   if (tagsError) throw new Error(tagsError.message);
 
-  const oxxoTagId = tags?.find((tag) => tag.name.toUpperCase() === "OXXO")?.id;
-  let paidTagId = tags?.find((tag) => tag.name.toUpperCase() === "PAGO")?.id;
+  const availableTags = (tags ?? []) as Array<{ id: string; name: string }>;
+  const oxxoTagId = availableTags.find((tag) => tag.name.toUpperCase() === "OXXO")?.id;
+  let paidTagId = availableTags.find((tag) => tag.name.toUpperCase() === "PAGO")?.id;
   if (!paidTagId) {
     const { data: createdTag, error: createTagError } = await service
       .from("tags")
