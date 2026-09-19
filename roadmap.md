@@ -36,3 +36,8 @@
 # Atalhos de automação na conversa
 
 - [x] Permitir buscar, anexar e remover fluxos diretamente no bloco de atalhos
+
+# Tradução do campo de mensagem
+
+- [x] Alterar o destino do botão para espanhol do México
+- [x] Preservar conteúdo, intenção, tom e formatação sem acréscimos ou cortes
