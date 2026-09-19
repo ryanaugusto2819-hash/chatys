@@ -45,3 +45,13 @@
 # Menu lateral
 
 - [x] Ocultar temporariamente o DashVendas sem remover sua página ou seus dados
+
+# Central Inteligente de IAs
+
+- [ ] Criar a central unificada com os sete Atendentes de IA
+- [ ] Implementar a IA Orquestradora como única porta de decisão
+- [ ] Garantir exclusão mútua, prioridade e bloqueio pós-venda
+- [ ] Registrar decisões, motivos, confiança e consumo de IA
+- [ ] Integrar gradualmente Seletora, Atendimento, Pós-venda, Upsell e Remarketing
+- [ ] Ampliar a IA Supervisora para avaliar todos os Atendentes de IA
+- [ ] Validar que apenas uma ação automática ocorre por mensagem
