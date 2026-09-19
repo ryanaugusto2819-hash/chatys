@@ -10,6 +10,7 @@ import QuickMessages from '@/components/chat/QuickMessages';
 import PinnedFlowShortcuts from '@/components/chat/PinnedFlowShortcuts';
 import LibertyPedidosPanel from '@/components/chat/LibertyPedidosPanel';
 import PinnedQuickMessageShortcuts from '@/components/chat/PinnedQuickMessageShortcuts';
+import OxxoChargesPanel from '@/components/chat/OxxoChargesPanel';
 
 import TagManager from '@/components/tags/TagManager';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -1292,6 +1293,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 conversationId={id!}
                 sector="cobranca"
               />
+              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} />
               <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
             </div>
           ) : (
@@ -1316,6 +1318,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
 
             <div className="p-4 space-y-5 flex-1">
+              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} />
               {/* Register Sale */}
               <div>
                 {saleRegisteredAt ? (
