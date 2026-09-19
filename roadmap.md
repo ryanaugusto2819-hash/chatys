@@ -61,3 +61,6 @@
 - [x] Adicionar regras de quando não enviar e exemplos por fluxo na Seletora
 - [x] Permitir que a Seletora analise opcionalmente o conteúdo dos blocos de cada fluxo
 - [x] Comparar regras em português com mensagens e fluxos em espanhol do México por intenção
+- [x] Adicionar IA de Pagamento com conexões, informações oficiais e tabela de valores OXXO
+- [x] Permitir escolher o fluxo para possível comprovante sem confirmar pagamento pela IA
+- [x] Incluir Pagamento nas decisões seguras da Orquestradora
