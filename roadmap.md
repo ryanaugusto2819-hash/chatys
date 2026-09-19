@@ -48,10 +48,10 @@
 
 # Central Inteligente de IAs
 
-- [ ] Criar a central unificada com os sete Atendentes de IA
-- [ ] Implementar a IA Orquestradora como única porta de decisão
-- [ ] Garantir exclusão mútua, prioridade e bloqueio pós-venda
-- [ ] Registrar decisões, motivos, confiança e consumo de IA
+- [x] Criar a central unificada com os sete Atendentes de IA
+- [x] Implementar a IA Orquestradora como única porta de decisão em modo de teste
+- [x] Garantir exclusão mútua, prioridade e bloqueio pós-venda na decisão central
+- [x] Registrar decisões, motivos, confiança e consumo de IA
 - [ ] Integrar gradualmente Seletora, Atendimento, Pós-venda, Upsell e Remarketing
 - [ ] Ampliar a IA Supervisora para avaliar todos os Atendentes de IA
-- [ ] Validar que apenas uma ação automática ocorre por mensagem
+- [x] Validar que o modo de teste não executa nenhuma ação automática

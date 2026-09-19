@@ -24,6 +24,7 @@ import {
   UserSearch,
   PanelLeftClose,
   PanelLeftOpen,
+  BrainCircuit,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -42,6 +43,7 @@ const adminItems = [
   { to: '/automation', icon: GitBranch, label: 'Automação' },
   { to: '/webhook-mappings', icon: Webhook, label: 'Webhooks' },
   { to: '/ai', icon: Bot, label: 'Nichos & IA' },
+  { to: '/ai-orchestration', icon: BrainCircuit, label: 'Central de IAs' },
   { to: '/reports', icon: BarChart3, label: 'Relatórios' },
   { to: '/leads', icon: UserSearch, label: 'Extração de Leads' },
   { to: '/activity', icon: Activity, label: 'Atividade (IP)' },
