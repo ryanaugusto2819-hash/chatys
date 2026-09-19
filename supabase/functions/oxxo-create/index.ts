@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const { conversationId, amount, payerName, payerEmail } = parsed.data;
     const { data: conversation, error: conversationError } = await service
       .from("conversations")
-      .select("id, contact_name, workspace_id")
+      .select("id, contact_name, contact_phone, workspace_id")
       .eq("id", conversationId)
       .maybeSingle();
     if (conversationError || !conversation?.workspace_id) return json({ success: false, error: "Conversa não encontrada" }, 404);
@@ -142,6 +142,17 @@ Deno.serve(async (req) => {
       provider_response: providerData,
     }).eq("id", charge.id).select("*").single();
     if (updateError) return json({ success: false, error: "Voucher criado, mas não foi possível salvá-lo", details: updateError.message }, 500);
+    try {
+      const { data: tag } = await service.from("tags").select("id").eq("workspace_id", conversation.workspace_id).eq("name", "OXXO").maybeSingle();
+      let tagId = tag?.id;
+      if (!tagId) {
+        const { data: newTag } = await service.from("tags").insert({ workspace_id: conversation.workspace_id, name: "OXXO", color: "#f97316" }).select("id").single();
+        tagId = newTag?.id;
+      }
+      if (tagId) {
+        await service.from("contact_tags").upsert({ contact_phone: conversation.contact_phone, tag_id: tagId, workspace_id: conversation.workspace_id }, { onConflict: "contact_phone,tag_id" });
+      }
+    } catch (e) { console.error("Erro ao aplicar tag OXXO:", e); }
 
     return json({ success: true, charge: updated });
   } catch (error) {

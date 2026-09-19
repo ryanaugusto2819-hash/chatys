@@ -99,6 +99,7 @@ export default function OxxoChargesPanel({ conversationId, contactName, onSendVo
         throw new Error(message);
       }
       if (!data?.success) throw new Error(data?.error || 'Não foi possível gerar o voucher');
+      if (data?.charge) { await sendVoucher(data.charge as OxxoCharge); }
       toast.success('Voucher OXXO gerado');
       setAmount('');
       setPayerEmail('');
