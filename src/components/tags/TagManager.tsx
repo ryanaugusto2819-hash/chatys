@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Tag, Plus, X, Check, Loader2 } from 'lucide-react';
+import { Tag, Plus, Check, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -11,6 +11,17 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface TagOption {
   id: string;
@@ -41,6 +52,7 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(PRESET_COLORS[0]);
   const [creating, setCreating] = useState(false);
+  const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const fetchAllTags = async () => {
@@ -107,6 +119,32 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
     }
   };
 
+  const deleteTag = async (tag: TagOption) => {
+    if (deletingTagId) return;
+    setDeletingTagId(tag.id);
+    try {
+      const { error: linksError } = await supabase
+        .from('contact_tags')
+        .delete()
+        .eq('tag_id', tag.id);
+      if (linksError) throw linksError;
+
+      const { error: tagError } = await supabase
+        .from('tags')
+        .delete()
+        .eq('id', tag.id);
+      if (tagError) throw tagError;
+
+      setAllTags(previous => previous.filter(item => item.id !== tag.id));
+      onTagsChanged();
+      toast.success(`Etiqueta "${tag.name}" excluída`);
+    } catch {
+      toast.error('Erro ao excluir etiqueta');
+    } finally {
+      setDeletingTagId(null);
+    }
+  };
+
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -137,7 +175,7 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
               >
                 <button
                   onClick={() => toggleTag(tag)}
-                  disabled={loading}
+                  disabled={loading || deletingTagId !== null}
                   className="flex items-center gap-2.5 flex-1 min-w-0"
                 >
                   <div
@@ -148,6 +186,39 @@ export default function TagManager({ contactPhone, contactTags, onTagsChanged }:
                   </div>
                   <span className="text-sm truncate">{tag.name}</span>
                 </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={loading || deletingTagId !== null}
+                      className="h-8 gap-1.5 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      {deletingTagId === tag.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Trash2 className="h-3.5 w-3.5" />}
+                      Excluir
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir etiqueta?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        A etiqueta “{tag.name}” será removida de todas as conversas. Esta ação não pode ser desfeita.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void deleteTag(tag)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ))}
           </div>

@@ -1549,7 +1549,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 </div>
               )}
 
-
+              {false && <>
               {/* Gerar Termo */}
               <div>
                 <button
@@ -1738,6 +1738,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   </div>
                 </div>
               )}
+              </>}
 
 
               <div className="rounded-lg border border-border bg-background/50 overflow-hidden">
