@@ -5,7 +5,7 @@ import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
-const agentKeys = ["flow_selector", "support", "post_sale", "upsell", "remarketing"] as const;
+const agentKeys = ["flow_selector", "support", "payment", "post_sale", "upsell", "remarketing"] as const;
 
 type AgentKey = typeof agentKeys[number] | "none";
 
@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
 ATENDENTES POSSÍVEIS:
 - flow_selector: escolhe e executa uma etapa/fluxo pronto quando a intenção corresponde claramente.
 - support: responde dúvidas atuais sobre produto, pagamento, envio, prazo e modo de uso antes da venda.
+- payment: envia informações de pagamento, reconhece quantidade para OXXO ou identifica possível comprovante; não confirma pagamento.
 - post_sale: suporte, uso, entrega, satisfação ou problema depois da compra.
 - upsell: oferta adicional somente após pagamento e quando houver elegibilidade explícita.
 - remarketing: reengaja lead inativo ou que abandonou o pagamento; não é resposta imediata a uma nova dúvida.
@@ -168,7 +169,7 @@ REGRAS INVIOLÁVEIS:
 1. Escolha no máximo um Atendente.
 2. A Orquestradora não responde e não executa mensagens.
 3. Em dúvida, escolha none.
-4. Após venda/pagamento, não escolha support, flow_selector ou remarketing; use post_sale, upsell ou none.
+4. Após venda/pagamento, não escolha support, payment, flow_selector ou remarketing; use post_sale, upsell ou none.
 5. Upsell exige venda/pagamento e sinal claro de elegibilidade. Não escolha upsell apenas porque houve compra.
 6. Remarketing só pode agir por inatividade/abandono e nunca como resposta imediata.
 7. Agentes desativados podem ser recomendados no modo de teste, mas inclua "Agente aguardando configuração" em blockers.
@@ -178,6 +179,8 @@ REGRAS INVIOLÁVEIS:
 11. Nunca recomende fluxo pausado, marcado como somente manual ou já executado nesta conversa.
 12. O conteúdo dos blocos serve apenas para melhorar a compreensão; não ignore as regras positivas e negativas escritas pelo administrador.
  13. A diferença de idioma nunca deve, sozinha, reduzir a confiança; avalie a equivalência semântica da intenção.
+14. Escolha payment quando houver intenção clara de pagar, quantidade de amostras para OXXO, dúvida específica sobre pagamento ou uma imagem/documento que possa ser comprovante.
+15. Um possível comprovante nunca confirma pagamento; a confirmação oficial continua externa à IA.
 
 INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}
@@ -219,7 +222,7 @@ Decida qual Atendente deveria assumir agora. Não produza a mensagem ao lead.`;
     let selectedAgent: AgentKey = output.selected_agent;
     const blockers = [...deterministicBlockers, ...output.blockers];
     if (lastMessage.sender_type !== "customer") selectedAgent = "none";
-    if (isPaid && ["support", "flow_selector", "remarketing"].includes(selectedAgent)) {
+    if (isPaid && ["support", "payment", "flow_selector", "remarketing"].includes(selectedAgent)) {
       blockers.push("Decisão bloqueada pela regra global pós-venda");
       selectedAgent = "none";
     }

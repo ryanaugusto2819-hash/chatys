@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bot, BrainCircuit, CheckCircle2, CircleDashed, GitBranch, Headphones,
-  Link2, Loader2, Megaphone, PackageCheck, Play, Save, Search, ShieldCheck, ShoppingBag,
+  Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
+  Link2, Loader2, Megaphone, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 
-type AgentKey = 'orchestrator' | 'flow_selector' | 'support' | 'post_sale' | 'upsell' | 'remarketing' | 'supervisor';
+type AgentKey = 'orchestrator' | 'flow_selector' | 'support' | 'payment' | 'post_sale' | 'upsell' | 'remarketing' | 'supervisor';
 type AgentConfig = {
   id?: string;
   agent_key: AgentKey;
@@ -31,6 +31,7 @@ type Conversation = { id: string; contact_name: string | null; contact_phone: st
 type Connection = { id: string; label: string; connection_id: string; status: string; is_connected: boolean };
 type Flow = { id: string; name: string; description: string | null; is_active: boolean; manual_only: boolean };
 type AgentFlow = { flow_id: string; send_when: string; do_not_send_when: string; trigger_examples: string; analyze_flow_content: boolean };
+type PaymentRules = { payment_information: string; receipt_flow_id: string; prices: Array<{ quantity: number; amount: number }> };
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
   blockers: string[]; operation_mode: string; status: string; created_at: string;
@@ -46,6 +47,7 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
   { key: 'orchestrator', name: 'IA Orquestradora', short: 'Decide qual único Atendente pode agir. Nunca responde ao lead.', icon: BrainCircuit },
   { key: 'flow_selector', name: 'IA Seletora de Fluxo', short: 'Escolhe a etapa ou fluxo pronto correto para o momento.', icon: GitBranch },
   { key: 'support', name: 'IA de Atendimento', short: 'Responde dúvidas sobre produto, pagamento, envio e prazo.', icon: Headphones },
+  { key: 'payment', name: 'IA de Pagamento', short: 'Orienta o pagamento, prepara OXXO e reconhece possíveis comprovantes.', icon: DollarSign },
   { key: 'post_sale', name: 'IA Pós-venda', short: 'Acompanha uso, entrega, satisfação e suporte após a compra.', icon: PackageCheck },
   { key: 'upsell', name: 'IA Upsell', short: 'Oferece uma nova oferta a clientes elegíveis após o pagamento.', icon: ShoppingBag },
   { key: 'remarketing', name: 'IA Remarketing', short: 'Reengaja leads inativos ou que abandonaram o pagamento.', icon: Megaphone },
@@ -62,6 +64,22 @@ const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
   entry_criteria: [],
   blocking_rules: [],
 }));
+
+const readPaymentRules = (value: Json): PaymentRules => {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, Json | undefined> : {};
+  const prices = Array.isArray(raw.prices) ? raw.prices.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const row = item as Record<string, Json | undefined>;
+    const quantity = Number(row.quantity);
+    const amount = Number(row.amount);
+    return Number.isFinite(quantity) && Number.isFinite(amount) ? [{ quantity, amount }] : [];
+  }) : [];
+  return {
+    payment_information: typeof raw.payment_information === 'string' ? raw.payment_information : '',
+    receipt_flow_id: typeof raw.receipt_flow_id === 'string' ? raw.receipt_flow_id : '',
+    prices,
+  };
+};
 
 export default function AiOrchestration() {
   const { currentWorkspace } = useWorkspace();
@@ -125,6 +143,11 @@ export default function AiOrchestration() {
     setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? { ...config, ...patch } : config));
   };
 
+  const updatePaymentRules = (patch: Partial<PaymentRules>) => {
+    const current = readPaymentRules(selected?.entry_criteria ?? {});
+    updateSelected({ entry_criteria: { ...current, ...patch } as unknown as Json });
+  };
+
   const toggleConnection = (connectionId: string) => {
     setConnectionSelections((current) => {
       const selectedIds = current[selectedKey] || [];
@@ -152,6 +175,14 @@ export default function AiOrchestration() {
       const incompleteFlow = flowSelections.some((flow) => !flow.send_when.trim() || !flow.do_not_send_when.trim() || !flow.trigger_examples.trim());
       if (incompleteFlow) {
         toast.error('Preencha quando enviar, quando não enviar e os exemplos de cada fluxo');
+        return;
+      }
+    }
+    if (selectedKey === 'payment') {
+      const rules = readPaymentRules(selected.entry_criteria);
+      const invalidPrice = rules.prices.some((row) => !Number.isInteger(row.quantity) || row.quantity <= 0 || row.amount < 10 || row.amount > 10000);
+      if (!rules.payment_information.trim() || rules.prices.length === 0 || invalidPrice) {
+        toast.error('Preencha as informações de pagamento e uma tabela válida entre 10 e 10.000 MXN');
         return;
       }
     }
@@ -238,7 +269,7 @@ export default function AiOrchestration() {
         <section className="border-b border-border pb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="mb-2 flex items-center gap-2"><Badge>Modo seguro</Badge><span className="text-xs text-muted-foreground">{activeCount} de 7 ativos</span></div>
+              <div className="mb-2 flex items-center gap-2"><Badge>Modo seguro</Badge><span className="text-xs text-muted-foreground">{activeCount} de {AGENTS.length} ativos</span></div>
               <h2 className="text-2xl font-semibold text-foreground">Comando central do atendimento</h2>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">A Orquestradora analisa o contexto e escolhe uma única função. No modo de teste, nenhuma mensagem ou fluxo é enviado.</p>
             </div>
@@ -327,6 +358,23 @@ export default function AiOrchestration() {
                   })}
                 </div>
               )}
+
+              {selectedKey === 'payment' && (() => {
+                const rules = readPaymentRules(selected.entry_criteria);
+                return <div className="mt-6 space-y-5 border-t border-border pt-5">
+                  <div><p className="text-sm font-medium text-foreground">Configuração de pagamento</p><p className="text-xs text-muted-foreground">A Orquestradora consulta estas regras. No modo seguro, nenhum voucher ou mensagem é enviado.</p></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-foreground">Informações que a IA pode enviar</label><Textarea value={rules.payment_information} onChange={(event) => updatePaymentRules({ payment_information: event.target.value })} rows={6} placeholder={'Informe somente os dados oficiais: formas de pagamento, instruções, prazos e restrições.\nPode escrever em português; a resposta futura será adaptada ao espanhol do México.'} /></div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium text-foreground">Valor OXXO por quantidade de amostras</p><p className="text-xs text-muted-foreground">O valor exato será usado somente quando a quantidade estiver clara.</p></div><Button type="button" variant="outline" size="sm" onClick={() => updatePaymentRules({ prices: [...rules.prices, { quantity: 1, amount: 10 }] })}><Plus className="mr-2 h-4 w-4" />Adicionar</Button></div>
+                    {rules.prices.length === 0 ? <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adicione ao menos uma quantidade e seu valor final em MXN.</div> : rules.prices.map((row, index) => <div key={`${index}-${row.quantity}`} className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-md border border-border bg-muted/20 p-3">
+                      <div><label className="mb-1 block text-xs font-medium text-foreground">Quantidade</label><Input type="number" min={1} step={1} value={row.quantity} onChange={(event) => updatePaymentRules({ prices: rules.prices.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(event.target.value) } : item) })} /></div>
+                      <div><label className="mb-1 block text-xs font-medium text-foreground">Valor final (MXN)</label><Input type="number" min={10} max={10000} step="0.01" value={row.amount} onChange={(event) => updatePaymentRules({ prices: rules.prices.map((item, rowIndex) => rowIndex === index ? { ...item, amount: Number(event.target.value) } : item) })} /></div>
+                      <Button type="button" variant="ghost" size="icon" title="Remover valor" onClick={() => updatePaymentRules({ prices: rules.prices.filter((_, rowIndex) => rowIndex !== index) })}><Trash2 className="h-4 w-4" /></Button>
+                    </div>)}
+                  </div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-foreground">Fluxo após identificar um possível comprovante</label><Select value={rules.receipt_flow_id || 'none'} onValueChange={(value) => updatePaymentRules({ receipt_flow_id: value === 'none' ? '' : value })}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Não executar fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select><p className="mt-1.5 text-xs text-muted-foreground">A imagem será tratada apenas como possível comprovante. A etiqueta PAGO continua dependendo da confirmação oficial.</p></div>
+                </div>;
+              })()}
 
               {selectedKey === 'orchestrator' && (
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">

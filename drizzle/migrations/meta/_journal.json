@@ -43,6 +43,13 @@
       "when": 1789859324740,
       "tag": "0005_add_flow_selector_precision_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789861283134,
+      "tag": "0006_add_payment_ai_agent",
+      "breakpoints": true
     }
   ]
 }
