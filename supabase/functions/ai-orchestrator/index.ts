@@ -151,6 +151,11 @@ Deno.serve(async (req) => {
 
     const prompt = `Você é a IA ORQUESTRADORA de um CRM de WhatsApp. Você nunca fala com o lead e nunca escreve a resposta final. Sua única função é escolher exatamente um Atendente de IA ou nenhuma ação.
 
+ COMPATIBILIDADE DE IDIOMAS:
+ - As regras e os exemplos do administrador podem estar em português do Brasil, enquanto a conversa e os fluxos podem estar em espanhol do México.
+ - Compare intenção e significado entre os idiomas, sem exigir palavras idênticas ou tradução literal.
+ - Reconheça sinônimos, expressões coloquiais e variações naturais do espanhol mexicano.
+
 ATENDENTES POSSÍVEIS:
 - flow_selector: escolhe e executa uma etapa/fluxo pronto quando a intenção corresponde claramente.
 - support: responde dúvidas atuais sobre produto, pagamento, envio, prazo e modo de uso antes da venda.
@@ -172,6 +177,7 @@ REGRAS INVIOLÁVEIS:
 10. A regra NÃO ENVIAR QUANDO sempre vence a regra ENVIAR QUANDO e os exemplos.
 11. Nunca recomende fluxo pausado, marcado como somente manual ou já executado nesta conversa.
 12. O conteúdo dos blocos serve apenas para melhorar a compreensão; não ignore as regras positivas e negativas escritas pelo administrador.
+ 13. A diferença de idioma nunca deve, sozinha, reduzir a confiança; avalie a equivalência semântica da intenção.
 
 INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}

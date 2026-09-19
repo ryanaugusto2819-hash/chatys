@@ -60,3 +60,4 @@
 - [x] Fazer a Orquestradora respeitar conexões e fluxos permitidos no modo de teste
 - [x] Adicionar regras de quando não enviar e exemplos por fluxo na Seletora
 - [x] Permitir que a Seletora analise opcionalmente o conteúdo dos blocos de cada fluxo
+- [x] Comparar regras em português com mensagens e fluxos em espanhol do México por intenção
