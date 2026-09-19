@@ -130,6 +130,69 @@ export type Database = {
           },
         ]
       }
+      ai_agent_configs: {
+        Row: {
+          agent_key: string
+          blocking_rules: Json
+          created_at: string
+          enabled: boolean
+          entry_criteria: Json
+          id: string
+          instructions: string
+          niche_id: string | null
+          operation_mode: string
+          priority: number
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agent_key: string
+          blocking_rules?: Json
+          created_at?: string
+          enabled?: boolean
+          entry_criteria?: Json
+          id?: string
+          instructions?: string
+          niche_id?: string | null
+          operation_mode?: string
+          priority?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agent_key?: string
+          blocking_rules?: Json
+          created_at?: string
+          enabled?: boolean
+          entry_criteria?: Json
+          id?: string
+          instructions?: string
+          niche_id?: string | null
+          operation_mode?: string
+          priority?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_configs_niche_id_fkey"
+            columns: ["niche_id"]
+            isOneToOne: false
+            referencedRelation: "niches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_configs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_configs: {
         Row: {
           auto_reply_enabled: boolean
@@ -178,6 +241,88 @@ export type Database = {
             foreignKeyName: "ai_configs_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_orchestration_decisions: {
+        Row: {
+          action: string
+          blockers: Json
+          confidence: number
+          context_snapshot: Json
+          conversation_id: string
+          created_at: string
+          duration_ms: number
+          execution_result: Json | null
+          id: string
+          input_tokens: number
+          operation_mode: string
+          output_tokens: number
+          reason: string
+          selected_agent: string
+          source_message_id: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          action?: string
+          blockers?: Json
+          confidence?: number
+          context_snapshot?: Json
+          conversation_id: string
+          created_at?: string
+          duration_ms?: number
+          execution_result?: Json | null
+          id?: string
+          input_tokens?: number
+          operation_mode?: string
+          output_tokens?: number
+          reason?: string
+          selected_agent: string
+          source_message_id?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          blockers?: Json
+          confidence?: number
+          context_snapshot?: Json
+          conversation_id?: string
+          created_at?: string
+          duration_ms?: number
+          execution_result?: Json | null
+          id?: string
+          input_tokens?: number
+          operation_mode?: string
+          output_tokens?: number
+          reason?: string
+          selected_agent?: string
+          source_message_id?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_orchestration_decisions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_orchestration_decisions_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_orchestration_decisions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
