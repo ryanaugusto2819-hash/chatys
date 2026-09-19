@@ -1110,7 +1110,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         : [...previous, savedMessage]);
     };
 
-    const imageResult = await sendWhatsAppMessage(id, 'Voucher OXXO', {
+    const imageResult = await sendWhatsAppMessage(id, 'Ficha de Pago OXXO', {
       mediaUrl: voucher.barcodeUrl,
       messageType: 'image',
     });
@@ -1120,7 +1120,12 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
 
     const amountLabel = voucher.amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const instructions = `*Pago en OXXO*\nMonto exacto: MX$ ${amountLabel}\nReferencia: ${voucher.reference}\n\nPresenta esta referencia en cualquier tienda OXXO y paga el monto exacto.`;
+    const instructions = `*Ficha de Pago OXXO*
+
+*Monto a pagar:* MX$ ${amountLabel}
+*Referencia:* ${voucher.reference}
+
+Presenta esta referencia en cualquier tienda OXXO para realizar tu pago. Asegúrate de pagar el monto exacto.`;
     const textResult = await sendWhatsAppMessage(id, instructions);
     appendSavedMessage(textResult);
     if (textResult?.success === false || textResult?.savedMessage?.status === 'failed') {

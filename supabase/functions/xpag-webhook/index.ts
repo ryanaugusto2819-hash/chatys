@@ -46,13 +46,13 @@ Deno.serve(async (req) => {
     const service = createClient(supabaseUrl, serviceKey);
     const payload = parsed.data;
 
-    let charge: { id: string; status: string } | null = null;
+    let charge: { id: string; status: string; conversation_id: string; workspace_id: string } | null = null;
     for (const [column, value] of [
       ["external_id", payload.external_id],
       ["transaction_id", payload.transaction_id],
       ["request_number", payload.request_number],
     ] as const) {
-      const { data, error } = await service.from("oxxo_charges").select("id, status").eq(column, value).maybeSingle();
+      const { data, error } = await service.from("oxxo_charges").select("id, status, conversation_id, workspace_id").eq(column, value).maybeSingle();
       if (error) return json({ success: false, error: "Falha ao localizar cobrança", details: error.message }, 500);
       if (data) { charge = data; break; }
     }
@@ -73,6 +73,25 @@ Deno.serve(async (req) => {
       error_message: null,
     }).eq("id", charge.id);
     if (updateError) return json({ success: false, error: "Falha ao confirmar cobrança", details: updateError.message }, 500);
+    try {
+      const { data: conv } = await service.from("conversations").select("contact_phone").eq("id", charge.conversation_id).maybeSingle();
+      if (conv?.contact_phone) {
+        const { data: tags } = await service.from("tags").select("id, name").eq("workspace_id", charge.workspace_id).in("name", ["OXXO", "PAGO"]);
+        const oxxoTag = tags?.find(t => t.name === "OXXO");
+        const pagoTag = tags?.find(t => t.name === "PAGO");
+        if (oxxoTag) {
+          await service.from("contact_tags").delete().eq("contact_phone", conv.contact_phone).eq("tag_id", oxxoTag.id);
+        }
+        let pagoTagId = pagoTag?.id;
+        if (!pagoTagId) {
+          const { data: newTag } = await service.from("tags").insert({ workspace_id: charge.workspace_id, name: "PAGO", color: "#14b8a6" }).select("id").single();
+          pagoTagId = newTag?.id;
+        }
+        if (pagoTagId) {
+          await service.from("contact_tags").upsert({ contact_phone: conv.contact_phone, tag_id: pagoTagId, workspace_id: charge.workspace_id }, { onConflict: "contact_phone,tag_id" });
+        }
+      }
+    } catch (e) { console.error("Erro ao atualizar tags OXXO/PAGO:", e); }
 
     return json({ success: true, confirmed: true });
   } catch (error) {
