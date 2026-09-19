@@ -21,6 +21,8 @@
 - [x] Configurar credenciais XPag com segurança
 - [ ] Validar um voucher real e a confirmação após pagamento em loja
 - [x] Adicionar envio do código de barras e referência OXXO ao lead
+- [x] Enviar voucher automaticamente após gerar e aplicar a etiqueta OXXO
+- [x] Trocar a etiqueta OXXO por PAGO após confirmação da XPag
 
 # Webhook DataCrazy
 

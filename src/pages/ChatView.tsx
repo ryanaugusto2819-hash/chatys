@@ -1100,7 +1100,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   };
 
   const handleSendOxxoVoucher = useCallback(async (voucher: { amount: number; reference: string; barcodeUrl: string }) => {
-    if (!id) throw new Error('Conversa não encontrada');
+    if (!id || !conversation?.workspace_id) throw new Error('Conversa não encontrada');
 
     const appendSavedMessage = (result: any) => {
       if (!result?.savedMessage) return;
@@ -1110,7 +1110,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
         : [...previous, savedMessage]);
     };
 
-    const imageResult = await sendWhatsAppMessage(id, 'Ficha de Pago OXXO', {
+    const imageResult = await sendWhatsAppMessage(id, '', {
       mediaUrl: voucher.barcodeUrl,
       messageType: 'image',
     });
@@ -1119,19 +1119,40 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
       throw new Error(imageResult?.error || 'Falha ao enviar a imagem do voucher');
     }
 
-    const amountLabel = voucher.amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const instructions = `*Ficha de Pago OXXO*
-
-*Monto a pagar:* MX$ ${amountLabel}
-*Referencia:* ${voucher.reference}
-
-Presenta esta referencia en cualquier tienda OXXO para realizar tu pago. Asegúrate de pagar el monto exacto.`;
+    const instructions = `${voucher.reference}\n\nTe envié el código de OXXO, después de que hagas el pago me envías el comprobante por favor.`;
     const textResult = await sendWhatsAppMessage(id, instructions);
     appendSavedMessage(textResult);
     if (textResult?.success === false || textResult?.savedMessage?.status === 'failed') {
       throw new Error(textResult?.error || 'A imagem foi enviada, mas a referência não pôde ser enviada');
     }
-  }, [id, setMessages]);
+
+    const { data: matchingTags, error: findTagError } = await supabase
+      .from('tags')
+      .select('id')
+      .eq('workspace_id', conversation.workspace_id)
+      .ilike('name', 'OXXO')
+      .limit(1);
+    if (findTagError) throw new Error('Voucher enviado, mas não foi possível localizar a etiqueta OXXO');
+
+    let oxxoTagId = matchingTags?.[0]?.id;
+    if (!oxxoTagId) {
+      const { data: createdTag, error: createTagError } = await supabase
+        .from('tags')
+        .insert({ name: 'OXXO', color: '#f59e0b', workspace_id: conversation.workspace_id })
+        .select('id')
+        .single();
+      if (createTagError || !createdTag) throw new Error('Voucher enviado, mas não foi possível criar a etiqueta OXXO');
+      oxxoTagId = createdTag.id;
+    }
+
+    const { error: assignTagError } = await supabase.from('contact_tags').upsert({
+      contact_phone: conversation.contact_phone,
+      tag_id: oxxoTagId,
+      workspace_id: conversation.workspace_id,
+    }, { onConflict: 'contact_phone,tag_id', ignoreDuplicates: true });
+    if (assignTagError) throw new Error('Voucher enviado, mas não foi possível aplicar a etiqueta OXXO');
+    await fetchConversation();
+  }, [conversation?.contact_phone, conversation?.workspace_id, fetchConversation, id, setMessages]);
 
   if (loading) {
     return (

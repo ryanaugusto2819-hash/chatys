@@ -28,6 +28,51 @@ const safeEqual = (a: string, b: string) => {
   return result === 0;
 };
 
+type ChargeRecord = { id: string; status: string; conversation_id: string; workspace_id: string };
+
+const applyPaidTag = async (service: ReturnType<typeof createClient>, charge: ChargeRecord) => {
+  const { data: conversation, error: conversationError } = await service
+    .from("conversations")
+    .select("contact_phone")
+    .eq("id", charge.conversation_id)
+    .maybeSingle();
+  if (conversationError || !conversation?.contact_phone) throw new Error(conversationError?.message || "Conversa da cobrança não encontrada");
+
+  const { data: tags, error: tagsError } = await service
+    .from("tags")
+    .select("id, name")
+    .eq("workspace_id", charge.workspace_id)
+    .in("name", ["OXXO", "PAGO"]);
+  if (tagsError) throw new Error(tagsError.message);
+
+  const oxxoTagId = tags?.find((tag) => tag.name.toUpperCase() === "OXXO")?.id;
+  let paidTagId = tags?.find((tag) => tag.name.toUpperCase() === "PAGO")?.id;
+  if (!paidTagId) {
+    const { data: createdTag, error: createTagError } = await service
+      .from("tags")
+      .insert({ workspace_id: charge.workspace_id, name: "PAGO", color: "#22c55e" })
+      .select("id")
+      .single();
+    if (createTagError || !createdTag) throw new Error(createTagError?.message || "Falha ao criar etiqueta PAGO");
+    paidTagId = createdTag.id;
+  }
+
+  if (oxxoTagId) {
+    const { error: removeError } = await service.from("contact_tags").delete()
+      .eq("workspace_id", charge.workspace_id)
+      .eq("contact_phone", conversation.contact_phone)
+      .eq("tag_id", oxxoTagId);
+    if (removeError) throw new Error(removeError.message);
+  }
+
+  const { error: paidError } = await service.from("contact_tags").upsert({
+    workspace_id: charge.workspace_id,
+    contact_phone: conversation.contact_phone,
+    tag_id: paidTagId,
+  }, { onConflict: "contact_phone,tag_id", ignoreDuplicates: true });
+  if (paidError) throw new Error(paidError.message);
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "Método não permitido" }, 405);
@@ -46,7 +91,7 @@ Deno.serve(async (req) => {
     const service = createClient(supabaseUrl, serviceKey);
     const payload = parsed.data;
 
-    let charge: { id: string; status: string; conversation_id: string; workspace_id: string } | null = null;
+    let charge: ChargeRecord | null = null;
     for (const [column, value] of [
       ["external_id", payload.external_id],
       ["transaction_id", payload.transaction_id],
@@ -57,8 +102,12 @@ Deno.serve(async (req) => {
       if (data) { charge = data; break; }
     }
     if (!charge) return json({ success: false, error: "Cobrança não encontrada" }, 404);
-    if (charge.status === "confirmed") return json({ success: true, duplicate: true });
     if (payload.status !== "confirmed") return json({ success: true, ignored: true, status: payload.status });
+
+    if (charge.status === "confirmed") {
+      await applyPaidTag(service, charge);
+      return json({ success: true, duplicate: true, tag: "PAGO" });
+    }
 
     const { error: updateError } = await service.from("oxxo_charges").update({
       status: "confirmed",
@@ -73,27 +122,9 @@ Deno.serve(async (req) => {
       error_message: null,
     }).eq("id", charge.id);
     if (updateError) return json({ success: false, error: "Falha ao confirmar cobrança", details: updateError.message }, 500);
-    try {
-      const { data: conv } = await service.from("conversations").select("contact_phone").eq("id", charge.conversation_id).maybeSingle();
-      if (conv?.contact_phone) {
-        const { data: tags } = await service.from("tags").select("id, name").eq("workspace_id", charge.workspace_id).in("name", ["OXXO", "PAGO"]);
-        const oxxoTag = tags?.find(t => t.name === "OXXO");
-        const pagoTag = tags?.find(t => t.name === "PAGO");
-        if (oxxoTag) {
-          await service.from("contact_tags").delete().eq("contact_phone", conv.contact_phone).eq("tag_id", oxxoTag.id);
-        }
-        let pagoTagId = pagoTag?.id;
-        if (!pagoTagId) {
-          const { data: newTag } = await service.from("tags").insert({ workspace_id: charge.workspace_id, name: "PAGO", color: "#14b8a6" }).select("id").single();
-          pagoTagId = newTag?.id;
-        }
-        if (pagoTagId) {
-          await service.from("contact_tags").upsert({ contact_phone: conv.contact_phone, tag_id: pagoTagId, workspace_id: charge.workspace_id }, { onConflict: "contact_phone,tag_id" });
-        }
-      }
-    } catch (e) { console.error("Erro ao atualizar tags OXXO/PAGO:", e); }
+    await applyPaidTag(service, charge);
 
-    return json({ success: true, confirmed: true });
+    return json({ success: true, confirmed: true, tag: "PAGO" });
   } catch (error) {
     return json({ success: false, error: "Erro inesperado no webhook", details: error instanceof Error ? error.message : String(error) }, 500);
   }
