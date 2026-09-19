@@ -1701,6 +1701,96 @@ export type Database = {
           },
         ]
       }
+      oxxo_charges: {
+        Row: {
+          amount: number
+          barcode_url: string | null
+          confirmed_at: string | null
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          error_code: string | null
+          error_message: string | null
+          external_id: string
+          fee: number | null
+          id: string
+          payer_email: string | null
+          payer_name: string | null
+          provider: string
+          provider_response: Json | null
+          reference: string | null
+          request_number: string | null
+          status: string
+          transaction_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          barcode_url?: string | null
+          confirmed_at?: string | null
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          error_code?: string | null
+          error_message?: string | null
+          external_id: string
+          fee?: number | null
+          id?: string
+          payer_email?: string | null
+          payer_name?: string | null
+          provider?: string
+          provider_response?: Json | null
+          reference?: string | null
+          request_number?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          barcode_url?: string | null
+          confirmed_at?: string | null
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          error_code?: string | null
+          error_message?: string | null
+          external_id?: string
+          fee?: number | null
+          id?: string
+          payer_email?: string | null
+          payer_name?: string | null
+          provider?: string
+          provider_response?: Json | null
+          reference?: string | null
+          request_number?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oxxo_charges_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oxxo_charges_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_ai_replies: {
         Row: {
           conversation_id: string

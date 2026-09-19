@@ -8,6 +8,13 @@
       "when": 1789690880736,
       "tag": "0000_add_provider_chat_id_to_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789850941138,
+      "tag": "0001_create_oxxo_charges",
+      "breakpoints": true
     }
   ]
 }
