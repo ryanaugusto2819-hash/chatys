@@ -10,12 +10,28 @@ export default function AppLayout() {
   const { session, loading, isApproved } = useAuth();
   useActivityHeartbeat();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('chatys_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const location = useLocation();
 
   // Close drawer on route change
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
+
+  const updateSidebarCollapsed = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
+    try {
+      localStorage.setItem('chatys_sidebar_collapsed', String(collapsed));
+    } catch {
+      // The preference is optional when browser storage is unavailable.
+    }
+  };
 
   if (loading) {
     return (
@@ -39,9 +55,18 @@ export default function AppLayout() {
         />
       )}
 
-      <AppSidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
+      <AppSidebar
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onCollapsedChange={updateSidebarCollapsed}
+      />
 
-      <div className="flex flex-1 flex-col min-w-0 lg:ml-64">
+      <div
+        className={`flex flex-1 flex-col min-w-0 transition-[margin] duration-300 ${
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        }`}
+      >
         {/* Mobile top bar */}
         <header
           className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-3 lg:hidden"

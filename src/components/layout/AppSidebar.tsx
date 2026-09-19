@@ -23,7 +23,10 @@ import {
   Megaphone,
   Activity,
   UserSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 
 
@@ -55,11 +58,13 @@ function SidebarNavItem({
   icon: Icon,
   label,
   badge,
+  collapsed = false,
 }: {
   to: string;
   icon: React.ElementType;
   label: string;
   badge?: number;
+  collapsed?: boolean;
 }) {
   const location = useLocation();
   const isActive =
@@ -69,7 +74,10 @@ function SidebarNavItem({
   return (
     <NavLink
       to={to}
-      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 group"
+      className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 group ${
+        collapsed ? 'lg:justify-center lg:px-0' : ''
+      }`}
+      title={collapsed ? `${label}${badge ? ` (${badge})` : ''}` : undefined}
       style={
         isActive
           ? {
@@ -96,16 +104,18 @@ function SidebarNavItem({
         className="h-[18px] w-[18px] shrink-0 transition-transform duration-150 group-hover:scale-105"
         style={{ color: isActive ? '#A78BFA' : undefined }}
       />
-      <span className="truncate flex-1">{label}</span>
+      <span className={`truncate flex-1 ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
       {badge !== undefined && badge > 0 && (
         <span
-          className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
+          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white ${
+            collapsed ? 'lg:absolute lg:right-1 lg:top-1 lg:h-2 lg:min-w-2 lg:p-0 lg:text-[0px]' : ''
+          }`}
           style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
         >
           {badge}
         </span>
       )}
-      {isActive && (
+      {isActive && !collapsed && (
         <ChevronRight className="h-3 w-3 shrink-0 opacity-50" style={{ color: '#A78BFA' }} />
       )}
     </NavLink>
@@ -115,9 +125,16 @@ function SidebarNavItem({
 interface AppSidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProps = {}) {
+export default function AppSidebar({
+  mobileOpen = false,
+  onMobileClose,
+  collapsed = false,
+  onCollapsedChange,
+}: AppSidebarProps = {}) {
   const { user, signOut, isAdmin, isPlatformAdmin } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const displayName =
@@ -173,7 +190,9 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r transition-transform duration-300 lg:translate-x-0 ${
+      className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r transition-[width,transform] duration-300 lg:translate-x-0 ${
+        collapsed ? 'lg:w-16' : 'lg:w-64'
+      } ${
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
       style={{
@@ -183,7 +202,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
     >
       {/* ── Logo area ── */}
       <div
-        className="flex h-16 items-center gap-3 px-5 border-b shrink-0"
+        className={`relative flex h-16 items-center gap-3 border-b shrink-0 ${collapsed ? 'lg:justify-center lg:px-2' : 'px-5'}`}
         style={{ borderColor: 'rgba(124,58,237,0.12)' }}
       >
         <div
@@ -195,7 +214,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
         >
           <img src={logoImg} alt="Group Liberty" className="h-9 w-9 object-cover" />
         </div>
-        <div className="min-w-0">
+        <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
           <h1
             className="text-sm font-bold tracking-tight truncate"
             style={{ color: '#F0EAFF' }}
@@ -209,17 +228,28 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
             Atendimento
           </p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => onCollapsedChange?.(!collapsed)}
+          className="absolute -right-3 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full border-border bg-card text-muted-foreground shadow-md hover:bg-secondary hover:text-foreground lg:flex"
+          aria-label={collapsed ? 'Expandir menu' : 'Minimizar menu'}
+          title={collapsed ? 'Expandir menu' : 'Minimizar menu'}
+        >
+          {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </Button>
       </div>
 
       {/* ── Workspace Switcher ── */}
-      <div className="pt-3 pb-1">
+      <div className={`pt-3 pb-1 ${collapsed ? 'lg:hidden' : ''}`}>
         <WorkspaceSwitcher />
       </div>
 
       {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto py-2 px-3 scrollbar-thin space-y-0.5">
         {/* Menu section */}
-        <p className="nav-section-label">Menu</p>
+        <p className={`nav-section-label ${collapsed ? 'lg:hidden' : ''}`}>Menu</p>
         {menuItems.map((item) => (
           <SidebarNavItem
             key={item.to}
@@ -227,6 +257,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
             icon={item.icon}
             label={item.label}
             badge={item.to === '/conversations' ? totalUnread : undefined}
+            collapsed={collapsed}
           />
         ))}
 
@@ -237,13 +268,14 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
               className="my-2.5 mx-2 h-px"
               style={{ background: 'rgba(124,58,237,0.12)' }}
             />
-            <p className="nav-section-label">Administração</p>
+            <p className={`nav-section-label ${collapsed ? 'lg:hidden' : ''}`}>Administração</p>
             {adminItems.map((item) => (
               <SidebarNavItem
                 key={item.to}
                 to={item.to}
                 icon={item.icon}
                 label={item.label}
+                collapsed={collapsed}
               />
             ))}
           </>
@@ -256,20 +288,20 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
               className="my-2.5 mx-2 h-px"
               style={{ background: 'rgba(124,58,237,0.12)' }}
             />
-            <p className="nav-section-label">Plataforma</p>
-            <SidebarNavItem to="/platform-admin" icon={Crown} label="Admin da Plataforma" />
+            <p className={`nav-section-label ${collapsed ? 'lg:hidden' : ''}`}>Plataforma</p>
+            <SidebarNavItem to="/platform-admin" icon={Crown} label="Admin da Plataforma" collapsed={collapsed} />
           </>
         )}
       </nav>
 
       {/* ── User section ── */}
       <div
-        className="border-t p-4 shrink-0"
+        className={`border-t p-4 shrink-0 ${collapsed ? 'lg:px-2' : ''}`}
         style={{ borderColor: 'rgba(124,58,237,0.12)' }}
       >
         {/* Online status bar */}
         <div
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 mb-3"
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 mb-3 ${collapsed ? 'lg:hidden' : ''}`}
           style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}
         >
           <span
@@ -281,7 +313,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${collapsed ? 'lg:justify-center' : ''}`}>
           <div className="relative shrink-0">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
@@ -298,7 +330,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
             />
           </div>
 
-          <div className="flex-1 min-w-0">
+          <div className={`flex-1 min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
             <p
               className="text-sm font-semibold truncate"
               style={{ color: '#E9E0FF' }}
@@ -312,7 +344,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose }: AppSid
 
           <button
             onClick={signOut}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-150 shrink-0"
+            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-150 shrink-0 ${collapsed ? 'lg:hidden' : ''}`}
             style={{ color: 'hsl(260 15% 42%)' }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)';
