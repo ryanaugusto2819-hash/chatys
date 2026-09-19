@@ -346,18 +346,18 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
   }, []);
   const [translating, setTranslating] = useState(false);
 
-  const translateToUruguayan = async () => {
+  const translateToMexicanSpanish = async () => {
     if (!input.trim() || translating) return;
     setTranslating(true);
     try {
       const { data, error } = await supabase.functions.invoke('translate-message', {
-        body: { text: input, target: 'es-UY' },
+        body: { text: input, target: 'es-MX' },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.translation) {
         setInput(data.translation);
-        toast.success('Traduzido para espanhol uruguaio');
+        toast.success('Traduzido fielmente para espanhol do México');
       }
     } catch (err: any) {
       toast.error(err?.message || 'Falha ao traduzir');
@@ -1321,9 +1321,9 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
             </div>
 
             <button
-              onClick={translateToUruguayan}
+              onClick={translateToMexicanSpanish}
               disabled={translating || !input.trim()}
-              title="Traduzir para espanhol (Uruguay) 🇺🇾"
+              title="Traduzir fielmente para espanhol do México 🇲🇽"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-40"
             >
               {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}

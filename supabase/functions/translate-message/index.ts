@@ -1,117 +1,138 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+function responseErrorMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) return record.message;
+    if (typeof record.error === "string" && record.error.trim()) return record.error;
+    if (record.error && typeof record.error === "object") {
+      const nested = record.error as Record<string, unknown>;
+      if (typeof nested.message === "string" && nested.message.trim()) return nested.message;
+    }
+  }
+  return `Falha na tradução (${status})`;
+}
+
+async function readTranslationStream(response: Response): Promise<string> {
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let translation = "";
+  let completedText = "";
+
+  const processEvent = (rawEvent: string) => {
+    const dataLine = rawEvent
+      .split("\n")
+      .find((line) => line.startsWith("data:"));
+    if (!dataLine) return;
+    const rawData = dataLine.slice(5).trim();
+    if (!rawData || rawData === "[DONE]") return;
+
+    try {
+      const event = JSON.parse(rawData);
+      if (event?.type === "response.output_text.delta" && typeof event.delta === "string") {
+        translation += event.delta;
+      }
+      if (event?.type === "response.completed") {
+        const terminalText = event?.response?.output_text;
+        if (typeof terminalText === "string") completedText = terminalText;
+      }
+      if (event?.type === "error") {
+        throw new Error(responseErrorMessage(event, 502));
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) return;
+      throw error;
+    }
+  };
+
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n/g, "\n");
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+    for (const event of events) processEvent(event);
+  }
+  buffer += decoder.decode().replace(/\r\n/g, "\n");
+  if (buffer.trim()) processEvent(buffer);
+
+  return (translation || completedText).trim();
+}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const body = await req.json();
     const text = body?.text;
-    const requestedTarget = String(body?.target || "es-UY").trim().toLowerCase();
-    const target = requestedTarget.startsWith("pt") || requestedTarget.includes("portugu") ? "pt-BR" : "es-UY";
+    const requestedTarget = String(body?.target || "es-MX").trim().toLowerCase();
+    const target = requestedTarget.startsWith("pt") || requestedTarget.includes("portugu") ? "pt-BR" : "es-MX";
     if (!text || typeof text !== "string" || !text.trim()) {
       return new Response(JSON.stringify({ error: "Texto vazio" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: jsonHeaders,
       });
     }
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "LOVABLE_API_KEY não configurada" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: jsonHeaders,
       });
     }
 
     const systemPrompt = target === "pt-BR"
       ? "Você é um tradutor profissional nativo do Brasil. Sua única tarefa é traduzir qualquer texto recebido para PORTUGUÊS BRASILEIRO. É proibido responder em inglês ou espanhol. Se o texto já estiver em português brasileiro, devolva-o inalterado. Preserve emojis, quebras de linha, links, números e formatação de WhatsApp. Responda somente com a tradução final, sem aspas e sem explicações."
-      : "Sos un traductor profesional nativo de Uruguay. Tu única tarea es traducir cualquier texto recibido al ESPAÑOL rioplatense usado en Uruguay. Está prohibido responder en inglés o portugués. Si el texto ya está en español rioplatense, devolvelo sin cambios. Mantené emojis, saltos de línea, links, números y formato de WhatsApp. Respondé solamente con la traducción final, sin comillas ni explicaciones.";
+      : "Eres un traductor profesional nativo de México. Traduce fielmente el texto recibido al ESPAÑOL DE MÉXICO natural y claro. Conserva exactamente el significado, la intención, el tono, el nivel de formalidad y toda la información original. No resumas, no expliques, no censures, no suavices, no intensifiques, no corrijas hechos y no agregues contenido. Mantén intactos nombres propios, marcas, teléfonos, importes, monedas, fechas, enlaces, códigos, emojis, saltos de línea y el formato de WhatsApp. Usa vocabulario mexicano neutral y evita regionalismos de otros países, incluido el voseo. Si el texto ya está en español de México, devuélvelo sin cambios. Responde únicamente con la traducción final, sin comillas ni comentarios.";
 
     const userContent = target === "pt-BR"
       ? `IDIOMA OBRIGATÓRIO DE SAÍDA: português brasileiro (pt-BR).\nNÃO escreva em inglês. NÃO escreva em espanhol.\n\nTexto original:\n${text}`
-      : `IDIOMA OBLIGATORIO DE SALIDA: español rioplatense de Uruguay.\nNO escribas en inglés. NO escribas en portugués.\n\nTexto original:\n${text}`;
+      : `IDIOMA OBLIGATORIO DE SALIDA: español de México (es-MX).\nTRADUCCIÓN LITERAL Y FIEL: conserva toda la información, intención, tono y formato. No agregues ni elimines nada.\nNO uses voseo ni expresiones rioplatenses. NO escribas en inglés ni en portugués.\n\nTexto original:\n${text}`;
 
-    async function callGateway(sys: string, usr: string) {
-      return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { "Lovable-API-Key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          temperature: 0,
-          messages: [
-            { role: "system", content: sys },
-            { role: "user", content: usr },
-          ],
-        }),
-      });
-    }
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+      method: "POST",
+      headers: {
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "fetch",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-6-astra",
+        input: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        stream: true,
+        store: false,
+        reasoning: { effort: "low", summary: "auto" },
+        include: ["reasoning.encrypted_content"],
+      }),
+    });
 
-    let res = await callGateway(systemPrompt, userContent);
-
-    if (res.status === 429) {
-      return new Response(JSON.stringify({ error: "Limite de uso atingido. Tente novamente em instantes." }), {
-        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (res.status === 402) {
-      return new Response(JSON.stringify({ error: "Créditos de IA esgotados. Adicione créditos no workspace." }), {
-        status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      return new Response(JSON.stringify({ error: `Gateway error ${res.status}`, details: errText }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const payload = await res.json().catch(async () => ({ message: await res.text().catch(() => "") }));
+      return new Response(JSON.stringify({ error: responseErrorMessage(payload, res.status) }), {
+        status: res.status, headers: jsonHeaders,
       });
     }
 
-    let data = await res.json();
-    let translation = data?.choices?.[0]?.message?.content?.trim() ?? "";
-
-    // Detecta idioma errado e refaz
-    function looksEnglish(t: string) {
-      const lower = ` ${t.toLowerCase().replace(/[’']/g, "'")} `;
-      const hits = [" the ", " you ", " your ", " they ", " we ", " are ", " is ", " and ", " with ", " not ", " for ", " about ", " what ", " kind ", " guarantee ", " nothing ", " i'm ", " telling ", " product ", " expensive ", " charge "].filter(w => lower.includes(w)).length;
-      return hits >= 2;
-    }
-    function looksPortuguese(t: string) {
-      const lower = ` ${t.toLowerCase()} `;
-      const hits = [" você ", " vocês ", " não ", " está ", " estão ", " então ", " também ", " depois ", " caro ", " cobram ", " fosse ", " garantia ", " dão ", " nada ", " produto "].filter(w => lower.includes(w)).length;
-      return /[ãõçâêáéíóúà]/.test(lower) || hits >= 2;
-    }
-    function looksSpanish(t: string) {
-      const lower = ` ${t.toLowerCase()} `;
-      const hits = [" usted ", " vos ", " está ", " están ", " después ", " propuesta ", " pensar ", " fácil ", " caro ", " cobran ", " fuera ", " garantía ", " dan ", " nada ", " producto "].filter(w => lower.includes(w)).length;
-      return /[ñ¿¡]/.test(lower) || hits >= 2;
-    }
-
-    const wrongLang =
-      (target === "pt-BR" && (looksEnglish(translation) || (!looksPortuguese(translation) && looksSpanish(translation)))) ||
-      (target === "es-UY" && (looksEnglish(translation) || (!looksSpanish(translation) && looksPortuguese(translation))));
-
-    if (wrongLang) {
-      const retrySys = target === "pt-BR"
-        ? "Você é um tradutor nativo do Brasil. Responda APENAS em PORTUGUÊS BRASILEIRO. Proibido inglês e espanhol."
-        : "Sos un traductor. Respondé SOLO en ESPAÑOL rioplatense. Prohibido inglés y portugués.";
-      const retryUsr = target === "pt-BR"
-        ? `Corrija o idioma. A resposta anterior saiu no idioma errado. Traduza este texto para PORTUGUÊS BRASILEIRO. Devolva SOMENTE a tradução em português brasileiro, sem inglês e sem espanhol:\n\n${text}`
-        : `Traducí este texto al ESPAÑOL rioplatense de Uruguay. Devolvé SOLO la traducción en español, sin inglés:\n\n${text}`;
-      const res2 = await callGateway(retrySys, retryUsr);
-      if (res2.ok) {
-        const data2 = await res2.json();
-        const t2 = data2?.choices?.[0]?.message?.content?.trim() ?? "";
-        if (t2) translation = t2;
-      }
+    const translation = await readTranslationStream(res);
+    if (!translation) {
+      return new Response(JSON.stringify({ error: "A tradução terminou sem produzir texto." }), {
+        status: 502, headers: jsonHeaders,
+      });
     }
 
     return new Response(JSON.stringify({ translation }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: jsonHeaders,
     });
   }
 });
