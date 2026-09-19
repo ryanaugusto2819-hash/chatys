@@ -50,6 +50,13 @@
       "when": 1789861283134,
       "tag": "0006_add_payment_ai_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789862011287,
+      "tag": "0007_create_ai_support_faqs",
+      "breakpoints": true
     }
   ]
 }
