@@ -21,3 +21,9 @@
 - [x] Configurar credenciais XPag com segurança
 - [ ] Validar um voucher real e a confirmação após pagamento em loja
 - [x] Adicionar envio do código de barras e referência OXXO ao lead
+
+# Webhook DataCrazy
+
+- [x] Criar e publicar webhook público de diagnóstico
+- [x] Validar recebimento e registro do JSON completo
+- [ ] Mapear o payload real enviado pelo DataCrazy
