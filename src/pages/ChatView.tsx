@@ -1099,6 +1099,35 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
     }
   };
 
+  const handleSendOxxoVoucher = useCallback(async (voucher: { amount: number; reference: string; barcodeUrl: string }) => {
+    if (!id) throw new Error('Conversa não encontrada');
+
+    const appendSavedMessage = (result: any) => {
+      if (!result?.savedMessage) return;
+      const savedMessage = result.savedMessage as ChatMessage;
+      setMessages(previous => previous.some(message => message.id === savedMessage.id)
+        ? previous
+        : [...previous, savedMessage]);
+    };
+
+    const imageResult = await sendWhatsAppMessage(id, 'Voucher OXXO', {
+      mediaUrl: voucher.barcodeUrl,
+      messageType: 'image',
+    });
+    appendSavedMessage(imageResult);
+    if (imageResult?.success === false || imageResult?.savedMessage?.status === 'failed') {
+      throw new Error(imageResult?.error || 'Falha ao enviar a imagem do voucher');
+    }
+
+    const amountLabel = voucher.amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const instructions = `*Pago en OXXO*\nMonto exacto: MX$ ${amountLabel}\nReferencia: ${voucher.reference}\n\nPresenta esta referencia en cualquier tienda OXXO y paga el monto exacto.`;
+    const textResult = await sendWhatsAppMessage(id, instructions);
+    appendSavedMessage(textResult);
+    if (textResult?.success === false || textResult?.savedMessage?.status === 'failed') {
+      throw new Error(textResult?.error || 'A imagem foi enviada, mas a referência não pôde ser enviada');
+    }
+  }, [id, setMessages]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1293,7 +1322,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 conversationId={id!}
                 sector="cobranca"
               />
-              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} />
+              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} onSendVoucher={handleSendOxxoVoucher} />
               <LibertyPedidosPanel contactPhone={conversation.contact_phone} />
             </div>
           ) : (
@@ -1318,7 +1347,7 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
 
 
             <div className="p-4 space-y-5 flex-1">
-              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} />
+              <OxxoChargesPanel conversationId={id!} contactName={conversation.contact_name} onSendVoucher={handleSendOxxoVoucher} />
               {/* Register Sale */}
               <div>
                 {saleRegisteredAt ? (
