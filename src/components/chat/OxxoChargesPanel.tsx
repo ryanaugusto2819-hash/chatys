@@ -58,6 +58,7 @@ export default function OxxoChargesPanel({ conversationId, contactName }: OxxoCh
   useEffect(() => {
     setLoading(true);
     void loadCharges();
+    const refreshInterval = window.setInterval(() => void loadCharges(), 30000);
     const channel = supabase
       .channel(`oxxo-charges-${conversationId}`)
       .on('postgres_changes', {
@@ -67,7 +68,10 @@ export default function OxxoChargesPanel({ conversationId, contactName }: OxxoCh
         filter: `conversation_id=eq.${conversationId}`,
       }, () => void loadCharges())
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      window.clearInterval(refreshInterval);
+      void supabase.removeChannel(channel);
+    };
   }, [conversationId, loadCharges]);
 
   const createCharge = async () => {

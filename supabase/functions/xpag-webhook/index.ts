@@ -1,4 +1,5 @@
-import { createClient, corsHeaders } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.23.8";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -45,14 +46,17 @@ Deno.serve(async (req) => {
     const service = createClient(supabaseUrl, serviceKey);
     const payload = parsed.data;
 
-    const { data: matches, error: lookupError } = await service.from("oxxo_charges")
-      .select("id, status")
-      .or(`transaction_id.eq.${payload.transaction_id},request_number.eq.${payload.request_number},external_id.eq.${payload.external_id}`)
-      .limit(2);
-    if (lookupError) return json({ success: false, error: "Falha ao localizar cobrança", details: lookupError.message }, 500);
-    if (!matches?.length) return json({ success: false, error: "Cobrança não encontrada" }, 404);
-
-    const charge = matches[0];
+    let charge: { id: string; status: string } | null = null;
+    for (const [column, value] of [
+      ["external_id", payload.external_id],
+      ["transaction_id", payload.transaction_id],
+      ["request_number", payload.request_number],
+    ] as const) {
+      const { data, error } = await service.from("oxxo_charges").select("id, status").eq(column, value).maybeSingle();
+      if (error) return json({ success: false, error: "Falha ao localizar cobrança", details: error.message }, 500);
+      if (data) { charge = data; break; }
+    }
+    if (!charge) return json({ success: false, error: "Cobrança não encontrada" }, 404);
     if (charge.status === "confirmed") return json({ success: true, duplicate: true });
     if (payload.status !== "confirmed") return json({ success: true, ignored: true, status: payload.status });
 

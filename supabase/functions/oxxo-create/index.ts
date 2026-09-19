@@ -1,4 +1,5 @@
-import { createClient, corsHeaders } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.23.8";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
     }).select("id").single();
     if (insertError || !charge) return json({ success: false, error: "Não foi possível iniciar a cobrança", details: insertError?.message }, 500);
 
+    const apiUrl = (Deno.env.get("XPAG_API_URL") || "https://api.xpag.global").replace(/\/+$/, "");
     const webhookUrl = `${supabaseUrl}/functions/v1/xpag-webhook?key=${encodeURIComponent(webhookKey)}`;
     const payload = {
       currency: "MXN",
@@ -88,7 +90,7 @@ Deno.serve(async (req) => {
     let response: Response;
     let responseText = "";
     try {
-      response = await fetch("https://api.xpag.global/cashin", {
+      response = await fetch(`${apiUrl}/cashin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
