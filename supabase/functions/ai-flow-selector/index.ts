@@ -82,7 +82,11 @@ Deno.serve(async (req) => {
       .eq("id", conversationId)
       .single();
 
-    if (conversation?.sale_registered_at) {
+    if (!conversation) {
+      return jsonResponse({ error: "Conversation not found" }, 404);
+    }
+
+    if (conversation.sale_registered_at) {
       console.log(`[ai-flow-selector] Skipping: sale already registered for conversation ${conversationId}`);
       return jsonResponse({ skipped: true, reason: "Sale already registered" });
     }
