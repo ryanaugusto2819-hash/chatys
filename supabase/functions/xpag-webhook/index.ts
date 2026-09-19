@@ -30,7 +30,7 @@ const safeEqual = (a: string, b: string) => {
 
 type ChargeRecord = { id: string; status: string; conversation_id: string; workspace_id: string };
 
-const applyPaidTag = async (service: ReturnType<typeof createClient>, charge: ChargeRecord) => {
+const applyPaidTag = async (service: any, charge: ChargeRecord) => {
   const { data: conversation, error: conversationError } = await service
     .from("conversations")
     .select("contact_phone")
