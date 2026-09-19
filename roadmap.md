@@ -41,3 +41,7 @@
 
 - [x] Alterar o destino do botão para espanhol do México
 - [x] Preservar conteúdo, intenção, tom e formatação sem acréscimos ou cortes
+
+# Menu lateral
+
+- [x] Ocultar temporariamente o DashVendas sem remover sua página ou seus dados

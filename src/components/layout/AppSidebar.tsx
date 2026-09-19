@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Webhook,
   ChevronRight,
-  Trophy,
   Crown,
   Megaphone,
   Activity,
@@ -36,7 +35,6 @@ const menuItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/conversations', icon: MessageSquare, label: 'Conversas' },
   { to: '/ads-conversions', icon: Megaphone, label: 'Conversões Ads' },
-  { to: '/ranking', icon: Trophy, label: 'DashVendas' },
 ];
 
 
