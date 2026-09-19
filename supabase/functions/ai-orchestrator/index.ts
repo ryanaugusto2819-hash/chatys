@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       service.from("contact_tags").select("tags(name)").eq("contact_phone", conversation.contact_phone).limit(30),
       service.from("sales_orders").select("valor, moeda, upsell_sent, upsell_sent_at, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(5),
       service.from("ai_agent_connections").select("agent_config_id, connection_config_id, ai_agent_configs!inner(id, workspace_id, agent_key)").eq("ai_agent_configs.workspace_id", workspaceId),
-      service.from("ai_agent_flows").select("agent_config_id, flow_id, send_when, ai_agent_configs!inner(id, workspace_id, agent_key), automation_flows!inner(id, name, description, is_active)").eq("ai_agent_configs.workspace_id", workspaceId),
+      service.from("ai_agent_flows").select("agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content, ai_agent_configs!inner(id, workspace_id, agent_key), automation_flows!inner(id, name, description, is_active, manual_only)").eq("ai_agent_configs.workspace_id", workspaceId),
     ]);
 
     const configs = configResult.data || [];
@@ -129,9 +129,24 @@ Deno.serve(async (req) => {
     }).join("\n");
 
     const selectorConfig = configs.find((item) => item.agent_key === "flow_selector");
-    const allowedFlows = (flowLinksResult.data || []).filter((link) => link.agent_config_id === selectorConfig?.id).map((link) => {
-      const flow = link.automation_flows as unknown as { name?: string; description?: string | null; is_active?: boolean } | null;
-      return `- ${flow?.name || link.flow_id} [${flow?.is_active ? "ATIVO" : "PAUSADO"}]: enviar quando: ${link.send_when || "critério não descrito"}. Descrição original: ${flow?.description || "sem descrição"}`;
+    const selectorFlows = (flowLinksResult.data || []).filter((link) => link.agent_config_id === selectorConfig?.id);
+    const analyzedFlowIds = selectorFlows.filter((link) => link.analyze_flow_content).map((link) => link.flow_id);
+    const { data: analyzedNodes, error: analyzedNodesError } = analyzedFlowIds.length
+      ? await service.from("automation_nodes").select("flow_id, node_type, label, config, sort_order").in("flow_id", analyzedFlowIds).order("sort_order").limit(500)
+      : { data: [], error: null };
+    if (analyzedNodesError) return json({ error: `Falha ao analisar o conteúdo dos fluxos: ${analyzedNodesError.message}` }, 500);
+
+    const flowContents = new Map<string, string>();
+    for (const node of analyzedNodes || []) {
+      const safeConfig = JSON.stringify(node.config).slice(0, 2500);
+      const current = flowContents.get(node.flow_id) || "";
+      flowContents.set(node.flow_id, `${current}\n  Bloco ${node.sort_order} — ${node.label} (${node.node_type}): ${safeConfig}`.slice(0, 12000));
+    }
+    const allowedFlows = selectorFlows.map((link) => {
+      const flow = link.automation_flows as unknown as { name?: string; description?: string | null; is_active?: boolean; manual_only?: boolean } | null;
+      const availability = !flow?.is_active ? "PAUSADO — NÃO RECOMENDAR" : (flow.manual_only ? "SOMENTE MANUAL — NÃO RECOMENDAR AUTOMATICAMENTE" : "ATIVO");
+      const content = link.analyze_flow_content ? (flowContents.get(link.flow_id) || "nenhum bloco encontrado") : "leitura desativada";
+      return `- FLUXO: ${flow?.name || link.flow_id}\n  DISPONIBILIDADE: ${availability}\n  ENVIAR QUANDO: ${link.send_when || "não definido"}\n  NÃO ENVIAR QUANDO (TEM PRIORIDADE): ${link.do_not_send_when || "não definido"}\n  EXEMPLOS POSITIVOS: ${link.trigger_examples || "nenhum"}\n  DESCRIÇÃO: ${flow?.description || "sem descrição"}\n  CONTEÚDO DOS BLOCOS: ${content}`;
     }).join("\n");
 
     const prompt = `Você é a IA ORQUESTRADORA de um CRM de WhatsApp. Você nunca fala com o lead e nunca escreve a resposta final. Sua única função é escolher exatamente um Atendente de IA ou nenhuma ação.
@@ -153,6 +168,10 @@ REGRAS INVIOLÁVEIS:
 6. Remarketing só pode agir por inatividade/abandono e nunca como resposta imediata.
 7. Agentes desativados podem ser recomendados no modo de teste, mas inclua "Agente aguardando configuração" em blockers.
 8. Confiança deve ficar entre 0 e 1.
+9. Para escolher flow_selector, a mensagem precisa corresponder claramente a um fluxo anexado e aos exemplos positivos.
+10. A regra NÃO ENVIAR QUANDO sempre vence a regra ENVIAR QUANDO e os exemplos.
+11. Nunca recomende fluxo pausado, marcado como somente manual ou já executado nesta conversa.
+12. O conteúdo dos blocos serve apenas para melhorar a compreensão; não ignore as regras positivas e negativas escritas pelo administrador.
 
 INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}

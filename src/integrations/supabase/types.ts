@@ -232,26 +232,35 @@ export type Database = {
       ai_agent_flows: {
         Row: {
           agent_config_id: string
+          analyze_flow_content: boolean
           created_at: string
+          do_not_send_when: string
           flow_id: string
           id: string
           send_when: string
+          trigger_examples: string
           updated_at: string
         }
         Insert: {
           agent_config_id: string
+          analyze_flow_content?: boolean
           created_at?: string
+          do_not_send_when?: string
           flow_id: string
           id?: string
           send_when?: string
+          trigger_examples?: string
           updated_at?: string
         }
         Update: {
           agent_config_id?: string
+          analyze_flow_content?: boolean
           created_at?: string
+          do_not_send_when?: string
           flow_id?: string
           id?: string
           send_when?: string
+          trigger_examples?: string
           updated_at?: string
         }
         Relationships: [
