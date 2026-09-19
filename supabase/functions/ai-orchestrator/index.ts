@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     if (!conversation) return json({ error: "Conversa não encontrada neste workspace" }, 404);
 
     const [configResult, messagesResult, executionsResult, tagsResult, saleResult, connectionLinksResult, flowLinksResult] = await Promise.all([
-      service.from("ai_agent_configs").select("agent_key, enabled, operation_mode, priority, instructions, entry_criteria, blocking_rules").eq("workspace_id", workspaceId).is("niche_id", null),
+      service.from("ai_agent_configs").select("id, agent_key, enabled, operation_mode, priority, instructions, entry_criteria, blocking_rules").eq("workspace_id", workspaceId).is("niche_id", null),
       service.from("messages").select("id, sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(30),
       service.from("flow_executions").select("status, created_at, automation_flows(name)").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tags(name)").eq("contact_phone", conversation.contact_phone).limit(30),
