@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 
 type AgentKey = 'orchestrator' | 'flow_selector' | 'support' | 'post_sale' | 'upsell' | 'remarketing' | 'supervisor';
@@ -21,8 +22,8 @@ type AgentConfig = {
   operation_mode: 'test' | 'live';
   priority: number;
   instructions: string;
-  entry_criteria: unknown[];
-  blocking_rules: unknown[];
+  entry_criteria: Json;
+  blocking_rules: Json;
 };
 type Conversation = { id: string; contact_name: string | null; contact_phone: string; funnel_stage: string | null; updated_at: string };
 type Decision = {
