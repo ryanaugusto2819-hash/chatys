@@ -20,3 +20,4 @@
 - [x] Adicionar geração e histórico dentro da conversa
 - [x] Configurar credenciais XPag com segurança
 - [ ] Validar um voucher real e a confirmação após pagamento em loja
+- [x] Adicionar envio do código de barras e referência OXXO ao lead

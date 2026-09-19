@@ -120,7 +120,7 @@ export default function FollowUps() {
   const saveTemplates = async () => {
     setSaving(true);
     for (const t of templates) {
-      const { id, ...data } = t;
+      const { id, flow_id: _flowId, ...data } = t;
       const { error } = await supabase.from('follow_up_templates').upsert({ id, ...data });
       if (error) {
         toast.error(`Erro ao salvar "${t.name}"`);

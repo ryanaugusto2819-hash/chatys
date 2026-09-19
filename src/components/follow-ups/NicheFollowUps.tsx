@@ -162,14 +162,14 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
       flow_id: null,
     };
     setTemplates(prev => [...prev, newTemplate]);
-    const { id, ...data } = newTemplate;
+    const { id, flow_id: _flowId, ...data } = newTemplate;
     await supabase.from('follow_up_templates').upsert({ id, ...data, niche_id: nicheId });
   };
 
   const saveTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const autoSaveTemplate = useCallback(async (template: FollowUpTemplate) => {
-    const { id, ...data } = template;
+    const { id, flow_id: _flowId, ...data } = template;
     const { error } = await supabase.from('follow_up_templates').upsert({ id, ...data, niche_id: nicheId });
     if (error) {
       console.error('Auto-save error:', error);
@@ -199,7 +199,7 @@ export default function NicheFollowUps({ nicheId }: NicheFollowUpsProps) {
   const saveTemplates = async () => {
     setSaving(true);
     for (const t of templates) {
-      const { id, ...data } = t;
+      const { id, flow_id: _flowId, ...data } = t;
       const { error } = await supabase.from('follow_up_templates').upsert({ id, ...data, niche_id: nicheId });
       if (error) {
         toast.error(`Erro ao salvar "${t.name}"`);

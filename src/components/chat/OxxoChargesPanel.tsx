@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Loader2, ReceiptText, RefreshCw, XCircle } from 'lucide-react';
+import { Check, Copy, Loader2, ReceiptText, RefreshCw, Send, XCircle } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ interface OxxoCharge {
 interface OxxoChargesPanelProps {
   conversationId: string;
   contactName: string;
+  onSendVoucher: (voucher: { amount: number; reference: string; barcodeUrl: string }) => Promise<void>;
 }
 
 const statusLabel: Record<OxxoCharge['status'], string> = {
@@ -31,7 +32,7 @@ const statusLabel: Record<OxxoCharge['status'], string> = {
   cancelled: 'Cancelado',
 };
 
-export default function OxxoChargesPanel({ conversationId, contactName }: OxxoChargesPanelProps) {
+export default function OxxoChargesPanel({ conversationId, contactName, onSendVoucher }: OxxoChargesPanelProps) {
   const [charges, setCharges] = useState<OxxoCharge[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ export default function OxxoChargesPanel({ conversationId, contactName }: OxxoCh
   const [amount, setAmount] = useState('');
   const [payerName, setPayerName] = useState(contactName);
   const [payerEmail, setPayerEmail] = useState('');
+  const [sendingChargeId, setSendingChargeId] = useState<string | null>(null);
 
   const loadCharges = useCallback(async () => {
     const { data, error } = await supabase
@@ -114,6 +116,23 @@ export default function OxxoChargesPanel({ conversationId, contactName }: OxxoCh
     toast.success('Referência copiada');
   };
 
+  const sendVoucher = async (charge: OxxoCharge) => {
+    if (!charge.reference || !charge.barcode_url || sendingChargeId) return;
+    setSendingChargeId(charge.id);
+    try {
+      await onSendVoucher({
+        amount: Number(charge.amount),
+        reference: charge.reference,
+        barcodeUrl: charge.barcode_url,
+      });
+      toast.success('Voucher enviado ao lead');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível enviar o voucher');
+    } finally {
+      setSendingChargeId(null);
+    }
+  };
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -175,6 +194,17 @@ export default function OxxoChargesPanel({ conversationId, contactName }: OxxoCh
                 </div>
               )}
               {charge.barcode_url && <img src={charge.barcode_url} alt="Código de barras OXXO" loading="lazy" className="h-20 w-full rounded-md bg-card object-contain p-2" />}
+              {charge.reference && charge.barcode_url && (
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => void sendVoucher(charge)}
+                  disabled={sendingChargeId !== null}
+                >
+                  {sendingChargeId === charge.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  {sendingChargeId === charge.id ? 'Enviando...' : 'Enviar ao lead'}
+                </Button>
+              )}
               {charge.fee !== null && <p className="text-[10px] text-muted-foreground">Taxa: MX$ {Number(charge.fee).toFixed(2)}</p>}
               {charge.error_message && <p className="text-[10px] text-destructive">{charge.error_message}</p>}
               <p className="text-[10px] text-muted-foreground">{new Date(charge.created_at).toLocaleString('pt-BR')}</p>
