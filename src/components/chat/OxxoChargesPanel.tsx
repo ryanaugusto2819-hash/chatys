@@ -99,7 +99,9 @@ export default function OxxoChargesPanel({ conversationId, contactName, onSendVo
         throw new Error(message);
       }
       if (!data?.success) throw new Error(data?.error || 'Não foi possível gerar o voucher');
-      toast.success('Voucher OXXO gerado');
+      if (!data?.charge) throw new Error('Voucher gerado sem dados para envio');
+      const sent = await sendVoucher(data.charge as OxxoCharge);
+      if (sent) toast.success('Voucher OXXO gerado e enviado');
       setAmount('');
       setPayerEmail('');
       setOpen(false);
@@ -117,7 +119,7 @@ export default function OxxoChargesPanel({ conversationId, contactName, onSendVo
   };
 
   const sendVoucher = async (charge: OxxoCharge) => {
-    if (!charge.reference || !charge.barcode_url || sendingChargeId) return;
+    if (!charge.reference || !charge.barcode_url || sendingChargeId) return false;
     setSendingChargeId(charge.id);
     try {
       await onSendVoucher({
@@ -126,8 +128,10 @@ export default function OxxoChargesPanel({ conversationId, contactName, onSendVo
         barcodeUrl: charge.barcode_url,
       });
       toast.success('Voucher enviado ao lead');
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível enviar o voucher');
+      return false;
     } finally {
       setSendingChargeId(null);
     }
@@ -202,7 +206,7 @@ export default function OxxoChargesPanel({ conversationId, contactName, onSendVo
                   disabled={sendingChargeId !== null}
                 >
                   {sendingChargeId === charge.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  {sendingChargeId === charge.id ? 'Enviando...' : 'Enviar ao lead'}
+                  {sendingChargeId === charge.id ? 'Enviando...' : 'Reenviar ao lead'}
                 </Button>
               )}
               {charge.fee !== null && <p className="text-[10px] text-muted-foreground">Taxa: MX$ {Number(charge.fee).toFixed(2)}</p>}
