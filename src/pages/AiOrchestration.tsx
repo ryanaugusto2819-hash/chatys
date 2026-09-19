@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, BrainCircuit, CheckCircle2, CircleDashed, GitBranch, Headphones,
-  Link2, Loader2, Megaphone, PackageCheck, Play, Save, ShieldCheck, ShoppingBag,
+  Link2, Loader2, Megaphone, PackageCheck, Play, Save, Search, ShieldCheck, ShoppingBag,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -73,6 +74,7 @@ export default function AiOrchestration() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [connectionSelections, setConnectionSelections] = useState<Record<AgentKey, string[]>>({} as Record<AgentKey, string[]>);
   const [flowSelections, setFlowSelections] = useState<AgentFlow[]>([]);
+  const [flowSearch, setFlowSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -136,6 +138,17 @@ export default function AiOrchestration() {
 
   const saveConfig = async () => {
     if (!currentWorkspace?.id || !selected) return;
+    if (selected.enabled && (connectionSelections[selectedKey] || []).length === 0) {
+      toast.error('Selecione ao menos uma conexão antes de ativar esta IA');
+      return;
+    }
+    if (selectedKey === 'flow_selector') {
+      const incompleteFlow = flowSelections.some((flow) => !flow.send_when.trim());
+      if (incompleteFlow) {
+        toast.error('Descreva quando cada fluxo anexado deve ser enviado');
+        return;
+      }
+    }
     setSaving(true);
     const payload = {
       workspace_id: currentWorkspace.id,
@@ -197,6 +210,11 @@ export default function AiOrchestration() {
   };
 
   const activeCount = useMemo(() => configs.filter((config) => config.enabled).length, [configs]);
+  const visibleFlows = useMemo(() => {
+    const query = flowSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!query) return flows;
+    return flows.filter((flow) => `${flow.name} ${flow.description || ''}`.toLocaleLowerCase('pt-BR').includes(query));
+  }, [flows, flowSearch]);
 
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
@@ -255,7 +273,7 @@ export default function AiOrchestration() {
               </div>
 
               <div className="mt-6 space-y-3 border-t border-border pt-5">
-                <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Conexões em que esta IA funciona</p><p className="text-xs text-muted-foreground">Ela só poderá atuar nas conexões marcadas.</p></div></div>
+                <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-primary" /><div><p className="text-sm font-medium text-foreground">Conexões em que esta IA funciona</p><p className="text-xs text-muted-foreground">Ela só poderá atuar nas conexões marcadas. Se estiver ativa, selecione ao menos uma.</p></div></div>
                 {connections.length === 0 ? (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhuma conexão disponível.</div>
                 ) : (
@@ -275,7 +293,8 @@ export default function AiOrchestration() {
               {selectedKey === 'flow_selector' && (
                 <div className="mt-6 space-y-3 border-t border-border pt-5">
                   <div><p className="text-sm font-medium text-foreground">Fluxos que a Seletora pode enviar</p><p className="text-xs text-muted-foreground">Anexe os fluxos permitidos e explique claramente quando usar cada um.</p></div>
-                  {flows.length === 0 ? <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum fluxo disponível.</div> : flows.map((flow) => {
+                  <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={flowSearch} onChange={(event) => setFlowSearch(event.target.value)} className="pl-9" placeholder="Buscar fluxo por nome ou descrição" /></div>
+                  {flows.length === 0 ? <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum fluxo disponível.</div> : visibleFlows.length === 0 ? <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum fluxo encontrado.</div> : visibleFlows.map((flow) => {
                     const linked = flowSelections.find((item) => item.flow_id === flow.id);
                     return <div key={flow.id} className={`rounded-md border p-4 ${linked ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'}`}>
                       <label className="flex cursor-pointer items-start gap-3">

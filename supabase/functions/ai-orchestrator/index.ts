@@ -61,24 +61,32 @@ Deno.serve(async (req) => {
     const service = createClient(url, serviceKey);
     const { data: conversation, error: conversationError } = await service
       .from("conversations")
-      .select("id, workspace_id, contact_name, contact_phone, status, funnel_stage, niche_id, sale_registered_at, updated_at")
+      .select("id, workspace_id, contact_name, contact_phone, status, funnel_stage, niche_id, connection_config_id, sale_registered_at, updated_at")
       .eq("id", conversationId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     if (conversationError) return json({ error: conversationError.message }, 500);
     if (!conversation) return json({ error: "Conversa não encontrada neste workspace" }, 404);
 
-    const [configResult, messagesResult, executionsResult, tagsResult, saleResult] = await Promise.all([
-      service.from("ai_agent_configs").select("agent_key, enabled, operation_mode, priority, instructions, entry_criteria, blocking_rules").eq("workspace_id", workspaceId).is("niche_id", null),
+    const [configResult, messagesResult, executionsResult, tagsResult, saleResult, connectionLinksResult, flowLinksResult] = await Promise.all([
+      service.from("ai_agent_configs").select("id, agent_key, enabled, operation_mode, priority, instructions, entry_criteria, blocking_rules").eq("workspace_id", workspaceId).is("niche_id", null),
       service.from("messages").select("id, sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(30),
       service.from("flow_executions").select("status, created_at, automation_flows(name)").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tags(name)").eq("contact_phone", conversation.contact_phone).limit(30),
       service.from("sales_orders").select("valor, moeda, upsell_sent, upsell_sent_at, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(5),
+      service.from("ai_agent_connections").select("agent_config_id, connection_config_id, ai_agent_configs!inner(id, workspace_id, agent_key)").eq("ai_agent_configs.workspace_id", workspaceId),
+      service.from("ai_agent_flows").select("agent_config_id, flow_id, send_when, ai_agent_configs!inner(id, workspace_id, agent_key), automation_flows!inner(id, name, description, is_active)").eq("ai_agent_configs.workspace_id", workspaceId),
     ]);
 
     const configs = configResult.data || [];
     const orchestratorConfig = configs.find((item) => item.agent_key === "orchestrator");
     if (!orchestratorConfig?.enabled) return json({ skipped: true, reason: "Orquestradora desativada" });
+
+    const connectionLinks = connectionLinksResult.data || [];
+    const orchestratorConnections = connectionLinks.filter((link) => link.agent_config_id === orchestratorConfig.id).map((link) => link.connection_config_id);
+    if (!conversation.connection_config_id || !orchestratorConnections.includes(conversation.connection_config_id)) {
+      return json({ skipped: true, reason: "A Orquestradora não está anexada à conexão desta conversa" });
+    }
 
     const messages = messagesResult.data || [];
     if (!messages.length) return json({ skipped: true, reason: "Conversa sem mensagens" });
@@ -91,7 +99,10 @@ Deno.serve(async (req) => {
       if (prior) return json({ skipped: true, reason: "Esta mensagem já foi decidida", decision: prior });
     }
 
-    const enabledAgents = new Set(configs.filter((item) => item.agent_key !== "orchestrator" && item.enabled).map((item) => item.agent_key));
+    const enabledAgents = new Set(configs.filter((item) => {
+      if (item.agent_key === "orchestrator" || !item.enabled) return false;
+      return connectionLinks.some((link) => link.agent_config_id === item.id && link.connection_config_id === conversation.connection_config_id);
+    }).map((item) => item.agent_key));
     const isPaid = Boolean(conversation.sale_registered_at || (saleResult.data || []).length);
     const deterministicBlockers: string[] = [];
     if (lastMessage.sender_type !== "customer") deterministicBlockers.push("A última mensagem não é do lead");
@@ -112,7 +123,15 @@ Deno.serve(async (req) => {
 
     const availableAgents = agentKeys.map((key) => {
       const config = configs.find((item) => item.agent_key === key);
-      return `- ${key}: ${config?.enabled ? "ATIVO" : "AGUARDANDO CONFIGURAÇÃO"}; prioridade ${config?.priority ?? 100}; instruções: ${config?.instructions || "não configuradas"}`;
+      const attached = config ? connectionLinks.some((link) => link.agent_config_id === config.id && link.connection_config_id === conversation.connection_config_id) : false;
+      const state = config?.enabled && attached ? "ATIVO NESTA CONEXÃO" : (config?.enabled ? "FORA DESTA CONEXÃO" : "AGUARDANDO CONFIGURAÇÃO");
+      return `- ${key}: ${state}; prioridade ${config?.priority ?? 100}; instruções: ${config?.instructions || "não configuradas"}`;
+    }).join("\n");
+
+    const selectorConfig = configs.find((item) => item.agent_key === "flow_selector");
+    const allowedFlows = (flowLinksResult.data || []).filter((link) => link.agent_config_id === selectorConfig?.id).map((link) => {
+      const flow = link.automation_flows as unknown as { name?: string; description?: string | null; is_active?: boolean } | null;
+      return `- ${flow?.name || link.flow_id} [${flow?.is_active ? "ATIVO" : "PAUSADO"}]: enviar quando: ${link.send_when || "critério não descrito"}. Descrição original: ${flow?.description || "sem descrição"}`;
     }).join("\n");
 
     const prompt = `Você é a IA ORQUESTRADORA de um CRM de WhatsApp. Você nunca fala com o lead e nunca escreve a resposta final. Sua única função é escolher exatamente um Atendente de IA ou nenhuma ação.
@@ -139,7 +158,10 @@ INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}
 
 ESTADO DOS ATENDENTES:
-${availableAgents}`;
+${availableAgents}
+
+FLUXOS PERMITIDOS PARA A SELETORA:
+${allowedFlows || "Nenhum fluxo anexado. Não escolha flow_selector."}`;
 
     const context = `LEAD: ${conversation.contact_name || "Sem nome"}
 ETAPA: ${conversation.funnel_stage || "não definida"}
@@ -177,6 +199,10 @@ Decida qual Atendente deveria assumir agora. Não produza a mensagem ao lead.`;
       selectedAgent = "none";
     }
     if (selectedAgent !== "none" && !enabledAgents.has(selectedAgent)) blockers.push("Agente aguardando configuração");
+    if (selectedAgent === "flow_selector" && !allowedFlows) {
+      blockers.push("A Seletora não possui fluxos anexados");
+      selectedAgent = "none";
+    }
 
     const confidence = Math.max(0, Math.min(1, Number(output.confidence) || 0));
     const decision = {

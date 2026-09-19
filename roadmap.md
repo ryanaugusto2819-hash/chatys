@@ -55,3 +55,6 @@
 - [ ] Integrar gradualmente Seletora, Atendimento, Pós-venda, Upsell e Remarketing
 - [ ] Ampliar a IA Supervisora para avaliar todos os Atendentes de IA
 - [x] Validar que o modo de teste não executa nenhuma ação automática
+- [x] Permitir anexar conexões específicas a cada Atendente de IA
+- [x] Permitir anexar fluxos à Seletora com uma descrição de quando usar cada um
+- [x] Fazer a Orquestradora respeitar conexões e fluxos permitidos no modo de teste
