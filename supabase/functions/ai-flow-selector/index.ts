@@ -101,9 +101,9 @@ Deno.serve(async (req) => {
     if (centralSelectorError) {
       return jsonResponse({ error: `Failed loading central selector: ${centralSelectorError.message}` }, 500);
     }
-    if (centralSelector && !centralSelector.enabled) {
-      return jsonResponse({ skipped: true, reason: "Central flow selector disabled" });
-    }
+    // A configuração da nova Central só deve assumir o controle quando estiver ativa.
+    // Enquanto estiver desativada, preservamos integralmente a Seletora legada.
+    const activeCentralSelector = centralSelector?.enabled ? centralSelector : null;
 
     let centralFlowRules: Array<{
       flow_id: string;
@@ -112,11 +112,11 @@ Deno.serve(async (req) => {
       trigger_examples: string;
       analyze_flow_content: boolean;
     }> = [];
-    if (centralSelector) {
+    if (activeCentralSelector) {
       const { data: connectionPermission, error: connectionPermissionError } = await supabase
         .from("ai_agent_connections")
         .select("id")
-        .eq("agent_config_id", centralSelector.id)
+        .eq("agent_config_id", activeCentralSelector.id)
         .eq("connection_config_id", conversation.connection_config_id)
         .maybeSingle();
       if (connectionPermissionError) {
@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       const { data: ruleRows, error: ruleRowsError } = await supabase
         .from("ai_agent_flows")
         .select("flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content")
-        .eq("agent_config_id", centralSelector.id);
+        .eq("agent_config_id", activeCentralSelector.id);
       if (ruleRowsError) {
         return jsonResponse({ error: `Failed loading selector rules: ${ruleRowsError.message}` }, 500);
       }
@@ -179,8 +179,8 @@ Deno.serve(async (req) => {
       customInstructions = (selectorConfig?.instructions as string) || "";
     }
 
-    if (centralSelector) {
-      customInstructions = [customInstructions, centralSelector.instructions].filter(Boolean).join("\n");
+    if (activeCentralSelector) {
+      customInstructions = [customInstructions, activeCentralSelector.instructions].filter(Boolean).join("\n");
     }
 
     if (!selectorEnabled) {
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
     } else {
       flowQuery = flowQuery.is("niche_id", null);
     }
-    if (centralSelector) {
+    if (activeCentralSelector) {
       flowQuery = flowQuery.in("id", centralFlowRules.map((rule) => rule.flow_id));
     }
 
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
 
     // Read node contents only for flows explicitly authorized by the administrator.
     const flowIds = flows.map((f) => f.id);
-    const readableFlowIds = centralSelector
+    const readableFlowIds = activeCentralSelector
       ? centralFlowRules.filter((rule) => rule.analyze_flow_content).map((rule) => rule.flow_id)
       : flowIds;
     const { data: allNodes } = await supabase
@@ -425,7 +425,7 @@ Qual fluxo deve ser disparado agora?`;
       return jsonResponse({ skipped: true, reason: `Flow "${selectedFlow.name}" already sent` });
     }
 
-    if (centralSelector?.operation_mode !== "live") {
+    if (activeCentralSelector && activeCentralSelector.operation_mode !== "live") {
       return jsonResponse({
         success: true,
         executed: false,
