@@ -66,3 +66,9 @@
 - [x] Incluir Pagamento nas decisões seguras da Orquestradora
 - [x] Adicionar perguntas frequentes e respostas oficiais à IA de Atendimento
 - [x] Usar a base de conhecimento da IA de Atendimento na decisão segura da Orquestradora
+
+# Nome da campanha no registro de venda
+
+- [x] Capturar Source ID e título do anúncio recebidos pela uazapiGO
+- [x] Buscar automaticamente a campanha atual na Meta quando houver Source ID
+- [ ] Confirmar com uma nova conversa vinda de anúncio pela uazapiGO
