@@ -1431,15 +1431,29 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                 ) : (
                   <button
                     onClick={async () => {
-                      const adParts = conversation.ad_title?.split(' › ') || [];
+                      const { data: latestConversation } = await supabase
+                        .from('conversations')
+                        .select('source_id, ad_title')
+                        .eq('id', conversation.id)
+                        .single();
+                      const currentSourceId = latestConversation?.source_id || conversation.source_id;
+                      const currentAdTitle = latestConversation?.ad_title || conversation.ad_title;
+                      if (latestConversation) {
+                        setConversation(prev => prev ? {
+                          ...prev,
+                          source_id: latestConversation.source_id,
+                          ad_title: latestConversation.ad_title,
+                        } : prev);
+                      }
+                      const adParts = currentAdTitle?.split(' › ') || [];
                       const savedCampaign = adParts[0] || '';
                       setSaleData({ valor: '', campanha: savedCampaign, pais: 'brasil', moeda: 'BRL' });
                       setShowSaleDialog(true);
-                      if (conversation.source_id) {
+                      if (currentSourceId) {
                         setCampaignLookupLoading(true);
                         try {
                           const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
-                            body: { sourceId: conversation.source_id, conversationId: conversation.id },
+                            body: { sourceId: currentSourceId, conversationId: conversation.id },
                           });
                           if (error) throw error;
                           if (data?.success && data?.campaignName) {

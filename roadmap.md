@@ -71,4 +71,5 @@
 
 - [x] Capturar Source ID e título do anúncio recebidos pela uazapiGO
 - [x] Buscar automaticamente a campanha atual na Meta quando houver Source ID
-- [ ] Confirmar com uma nova conversa vinda de anúncio pela uazapiGO
+- [x] Confirmar com novas conversas vindas de anúncio pela uazapiGO
+- [x] Atualizar os dados da conversa ao abrir o registro de venda
