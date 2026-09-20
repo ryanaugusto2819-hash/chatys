@@ -3,7 +3,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function fetchMetaObject(objectId: string, fields: string, accessToken: string) {
+type MetaLookupResult = {
+  data: Record<string, any> | null;
+  error: { status: number; code: number | null; type: string | null; message: string } | null;
+};
+
+async function fetchMetaObject(objectId: string, fields: string, accessToken: string): Promise<MetaLookupResult> {
   const url = new URL(`https://graph.facebook.com/v24.0/${encodeURIComponent(objectId)}`);
   url.searchParams.set("fields", fields);
   url.searchParams.set("access_token", accessToken);
@@ -16,33 +21,49 @@ async function fetchMetaObject(objectId: string, fields: string, accessToken: st
       Pragma: "no-cache",
     },
   });
-  if (!res.ok) return null;
-  return await res.json();
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const graphError = body?.error;
+    return {
+      data: null,
+      error: {
+        status: res.status,
+        code: typeof graphError?.code === "number" ? graphError.code : null,
+        type: typeof graphError?.type === "string" ? graphError.type : null,
+        message: typeof graphError?.message === "string" ? graphError.message : `Meta returned HTTP ${res.status}`,
+      },
+    };
+  }
+  return { data: body, error: null };
 }
 
 async function tryFetchAd(sourceId: string, accessToken: string) {
-  const ad = await fetchMetaObject(
+  const adResult = await fetchMetaObject(
     sourceId,
     "name,campaign_id,adset_id,status,creative{title,body}",
     accessToken,
   );
-  if (!ad) return null;
+  if (!adResult.data) return { ad: null, error: adResult.error };
+  const ad = adResult.data;
 
   // Fetch hierarchy objects directly by ID. Nested campaign{name} responses can
   // keep the old label for a while after a rename in Ads Manager.
   const [campaign, adset] = await Promise.all([
     ad.campaign_id
       ? fetchMetaObject(ad.campaign_id, "name", accessToken)
-      : Promise.resolve(null),
+      : Promise.resolve({ data: null, error: null }),
     ad.adset_id
       ? fetchMetaObject(ad.adset_id, "name", accessToken)
-      : Promise.resolve(null),
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   return {
-    ...ad,
-    campaign: campaign?.name ? campaign : null,
-    adset: adset?.name ? adset : null,
+    ad: {
+      ...ad,
+      campaign: campaign.data?.name ? campaign.data : null,
+      adset: adset.data?.name ? adset.data : null,
+    },
+    error: campaign.error || adset.error,
   };
 }
 
@@ -87,9 +108,12 @@ Deno.serve(async (req) => {
     }
 
     let adData: any = null;
+    const diagnostics: Array<{ tokenPosition: number; status: number; code: number | null; type: string | null; message: string }> = [];
     for (let i = 0; i < tokens.length; i++) {
       console.log(`Trying token ${i + 1} of ${tokens.length}...`);
-      adData = await tryFetchAd(sourceId, tokens[i]);
+      const result = await tryFetchAd(sourceId, tokens[i]);
+      adData = result.ad;
+      if (result.error) diagnostics.push({ tokenPosition: i + 1, ...result.error });
       if (adData?.name || adData?.campaign) {
         console.log(`Token ${i + 1} found the ad.`);
         break;
@@ -99,8 +123,21 @@ Deno.serve(async (req) => {
 
     if (!adData) {
       console.error(`No token could resolve ad for sourceId: ${sourceId}`);
+      const lastError = diagnostics.at(-1) || null;
       return new Response(
-        JSON.stringify({ success: false, notFound: true, error: "Ad not found with any configured token" }),
+        JSON.stringify({
+          success: false,
+          notFound: true,
+          error: "Ad not found with any configured token",
+          diagnostics: {
+            attemptedTokens: tokens.length,
+            failures: diagnostics.length,
+            status: lastError?.status ?? null,
+            code: lastError?.code ?? null,
+            type: lastError?.type ?? null,
+            message: lastError?.message ?? "O Source ID não foi reconhecido por nenhum acesso configurado.",
+          },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

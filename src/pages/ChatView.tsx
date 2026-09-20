@@ -1432,19 +1432,34 @@ export default function ChatView({ embedded, conversationId, onBack }: ChatViewP
                   <button
                     onClick={async () => {
                       const adParts = conversation.ad_title?.split(' › ') || [];
-                      setSaleData({ valor: '', campanha: conversation.source_id ? '' : (adParts[0] || ''), pais: 'brasil', moeda: 'BRL' });
+                      const savedCampaign = adParts[0] || '';
+                      setSaleData({ valor: '', campanha: savedCampaign, pais: 'brasil', moeda: 'BRL' });
                       setShowSaleDialog(true);
                       if (conversation.source_id) {
                         setCampaignLookupLoading(true);
                         try {
-                          const { data } = await supabase.functions.invoke('meta-ad-lookup', {
+                          const { data, error } = await supabase.functions.invoke('meta-ad-lookup', {
                             body: { sourceId: conversation.source_id, conversationId: conversation.id },
                           });
+                          if (error) throw error;
                           if (data?.success && data?.campaignName) {
                             setSaleData(prev => ({ ...prev, campanha: data.campaignName }));
+                          } else {
+                            const detail = data?.diagnostics?.message || data?.error || 'A Meta não retornou o nome da campanha';
+                            toast.warning(
+                              savedCampaign
+                                ? `Não foi possível atualizar o anúncio na Meta. Mantivemos o nome salvo. ${detail}`
+                                : `Não foi possível buscar o anúncio na Meta. ${detail}`,
+                              { duration: 8000 },
+                            );
                           }
-                        } catch {
-                          setSaleData(prev => ({ ...prev, campanha: adParts[0] || '' }));
+                        } catch (error: any) {
+                          toast.warning(
+                            savedCampaign
+                              ? 'A busca na Meta falhou. Mantivemos o nome salvo.'
+                              : `A busca na Meta falhou: ${error?.message || 'erro desconhecido'}`,
+                            { duration: 8000 },
+                          );
                         } finally {
                           setCampaignLookupLoading(false);
                         }
