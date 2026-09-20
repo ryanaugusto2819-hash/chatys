@@ -4,6 +4,47 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const first = (...values: unknown[]) => values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
 
+function findNestedValue(value: unknown, keys: string[]): unknown {
+  if (!value || typeof value !== "object") return undefined;
+  const wanted = new Set(keys.map((key) => key.toLowerCase()));
+  const queue: unknown[] = [value];
+  let inspected = 0;
+
+  while (queue.length > 0 && inspected < 350) {
+    const current = queue.shift();
+    inspected += 1;
+    if (!current || typeof current !== "object") continue;
+
+    for (const [key, child] of Object.entries(current as Record<string, unknown>)) {
+      if (wanted.has(key.toLowerCase()) && child !== null && child !== undefined && child !== "") {
+        return child;
+      }
+      if (child && typeof child === "object") queue.push(child);
+    }
+  }
+  return undefined;
+}
+
+function extractAdAttribution(payload: unknown) {
+  const sourceIdValue = findNestedValue(payload, ["source_id", "sourceId", "ad_id", "adId"]);
+  const ctwaValue = findNestedValue(payload, ["ctwa_clid", "ctwaClid"]);
+  const sourceTypeValue = findNestedValue(payload, ["source_type", "sourceType", "conversionSource"]);
+  const headlineValue = findNestedValue(payload, ["headline", "ad_title", "adTitle"]);
+  const sourceId = typeof sourceIdValue === "string" || typeof sourceIdValue === "number"
+    ? String(sourceIdValue).trim()
+    : null;
+  const ctwaClid = typeof ctwaValue === "string" ? ctwaValue.trim() : null;
+  const adTitle = typeof headlineValue === "string" ? headlineValue.trim() : null;
+  const sourceType = typeof sourceTypeValue === "string" ? sourceTypeValue.trim() : null;
+
+  return {
+    sourceId: sourceId && /^\d{10,30}$/.test(sourceId) ? sourceId : null,
+    ctwaClid: ctwaClid || null,
+    adTitle: adTitle || null,
+    sourceType: sourceType || null,
+  };
+}
+
 function normalizeStatus(value: unknown) {
   const status = String(value ?? "").toLowerCase();
   if (/fail|error|reject|cancel/.test(status)) return "failed";
@@ -177,6 +218,19 @@ async function triggerAutomations(conversationId: string) {
   })));
 }
 
+async function triggerMetaAdLookup(sourceId: string, conversationId: string) {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const response = await fetch(`${url}/functions/v1/meta-ad-lookup`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceId, conversationId }),
+  });
+  if (!response.ok) {
+    console.error(`[uazapigo-webhook] Meta lookup failed [${response.status}]: ${(await response.text()).slice(0, 500)}`);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") return json({ status: "ok", provider: "uazapiGO" });
@@ -212,6 +266,7 @@ Deno.serve(async (req) => {
     const items = Array.isArray(payload?.data) ? payload.data : [payload?.data ?? payload];
     for (const item of items) {
       const message = extractMessage({ ...payload, data: item });
+      const attribution = extractAdAttribution({ ...payload, data: item });
       if (!message.phone || message.chatId.includes("@g.us") || message.chatId === "status@broadcast") continue;
       
       const token = first(payload?.token, payload?.instance?.token, item?.token);
@@ -235,16 +290,31 @@ Deno.serve(async (req) => {
         }
       }
 
-      let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let { data: conversation } = await supabase.from("conversations").select("id, provider_chat_id, source_id, ad_title, ctwa_clid").eq("contact_phone", message.phone).eq("connection_config_id", connection.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      const adFields = {
+        ...(attribution.sourceId ? { source_id: attribution.sourceId } : {}),
+        ...(attribution.adTitle ? { ad_title: attribution.adTitle } : {}),
+        ...(attribution.ctwaClid ? { ctwa_clid: attribution.ctwaClid } : {}),
+        ...(attribution.sourceId || attribution.ctwaClid || /facebook|instagram|meta|ad/i.test(attribution.sourceType || "")
+          ? { source_type: "ads" }
+          : {}),
+      };
       
       if (!conversation) {
-        const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, provider_chat_id: message.chatId || null, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null }).select("id, provider_chat_id").single();
+        const created = await supabase.from("conversations").insert({ contact_name: message.name, contact_phone: message.phone, provider_chat_id: message.chatId || null, status: "new", tags: [], connection_config_id: connection.id, workspace_id: connection.workspace_id, sector: connection.sector || null, ...adFields }).select("id, provider_chat_id, source_id, ad_title, ctwa_clid").single();
         conversation = created.data;
       } else {
-        await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active", ...(message.chatId ? { provider_chat_id: message.chatId } : {}) }).eq("id", conversation.id);
+        await supabase.from("conversations").update({ updated_at: new Date().toISOString(), status: "active", ...(message.chatId ? { provider_chat_id: message.chatId } : {}), ...adFields }).eq("id", conversation.id);
       }
       
       if (!conversation?.id) continue;
+
+      if (attribution.sourceId && (!conversation.source_id || !conversation.ad_title)) {
+        triggerMetaAdLookup(attribution.sourceId, conversation.id).catch((error) =>
+          console.error("[uazapigo-webhook] Meta ad lookup error:", error instanceof Error ? error.message : String(error))
+        );
+      }
 
       if (message.id) {
         const { data: duplicate } = await supabase.from("messages").select("id").eq("provider_message_id", message.id).maybeSingle();
