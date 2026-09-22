@@ -71,6 +71,7 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
 ];
 
 const AGENT_LABELS = Object.fromEntries(AGENTS.map((agent) => [agent.key, agent.name]));
+const TRAINING_TAG_ACTIONS = ['Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
 const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
   agent_key: agent.key,
   enabled: agent.key === 'orchestrator',
@@ -316,6 +317,11 @@ export default function AiOrchestration({
       return { ...current, [itemId]: selectedIds.includes(tagId) ? selectedIds.filter((id) => id !== tagId) : [...selectedIds, tagId] };
     });
     oppositeSetter((current) => ({ ...current, [itemId]: (current[itemId] || []).filter((id) => id !== tagId) }));
+  };
+
+  const selectTrainingTagAction = (itemId: string, tagName: typeof TRAINING_TAG_ACTIONS[number]) => {
+    setTrainingActions((current) => ({ ...current, [itemId]: `Aplicar a etiqueta "${tagName}".` }));
+    setTrainingActionTypes((current) => ({ ...current, [itemId]: 'other' }));
   };
 
   const trainFromMessage = async (item: TrainingQueueItem) => {
@@ -579,8 +585,7 @@ export default function AiOrchestration({
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
                       {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-foreground">Resposta que seria selecionada no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
-                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</label><Textarea value={trainingActions[item.id] || ''} onChange={(event) => setTrainingActions((current) => ({ ...current, [item.id]: event.target.value }))} rows={3} placeholder="Ex.: Explicar o prazo de entrega e perguntar se ficou alguma dúvida." /></div>
-                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Tipo de ação</label><Select value={trainingActionTypes[item.id] || 'reply'} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [item.id]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem pronta</SelectItem><SelectItem value="no_response">Não responder</SelectItem><SelectItem value="wait">Aguardar</SelectItem><SelectItem value="route">Encaminhar para outro atendimento</SelectItem><SelectItem value="other">Outra ação</SelectItem></SelectContent></Select></div>
+                       <div className="space-y-2"><label className="block text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</label><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{TRAINING_TAG_ACTIONS.map((tagName) => { const action = `Aplicar a etiqueta "${tagName}".`; const active = trainingActions[item.id] === action; return <Button key={`${item.id}-${tagName}`} type="button" variant={active ? 'default' : 'outline'} className="justify-start" onClick={() => selectTrainingTagAction(item.id, tagName)}><span className="mr-2 text-xs">Tag</span>{tagName}</Button>; })}</div><p className="text-xs text-muted-foreground">Escolha a etapa para a qual este cliente deve avançar.</p></div>
                        <div className="space-y-3 rounded-md border border-border bg-background p-3">
                          <div><p className="text-xs font-medium text-foreground">Condições por etiquetas</p><p className="text-xs text-muted-foreground">As etiquetas atuais já vêm marcadas como obrigatórias. Ajuste antes de ensinar.</p></div>
                          <div><p className="mb-2 text-xs font-medium text-foreground">Deve ter todas estas etiquetas</p><div className="flex flex-wrap gap-2">{workspaceTags.length === 0 ? <span className="text-xs text-muted-foreground">Nenhuma etiqueta cadastrada.</span> : workspaceTags.map((tag) => { const selectedIds = trainingRequiredTags[item.id] ?? snapshotTagIds(item); return <Button key={`required-${item.id}-${tag.id}`} type="button" size="sm" variant={selectedIds.includes(tag.id) ? 'default' : 'outline'} onClick={() => toggleTagCondition(item.id, tag.id, 'required')}><Checkbox checked={selectedIds.includes(tag.id)} className="mr-2" />{tag.name}</Button>; })}</div></div>
