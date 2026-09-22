@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -480,7 +481,7 @@ async function processWebhook(body: any) {
           }
         }
 
-        const { error: msgError } = await supabase.from("messages").insert({
+        const { data: insertedMessage, error: msgError } = await supabase.from("messages").insert({
           conversation_id: conversationId,
           content,
           sender_type: "customer",
@@ -488,11 +489,14 @@ async function processWebhook(body: any) {
           media_url: mediaUrl,
           status: "delivered",
           provider_message_id: providerMsgId,
-        });
+        }).select("id").single();
 
         if (msgError) {
           console.error("Error inserting message:", msgError);
         } else {
+          if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((err) =>
+            console.error("Trained message analysis error:", err)
+          );
           if (sourceId) {
             triggerMetaAdLookup(sourceId, conversationId).catch((err) =>
               console.error("Meta ad lookup error:", err)

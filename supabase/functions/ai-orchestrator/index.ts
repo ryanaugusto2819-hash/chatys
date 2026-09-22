@@ -5,7 +5,7 @@ import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
-const agentKeys = ["flow_selector", "support", "payment", "post_sale", "upsell", "remarketing"] as const;
+const agentKeys = ["flow_selector", "support", "payment", "trained_messages", "post_sale", "upsell", "remarketing"] as const;
 
 type AgentKey = typeof agentKeys[number] | "none";
 
@@ -168,6 +168,7 @@ ATENDENTES POSSÍVEIS:
 - flow_selector: escolhe e executa uma etapa/fluxo pronto quando a intenção corresponde claramente.
 - support: responde dúvidas atuais sobre produto, pagamento, envio, prazo e modo de uso antes da venda.
 - payment: envia informações de pagamento, reconhece quantidade para OXXO ou identifica possível comprovante; não confirma pagamento.
+- trained_messages: escolhe somente uma resposta oficial previamente treinada quando o significado e o contexto corresponderem com alta segurança; nunca cria texto novo.
 - post_sale: suporte, uso, entrega, satisfação ou problema depois da compra.
 - upsell: oferta adicional somente após pagamento e quando houver elegibilidade explícita.
 - remarketing: reengaja lead inativo ou que abandonou o pagamento; não é resposta imediata a uma nova dúvida.
@@ -191,6 +192,7 @@ REGRAS INVIOLÁVEIS:
 15. Um possível comprovante nunca confirma pagamento; a confirmação oficial continua externa à IA.
 16. Escolha support somente quando a dúvida específica estiver coberta pelas instruções ou pela base de conhecimento oficial da IA de Atendimento.
 17. A base de conhecimento é referência factual. Ela não autoriza confirmar pagamento, alterar etiquetas, executar fluxos ou ignorar os bloqueios do funil.
+18. Escolha trained_messages somente quando existir uma resposta oficial treinada com intenção e contexto equivalentes. Ela deve usar o texto literal e, sem correspondência segura, não pode responder.
 
 INSTRUÇÕES DO ADMINISTRADOR:
 ${orchestratorConfig.instructions || "Ainda não há instruções personalizadas; aplique apenas as regras de segurança acima."}

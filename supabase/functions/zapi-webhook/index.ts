@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -260,7 +261,7 @@ async function processZapiWebhook(body: any) {
     }
   }
 
-  const { error: msgError } = await supabase.from("messages").insert({
+  const { data: insertedMessage, error: msgError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     content,
     sender_type: "customer",
@@ -268,11 +269,14 @@ async function processZapiWebhook(body: any) {
     media_url: mediaUrl,
     status: "delivered",
     provider_message_id: providerMsgId,
-  });
+  }).select("id").single();
 
   if (msgError) {
     console.error("Error inserting message:", msgError);
   } else {
+    if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((err) =>
+      console.error("Trained message analysis error:", err)
+    );
     triggerAiFlowSelector(conversationId).catch((err) =>
       console.error("Flow selector trigger error:", err)
     );

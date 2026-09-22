@@ -73,3 +73,13 @@
 - [x] Buscar automaticamente a campanha atual na Meta quando houver Source ID
 - [x] Confirmar com novas conversas vindas de anúncio pela uazapiGO
 - [x] Atualizar os dados da conversa ao abrir o registro de venda
+
+# Automação Inteligente — Mensagens Treinadas
+
+- [x] Adicionar a IA de Mensagens Treinadas à Central
+- [x] Criar fila protegida para novas mensagens e regras de resposta oficial
+- [x] Capturar mensagens novas dos quatro provedores sem duplicar registros
+- [x] Comparar intenção e contexto em português e espanhol mexicano
+- [x] Preservar a resposta oficial exatamente como cadastrada
+- [x] Permitir ensinar, ignorar, marcar como não responder, editar, desativar e excluir regras
+- [x] Manter toda correspondência no modo de teste sem enviar ao cliente

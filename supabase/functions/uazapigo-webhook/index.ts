@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -334,7 +335,7 @@ Deno.serve(async (req) => {
         if (queued) { await supabase.from("messages").update({ status: "sent", provider_status: "sent", provider_message_id: message.id }).eq("id", queued.id); continue; }
       }
       
-      const { error } = await supabase.from("messages").insert({ 
+      const { data: insertedMessage, error } = await supabase.from("messages").insert({ 
         conversation_id: conversation.id, 
         content: message.content, 
         sender_type: message.fromMe ? "agent" : "customer", 
@@ -343,9 +344,14 @@ Deno.serve(async (req) => {
         media_url: message.mediaUrl, 
         status: message.fromMe ? "sent" : "delivered", 
         provider_message_id: message.id 
-      });
+      }).select("id").single();
       
-      if (!error && !message.fromMe) await triggerAutomations(conversation.id);
+      if (!error && !message.fromMe) {
+        if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((analysisError) =>
+          console.error("[uazapigo-webhook] trained message analysis error:", analysisError)
+        );
+        await triggerAutomations(conversation.id);
+      }
     }
     return json({ success: true });
   } catch (error) {

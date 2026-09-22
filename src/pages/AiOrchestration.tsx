@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
-  Link2, Loader2, Megaphone, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  Link2, Loader2, Megaphone, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 
-type AgentKey = 'orchestrator' | 'flow_selector' | 'support' | 'payment' | 'post_sale' | 'upsell' | 'remarketing' | 'supervisor';
+type AgentKey = 'orchestrator' | 'flow_selector' | 'support' | 'payment' | 'trained_messages' | 'post_sale' | 'upsell' | 'remarketing' | 'supervisor';
 type AgentConfig = {
   id?: string;
   agent_key: AgentKey;
@@ -33,6 +33,16 @@ type Flow = { id: string; name: string; description: string | null; is_active: b
 type AgentFlow = { flow_id: string; send_when: string; do_not_send_when: string; trigger_examples: string; analyze_flow_content: boolean };
 type SupportFaq = { question: string; answer: string };
 type PaymentRules = { payment_information: string; receipt_flow_id: string; prices: Array<{ quantity: number; amount: number }> };
+type TrainingQueueItem = {
+  id: string; source_message_id: string; customer_message: string; message_type: string;
+  status: string; confidence: number; match_reason: string; suggested_response: string | null;
+  context_snapshot: Json; created_at: string;
+  conversations?: { contact_name?: string | null; contact_phone?: string } | null;
+};
+type TrainedRule = {
+  id: string; example_message: string; context_notes: string; official_response: string;
+  active: boolean; updated_at: string;
+};
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
   blockers: string[]; operation_mode: string; status: string; created_at: string;
@@ -49,6 +59,7 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
   { key: 'flow_selector', name: 'IA Seletora de Fluxo', short: 'Escolhe a etapa ou fluxo pronto correto para o momento.', icon: GitBranch },
   { key: 'support', name: 'IA de Atendimento', short: 'Responde dúvidas sobre produto, pagamento, envio e prazo.', icon: Headphones },
   { key: 'payment', name: 'IA de Pagamento', short: 'Orienta o pagamento, prepara OXXO e reconhece possíveis comprovantes.', icon: DollarSign },
+  { key: 'trained_messages', name: 'IA de Mensagens Treinadas', short: 'Escolhe uma resposta pronta pelo significado e envia o texto sem alterações.', icon: MessageSquareText },
   { key: 'post_sale', name: 'IA Pós-venda', short: 'Acompanha uso, entrega, satisfação e suporte após a compra.', icon: PackageCheck },
   { key: 'upsell', name: 'IA Upsell', short: 'Oferece uma nova oferta a clientes elegíveis após o pagamento.', icon: ShoppingBag },
   { key: 'remarketing', name: 'IA Remarketing', short: 'Reengaja leads inativos ou que abandonaram o pagamento.', icon: Megaphone },
@@ -94,6 +105,10 @@ export default function AiOrchestration() {
   const [connectionSelections, setConnectionSelections] = useState<Record<AgentKey, string[]>>({} as Record<AgentKey, string[]>);
   const [flowSelections, setFlowSelections] = useState<AgentFlow[]>([]);
   const [supportFaqs, setSupportFaqs] = useState<SupportFaq[]>([]);
+  const [trainingQueue, setTrainingQueue] = useState<TrainingQueueItem[]>([]);
+  const [trainedRules, setTrainedRules] = useState<TrainedRule[]>([]);
+  const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string>>({});
+  const [trainingBusyId, setTrainingBusyId] = useState('');
   const [flowSearch, setFlowSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,7 +119,7 @@ export default function AiOrchestration() {
   const loadData = async () => {
     if (!currentWorkspace?.id) return;
     setLoading(true);
-    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult, supportFaqsResult] = await Promise.all([
+    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult, supportFaqsResult, trainingQueueResult, trainedRulesResult] = await Promise.all([
       supabase.from('ai_agent_configs').select('*').eq('workspace_id', currentWorkspace.id).is('niche_id', null),
       supabase.from('conversations').select('id, contact_name, contact_phone, funnel_stage, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(50),
       supabase.from('ai_orchestration_decisions').select('id, selected_agent, action, reason, confidence, blockers, operation_mode, status, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(30),
@@ -113,6 +128,8 @@ export default function AiOrchestration() {
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, official_response, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
     ]);
 
     if (configsResult.error) toast.error('Não foi possível carregar os Atendentes de IA');
@@ -134,6 +151,8 @@ export default function AiOrchestration() {
       analyze_flow_content: link.analyze_flow_content,
     })));
     setSupportFaqs((supportFaqsResult.data || []).filter((item) => item.agent_config_id === supportId).map((item) => ({ question: item.question, answer: item.answer })));
+    setTrainingQueue((trainingQueueResult.data || []) as unknown as TrainingQueueItem[]);
+    setTrainedRules((trainedRulesResult.data || []) as TrainedRule[]);
     setConnections((connectionsResult.data || []) as Connection[]);
     setFlows((flowsResult.data || []) as Flow[]);
     setConversations((conversationsResult.data || []) as Conversation[]);
@@ -253,6 +272,68 @@ export default function AiOrchestration() {
     setSaving(false);
     setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? savedConfig : config));
     toast.success(`${AGENT_LABELS[selectedKey]} salva`);
+  };
+
+  const updateTrainingStatus = async (itemId: string, status: 'no_response' | 'ignored') => {
+    setTrainingBusyId(itemId);
+    const { error } = await supabase.from('ai_training_queue').update({ status, processed_at: new Date().toISOString() }).eq('id', itemId);
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    setTrainingQueue((current) => current.map((item) => item.id === itemId ? { ...item, status } : item));
+    toast.success(status === 'no_response' ? 'Mensagem marcada para não responder' : 'Mensagem ignorada');
+  };
+
+  const trainFromMessage = async (item: TrainingQueueItem) => {
+    if (!currentWorkspace?.id) return;
+    const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
+    if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
+    const officialResponse = (trainingAnswers[item.id] || '').trim();
+    if (!officialResponse) { toast.error('Escreva a resposta oficial antes de salvar'); return; }
+    setTrainingBusyId(item.id);
+    const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot)
+      ? item.context_snapshot as Record<string, Json | undefined>
+      : {};
+    const tags = Array.isArray(snapshot.tags) ? snapshot.tags.filter((tag) => typeof tag === 'string').join(', ') : '';
+    const contextNotes = [`Etapa: ${typeof snapshot.funnel_stage === 'string' ? snapshot.funnel_stage : 'não definida'}`, `Etiquetas: ${tags || 'nenhuma'}`].join('\n');
+    const { data: rule, error: ruleError } = await supabase.from('ai_trained_message_rules').insert({
+      workspace_id: currentWorkspace.id,
+      agent_config_id: trainedConfig.id,
+      source_message_id: item.source_message_id,
+      example_message: item.customer_message,
+      context_notes: contextNotes,
+      official_response: officialResponse,
+    }).select().single();
+    if (ruleError || !rule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
+    const { error: queueError } = await supabase.from('ai_training_queue').update({
+      status: 'trained', matched_rule_id: rule.id, suggested_response: officialResponse, processed_at: new Date().toISOString(),
+    }).eq('id', item.id);
+    setTrainingBusyId('');
+    if (queueError) { toast.error(queueError.message); return; }
+    setTrainedRules((current) => [rule as TrainedRule, ...current]);
+    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: officialResponse } : currentItem));
+    setTrainingAnswers((current) => ({ ...current, [item.id]: '' }));
+    toast.success('Resposta oficial aprendida exatamente como foi escrita');
+  };
+
+  const saveTrainedRule = async (rule: TrainedRule) => {
+    if (!rule.example_message.trim() || !rule.official_response.trim()) { toast.error('Exemplo e resposta oficial são obrigatórios'); return; }
+    setTrainingBusyId(rule.id);
+    const { error } = await supabase.from('ai_trained_message_rules').update({
+      example_message: rule.example_message.trim(), context_notes: rule.context_notes.trim(), official_response: rule.official_response.trim(), active: rule.active,
+    }).eq('id', rule.id);
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    toast.success('Regra de treinamento atualizada');
+  };
+
+  const deleteTrainedRule = async (ruleId: string) => {
+    if (!window.confirm('Excluir esta regra aprendida? A mensagem original da conversa será preservada.')) return;
+    setTrainingBusyId(ruleId);
+    const { error } = await supabase.from('ai_trained_message_rules').delete().eq('id', ruleId);
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    setTrainedRules((current) => current.filter((rule) => rule.id !== ruleId));
+    toast.success('Regra excluída');
   };
 
   const testOrchestrator = async () => {
@@ -412,6 +493,39 @@ export default function AiOrchestration() {
                   <div><label className="mb-1.5 block text-sm font-medium text-foreground">Fluxo após identificar um possível comprovante</label><Select value={rules.receipt_flow_id || 'none'} onValueChange={(value) => updatePaymentRules({ receipt_flow_id: value === 'none' ? '' : value })}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Não executar fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select><p className="mt-1.5 text-xs text-muted-foreground">A imagem será tratada apenas como possível comprovante. A etiqueta PAGO continua dependendo da confirmação oficial.</p></div>
                 </div>;
               })()}
+
+              {selectedKey === 'trained_messages' && (
+                <div className="mt-6 space-y-6 border-t border-border pt-5">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainingQueue.filter((item) => item.status === 'pending' || item.status === 'unmatched').length}</p><p className="text-xs text-muted-foreground">aguardando treinamento</p></div>
+                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainedRules.filter((rule) => rule.active).length}</p><p className="text-xs text-muted-foreground">respostas ativas</p></div>
+                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainingQueue.filter((item) => item.status === 'matched').length}</p><p className="text-xs text-muted-foreground">correspondências em teste</p></div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div><p className="text-sm font-medium text-foreground">Novas mensagens para ensinar</p><p className="text-xs text-muted-foreground">A IA pergunta o que deveria responder. O texto salvo será preservado exatamente, sem tradução ou reescrita.</p></div>
+                    {trainingQueue.filter((item) => ['pending', 'unmatched', 'matched'].includes(item.status)).length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento.</div> : trainingQueue.filter((item) => ['pending', 'unmatched', 'matched'].includes(item.status)).map((item) => <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || item.conversations?.contact_phone || 'Cliente'}</p><p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><Badge variant={item.status === 'matched' ? 'default' : 'secondary'}>{item.status === 'matched' ? `${Math.round(Number(item.confidence) * 100)}% compatível` : item.status === 'unmatched' ? 'Sem resposta segura' : 'Nova'}</Badge></div>
+                      <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
+                      {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
+                      {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-foreground">Resposta que seria selecionada no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
+                      <div><label className="mb-1.5 block text-xs font-medium text-foreground">O que deveria responder?</label><Textarea value={trainingAnswers[item.id] || ''} onChange={(event) => setTrainingAnswers((current) => ({ ...current, [item.id]: event.target.value }))} rows={4} placeholder="Digite a resposta oficial exatamente como deverá ser enviada ao cliente." /></div>
+                      <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" variant="outline" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'no_response')}>Não responder</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar resposta</Button></div>
+                    </div>)}
+                  </div>
+
+                  <div className="space-y-3 border-t border-border pt-5">
+                    <div><p className="text-sm font-medium text-foreground">Respostas aprendidas</p><p className="text-xs text-muted-foreground">Revise o exemplo e a resposta literal. Desative uma regra para parar de usá-la sem excluí-la.</p></div>
+                    {trainedRules.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma resposta aprendida ainda.</div> : trainedRules.map((rule) => <div key={rule.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Switch checked={rule.active} onCheckedChange={(active) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, active } : item))} /><span className="text-sm font-medium text-foreground">{rule.active ? 'Ativa' : 'Desativada'}</span></div><Button type="button" variant="ghost" size="icon" title="Excluir regra" onClick={() => void deleteTrainedRule(rule.id)}><Trash2 className="h-4 w-4" /></Button></div>
+                      <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem de exemplo</label><Textarea value={rule.example_message} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, example_message: event.target.value } : item))} rows={2} /></div>
+                      <div><label className="mb-1.5 block text-xs font-medium text-foreground">Contexto</label><Textarea value={rule.context_notes} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, context_notes: event.target.value } : item))} rows={2} /></div>
+                      <div><label className="mb-1.5 block text-xs font-medium text-foreground">Resposta oficial exata</label><Textarea value={rule.official_response} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, official_response: event.target.value } : item))} rows={4} /></div>
+                      <div className="flex justify-end"><Button type="button" variant="outline" size="sm" disabled={trainingBusyId === rule.id} onClick={() => void saveTrainedRule(rule)}>{trainingBusyId === rule.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar regra</Button></div>
+                    </div>)}
+                  </div>
+                </div>
+              )}
 
               {selectedKey === 'orchestrator' && (
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">

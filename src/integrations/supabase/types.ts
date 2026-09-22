@@ -453,6 +453,163 @@ export type Database = {
           },
         ]
       }
+      ai_trained_message_rules: {
+        Row: {
+          active: boolean
+          agent_config_id: string
+          context_notes: string
+          created_at: string
+          created_by: string | null
+          example_message: string
+          id: string
+          official_response: string
+          source_message_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          agent_config_id: string
+          context_notes?: string
+          created_at?: string
+          created_by?: string | null
+          example_message: string
+          id?: string
+          official_response: string
+          source_message_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          agent_config_id?: string
+          context_notes?: string
+          created_at?: string
+          created_by?: string | null
+          example_message?: string
+          id?: string
+          official_response?: string
+          source_message_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_trained_message_rules_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_trained_message_rules_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_trained_message_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_training_queue: {
+        Row: {
+          agent_config_id: string
+          confidence: number
+          context_snapshot: Json
+          conversation_id: string
+          created_at: string
+          customer_message: string
+          id: string
+          match_reason: string
+          matched_rule_id: string | null
+          message_type: string
+          processed_at: string | null
+          source_message_id: string
+          status: string
+          suggested_response: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          agent_config_id: string
+          confidence?: number
+          context_snapshot?: Json
+          conversation_id: string
+          created_at?: string
+          customer_message?: string
+          id?: string
+          match_reason?: string
+          matched_rule_id?: string | null
+          message_type?: string
+          processed_at?: string | null
+          source_message_id: string
+          status?: string
+          suggested_response?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          agent_config_id?: string
+          confidence?: number
+          context_snapshot?: Json
+          conversation_id?: string
+          created_at?: string
+          customer_message?: string
+          id?: string
+          match_reason?: string
+          matched_rule_id?: string | null
+          message_type?: string
+          processed_at?: string | null
+          source_message_id?: string
+          status?: string
+          suggested_response?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_queue_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_matched_rule_id_fkey"
+            columns: ["matched_rule_id"]
+            isOneToOne: false
+            referencedRelation: "ai_trained_message_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_logs: {
         Row: {
           conversation_id: string | null
