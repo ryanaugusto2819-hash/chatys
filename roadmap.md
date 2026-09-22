@@ -173,3 +173,4 @@
 
 - [x] Carregar imagens privadas recebidas na fila e no histórico
 - [x] Analisar imagens como possível comprovante sem confirmar o pagamento
+- [x] Abrir diretamente a conversa do cliente pela pendência ou pelo histórico
