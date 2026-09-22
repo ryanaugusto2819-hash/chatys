@@ -20,6 +20,39 @@ function safeError(error: unknown) {
   return "Falha desconhecida na IA de Mensagens Treinadas";
 }
 
+async function transcribeAudio(audioUrl: string, lovableKey: string) {
+  const audioResponse = await fetch(audioUrl);
+  if (!audioResponse.ok) {
+    return { text: null, error: `Não foi possível baixar o áudio (${audioResponse.status})` };
+  }
+  const blob = await audioResponse.blob();
+  if (!blob.size) return { text: null, error: "O áudio recebido está vazio" };
+  if (blob.size > 14 * 1024 * 1024) return { text: null, error: "O áudio ultrapassa o limite de 14 MB para transcrição" };
+  const mimeType = blob.type.startsWith("audio/") ? blob.type : "audio/ogg";
+  const extension = mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : mimeType.includes("webm") ? "webm" : "ogg";
+  const form = new FormData();
+  form.append("model", "google/gemini-3.5-transcribe");
+  form.append("file", new File([blob], `audio.${extension}`, { type: mimeType }));
+  form.append("response_format", "json");
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${lovableKey}` },
+    body: form,
+  });
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = raw;
+    try {
+      const parsed = JSON.parse(raw) as { message?: string; error?: { message?: string } | string };
+      message = parsed.message || (typeof parsed.error === "string" ? parsed.error : parsed.error?.message) || raw;
+    } catch { /* preserve the upstream text */ }
+    return { text: null, error: message || `A transcrição falhou (${response.status})` };
+  }
+  const result = await response.json() as { text?: string };
+  const text = result.text?.trim();
+  return text ? { text, error: null } : { text: null, error: "O áudio não contém fala reconhecível" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
@@ -40,7 +73,7 @@ Deno.serve(async (req) => {
     const service = createClient(url, serviceKey);
     const { data: message, error: messageError } = await service
       .from("messages")
-      .select("id, conversation_id, content, message_type, sender_type, created_at, conversations!inner(id, workspace_id, connection_config_id, funnel_stage, sale_registered_at, contact_phone)")
+      .select("id, conversation_id, content, media_url, message_type, sender_type, created_at, conversations!inner(id, workspace_id, connection_config_id, funnel_stage, sale_registered_at, contact_phone)")
       .eq("id", sourceMessageId)
       .maybeSingle();
     if (messageError) return json({ error: messageError.message }, 500);
@@ -68,6 +101,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!connectionLink) return json({ skipped: true, reason: "IA fora da conexão desta conversa" });
 
+    let customerMessage = message.content?.trim() || `[${message.message_type}]`;
+    let audioTranscription: string | null = null;
+    let transcriptionError: string | null = null;
+    if (message.message_type === "audio") {
+      if (!message.media_url) {
+        transcriptionError = "O áudio não possui um arquivo disponível para transcrição";
+      } else {
+        const transcription = await transcribeAudio(message.media_url, lovableKey);
+        audioTranscription = transcription.text;
+        transcriptionError = transcription.error;
+        if (audioTranscription) customerMessage = `[Áudio transcrito]: ${audioTranscription}`;
+      }
+    }
+
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tag_id, tags!inner(id, name, workspace_id)").eq("contact_phone", conversation.contact_phone).eq("tags.workspace_id", conversation.workspace_id).limit(30),
@@ -85,6 +132,8 @@ Deno.serve(async (req) => {
       tags: tagNames,
       tag_ids: tagIds,
       recent_transcript: transcript,
+      audio_transcription: audioTranscription,
+      transcription_error: transcriptionError,
     };
 
     const { data: queued, error: queueError } = await service.from("ai_training_queue").upsert({
@@ -92,14 +141,24 @@ Deno.serve(async (req) => {
       agent_config_id: config.id,
       conversation_id: conversation.id,
       source_message_id: message.id,
-      customer_message: message.content || `[${message.message_type}]`,
+      customer_message: customerMessage,
       message_type: message.message_type,
       context_snapshot: contextSnapshot,
       status: "pending",
     }, { onConflict: "source_message_id" }).select("id").single();
     if (queueError || !queued) return json({ error: queueError?.message || "Falha ao registrar mensagem para treinamento" }, 500);
 
-    if (!rules?.length) return json({ success: true, queued: true, matched: false, reason: "Nenhuma resposta treinada ainda" });
+    if (message.message_type === "audio" && !audioTranscription) {
+      await service.from("ai_training_queue").update({
+        status: "failed", confidence: 0, matched_rule_id: null,
+        match_reason: transcriptionError || "Não foi possível transcrever o áudio",
+        suggested_action: null, suggested_action_type: null, suggested_response: null,
+        processed_at: new Date().toISOString(),
+      }).eq("id", queued.id);
+      return json({ success: false, queued: true, transcriptionError, executed: false });
+    }
+
+    if (!rules?.length) return json({ success: true, queued: true, matched: false, transcription: audioTranscription, reason: "Nenhuma resposta treinada ainda" });
 
     const eligibleRules = rules.filter((rule) => {
       const required = Array.isArray(rule.required_tag_ids) ? rule.required_tag_ids : [];
@@ -128,7 +187,7 @@ Deno.serve(async (req) => {
       model: provider.responses("openai/gpt-6-astra"),
       output: Output.object({ schema: MatchSchema }),
         system: `Você compara a nova mensagem e todo o contexto com cenários treinados previamente para as etiquetas que o cliente já possui. As etiquetas servem somente para escolher qual comportamento e resposta usar: nunca adicione, remova ou altere etiquetas. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo e a condição de etiqueta forem equivalentes com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
-      prompt: `NOVA MENSAGEM:\n${message.content || `[${message.message_type}]`}\n\nETAPA: ${conversation.funnel_stage || "não definida"}\nVENDA REGISTRADA: ${conversation.sale_registered_at ? "sim" : "não"}\nETIQUETAS: ${tagNames.join(", ") || "nenhuma"}\n\nCONTEXTO RECENTE:\n${transcript}\n\nREGRAS TREINADAS:\n${catalog}`,
+      prompt: `NOVA MENSAGEM:\n${customerMessage}\n\nETAPA: ${conversation.funnel_stage || "não definida"}\nVENDA REGISTRADA: ${conversation.sale_registered_at ? "sim" : "não"}\nETIQUETAS: ${tagNames.join(", ") || "nenhuma"}\n\nCONTEXTO RECENTE:\n${transcript}\n\nREGRAS TREINADAS:\n${catalog}`,
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
     });
     const output = await result.output;
@@ -167,6 +226,7 @@ Deno.serve(async (req) => {
        response: safeMatch?.action_type === "reply" ? safeMatch.official_response : null,
       confidence,
       reason: output.reason,
+      transcription: audioTranscription,
       executed: false,
     });
   } catch (error) {

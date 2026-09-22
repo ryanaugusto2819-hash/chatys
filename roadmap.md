@@ -124,8 +124,8 @@
 
 # Transcrição de áudio na Automação Inteligente
 
-- [ ] Transcrever áudios antes da análise da IA
-- [ ] Salvar a transcrição na fila e no contexto de treinamento
-- [ ] Mostrar claramente que o texto veio de um áudio
-- [ ] Preservar erros reais sem respostas genéricas
+- [x] Transcrever áudios antes da análise da IA
+- [x] Salvar a transcrição na fila e no contexto de treinamento
+- [x] Mostrar claramente que o texto veio de um áudio
+- [x] Preservar erros reais sem respostas genéricas
 - [ ] Publicar e testar com áudio real
