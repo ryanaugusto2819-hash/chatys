@@ -109,8 +109,8 @@
 
 # Respostas diferentes por etiqueta
 
-- [ ] Tratar Etapa 1, Etapa 2, Pago e Pós-venda somente como contexto
-- [ ] Permitir comportamento e mensagem próprios para cada etiqueta
-- [ ] Salvar uma regra independente por etiqueta sem alterar o cliente
-- [ ] Filtrar correspondências pelo nome da etiqueta
+- [x] Tratar Etapa 1, Etapa 2, Pago e Pós-venda somente como contexto
+- [x] Permitir comportamento e mensagem próprios para cada etiqueta
+- [x] Salvar uma regra independente por etiqueta sem alterar o cliente
+- [x] Filtrar correspondências pela etiqueta atual do cliente
 - [ ] Validar painel e função da IA
