@@ -105,4 +105,4 @@
 
 - [x] Mostrar Etapa 1, Etapa 2, Pago e Pós-venda após a ação do cenário
 - [x] Salvar a etapa escolhida como a ação correta do cenário
-- [ ] Validar salvamento e tela
+- [x] Validar salvamento e tela
