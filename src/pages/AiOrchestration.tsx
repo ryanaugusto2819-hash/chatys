@@ -777,7 +777,7 @@ export default function AiOrchestration({
                     <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-foreground">Pergunta {index + 1}</p><Button type="button" variant="ghost" size="icon" title="Excluir pergunta" onClick={() => setSupportFaqs((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>
                     <div><label className="mb-1.5 block text-xs font-medium text-foreground">Pergunta frequente</label><Textarea value={item.question} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, question: event.target.value } : faq))} rows={2} placeholder="Ex.: Quanto tempo demora a entrega?" /></div>
                     <div><label className="mb-1.5 block text-xs font-medium text-foreground">Resposta oficial</label><Textarea value={item.answer} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, answer: event.target.value } : faq))} rows={4} placeholder="Escreva a resposta correta e completa que a IA deverá usar como referência." /></div>
-                  </div>)}
+                     </div>; })}
                   <p className="text-xs text-muted-foreground">A base responde dúvidas específicas; ela não confirma pagamentos, altera etiquetas ou executa fluxos.</p>
                 </div>
               )}
