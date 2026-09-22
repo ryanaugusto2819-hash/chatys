@@ -24,6 +24,7 @@ const FlowMetrics = lazy(() => import("./pages/FlowMetrics"));
 const WebhookMappings = lazy(() => import("./pages/WebhookMappings"));
 const AiSettings = lazy(() => import("./pages/AiSettings"));
 const AiOrchestration = lazy(() => import("./pages/AiOrchestration"));
+const SmartAutomation = lazy(() => import("./pages/SmartAutomation"));
 const Reports = lazy(() => import("./pages/Reports"));
 const ManagerAI = lazy(() => import("./pages/ManagerAI"));
 const Connections = lazy(() => import("./pages/Connections"));
@@ -109,7 +110,7 @@ const App = () => (
                   <Route path="/webhook-mappings" element={<AdminRoute><WebhookMappings /></AdminRoute>} />
                   <Route path="/ai" element={<AdminRoute><AiSettings /></AdminRoute>} />
                   <Route path="/ai-orchestration" element={<AdminRoute><AiOrchestration /></AdminRoute>} />
-                  <Route path="/smart-automation" element={<AdminRoute><AiOrchestration initialAgentKey="trained_messages" /></AdminRoute>} />
+                  <Route path="/smart-automation" element={<AdminRoute><SmartAutomation /></AdminRoute>} />
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
                   <Route path="/activity" element={<AdminRoute><ActivityReport /></AdminRoute>} />
                   <Route path="/manager-ai" element={<AdminRoute><ManagerAI /></AdminRoute>} />

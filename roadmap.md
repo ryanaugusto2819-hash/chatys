@@ -96,7 +96,7 @@
 
 # Painel próprio — Automação Inteligente
 
-- [ ] Separar visualmente da Central de IAs
-- [ ] Remover lista dos demais Atendentes da página exclusiva
-- [ ] Manter treinamento, conexões, etiquetas e cenários aprendidos
+- [x] Separar visualmente da Central de IAs
+- [x] Remover lista dos demais Atendentes da página exclusiva
+- [x] Manter treinamento, conexões, etiquetas e cenários aprendidos
 - [ ] Validar acesso direto pelo menu
