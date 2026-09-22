@@ -167,3 +167,4 @@
 # Aguardar próxima mensagem
 
 - [x] Permitir treinar a IA para não enviar mensagem nem fluxo e aguardar o próximo contato do cliente
+- [x] Exibir as etiquetas atuais do lead ou “Sem tag” nas pendências e no histórico
