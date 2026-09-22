@@ -193,8 +193,8 @@
 
 # Inteligência e auditoria da Automação Inteligente
 
-- [ ] Salvar uma cópia imutável da base usada em cada decisão
-- [ ] Agrupar mensagens semelhantes aguardando treinamento
-- [ ] Permitir avaliar decisões como corretas ou erradas
-- [ ] Detectar e mostrar conflitos entre regras treinadas
-- [ ] Buscar no histórico por lead, telefone, mensagem, etiqueta, ação ou fluxo
+- [x] Salvar uma cópia imutável da base usada em cada decisão
+- [x] Agrupar mensagens semelhantes aguardando treinamento
+- [x] Permitir avaliar decisões como corretas ou erradas
+- [x] Detectar e mostrar conflitos entre regras treinadas
+- [x] Buscar no histórico por lead, telefone, mensagem, etiqueta, ação ou fluxo

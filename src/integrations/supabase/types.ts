@@ -559,10 +559,14 @@ export type Database = {
           conversation_id: string
           created_at: string
           customer_message: string
+          decision_feedback: string | null
           detected_country_code: string | null
+          feedback_at: string | null
+          feedback_by: string | null
           id: string
           match_reason: string
           matched_rule_id: string | null
+          matched_rule_snapshot: Json
           message_type: string
           processed_at: string | null
           source_message_id: string
@@ -582,10 +586,14 @@ export type Database = {
           conversation_id: string
           created_at?: string
           customer_message?: string
+          decision_feedback?: string | null
           detected_country_code?: string | null
+          feedback_at?: string | null
+          feedback_by?: string | null
           id?: string
           match_reason?: string
           matched_rule_id?: string | null
+          matched_rule_snapshot?: Json
           message_type?: string
           processed_at?: string | null
           source_message_id: string
@@ -605,10 +613,14 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           customer_message?: string
+          decision_feedback?: string | null
           detected_country_code?: string | null
+          feedback_at?: string | null
+          feedback_by?: string | null
           id?: string
           match_reason?: string
           matched_rule_id?: string | null
+          matched_rule_snapshot?: Json
           message_type?: string
           processed_at?: string | null
           source_message_id?: string

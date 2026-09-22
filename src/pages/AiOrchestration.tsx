@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
-  Check, ChevronsUpDown, ChevronDown, ChevronUp, Clock3, History, Link2, Loader2, Megaphone, MessageCircle, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  AlertTriangle, Check, ChevronsUpDown, ChevronDown, ChevronUp, Clock3, History, Link2, Loader2, Megaphone, MessageCircle, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, ThumbsDown, ThumbsUp, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,8 @@ type TrainingQueueItem = {
   id: string; conversation_id: string; source_message_id: string; customer_message: string; message_type: string;
   status: string; confidence: number; match_reason: string; suggested_response: string | null;
   matched_rule_id?: string | null;
+  matched_rule_snapshot: Json;
+  decision_feedback?: 'correct' | 'incorrect' | null;
   suggested_responses: Json;
   detected_country_code?: CountryCode | null;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
@@ -169,6 +171,7 @@ export default function AiOrchestration({
   const [trainingView, setTrainingView] = useState<TrainingView>('waiting');
   const [trainingCountryFilter, setTrainingCountryFilter] = useState<CountryFilter>('any');
   const [flowSearch, setFlowSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -187,7 +190,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
@@ -446,8 +449,74 @@ export default function AiOrchestration({
   const itemCountry = (item: TrainingQueueItem) => item.detected_country_code || countryFromPhone(item.conversations?.contact_phone);
   const visibleTrainingQueue = trainingQueue.filter((item) => trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter);
   const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
+  const normalizedWords = (value: string) => Array.from(new Set(normalizeTagName(value).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((word) => word.length > 2)));
+  const messageSimilarity = (left: string, right: string) => {
+    const leftWords = normalizedWords(left);
+    const rightWords = normalizedWords(right);
+    if (!leftWords.length || !rightWords.length) return 0;
+    const intersection = leftWords.filter((word) => rightWords.includes(word)).length;
+    return intersection / Math.max(leftWords.length, rightWords.length);
+  };
+  const ruleConflicts = useMemo(() => {
+    const conflicts: Record<string, string[]> = {};
+    trainedRules.forEach((rule, index) => {
+      trainedRules.forEach((other, otherIndex) => {
+        if (index >= otherIndex || !rule.active || !other.active) return;
+        const countryOverlap = rule.country_code === other.country_code || rule.country_code === 'any' || other.country_code === 'any';
+        const tagsOverlap = (rule.requires_no_tags && other.requires_no_tags)
+          || (!rule.requires_no_tags && !other.requires_no_tags && (rule.required_tag_ids.length === 0 || other.required_tag_ids.length === 0 || rule.required_tag_ids.some((id) => other.required_tag_ids.includes(id))));
+        if (!countryOverlap || !tagsOverlap || messageSimilarity(rule.example_message, other.example_message) < 0.65) return;
+        conflicts[rule.id] = [...(conflicts[rule.id] || []), other.id];
+        conflicts[other.id] = [...(conflicts[other.id] || []), rule.id];
+      });
+    });
+    return conflicts;
+  }, [trainedRules]);
+  const filteredDecisions = decisions;
+  const snapshotRule = (item: TrainingQueueItem) => {
+    const raw = item.matched_rule_snapshot && typeof item.matched_rule_snapshot === 'object' && !Array.isArray(item.matched_rule_snapshot)
+      ? item.matched_rule_snapshot as Record<string, Json | undefined>
+      : {};
+    if (typeof raw.example_message !== 'string') return null;
+    return {
+      example_message: raw.example_message,
+      context_notes: typeof raw.context_notes === 'string' ? raw.context_notes : '',
+      action_observation: typeof raw.action_observation === 'string' ? raw.action_observation : '',
+      country_code: typeof raw.country_code === 'string' ? raw.country_code : 'any',
+    };
+  };
+  const filteredHistory = useMemo(() => {
+    const history = trainingQueue.filter((item) => item.status !== "pending" && (trainingCountryFilter === "any" || itemCountry(item) === trainingCountryFilter));
+    if (!historySearch.trim()) return history;
+    const query = normalizeTagName(historySearch);
+    return history.filter((item) => {
+      const searchable = [item.conversations?.contact_name, item.conversations?.contact_phone, item.customer_message, ...snapshotTagNames(item), item.suggested_action, ...readMessages(item.suggested_responses, item.suggested_response || ''), flows.find((flow) => flow.id === item.suggested_flow_id)?.name].filter(Boolean).join(' ');
+      return normalizeTagName(searchable).includes(query);
+    });
+  }, [trainingQueue, trainingCountryFilter, historySearch, flows]);
+  const groupedTrainingQueue = useMemo(() => {
+    const waiting = visibleTrainingQueue.filter((item) => ["pending", "unmatched"].includes(item.status));
+    const groups: TrainingQueueItem[][] = [];
+    waiting.forEach((item) => {
+      const group = groups.find((candidate) => itemCountry(candidate[0]) === itemCountry(item) && messageSimilarity(candidate[0].customer_message, item.customer_message) >= 0.65);
+      if (group) group.push(item);
+      else groups.push([item]);
+    });
+    return groups;
+  }, [visibleTrainingQueue]);
 
-  const trainFromMessage = async (item: TrainingQueueItem) => {
+  const setDecisionFeedback = async (item: TrainingQueueItem, feedback: 'correct' | 'incorrect') => {
+    const nextFeedback = item.decision_feedback === feedback ? null : feedback;
+    setTrainingBusyId(item.id);
+    const { data: authData } = await supabase.auth.getUser();
+    const { error } = await supabase.from('ai_training_queue').update({ decision_feedback: nextFeedback, feedback_at: nextFeedback ? new Date().toISOString() : null, feedback_by: nextFeedback ? authData.user?.id || null : null }).eq('id', item.id);
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    setTrainingQueue((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, decision_feedback: nextFeedback } : candidate));
+    toast.success(nextFeedback === 'correct' ? 'Decisão marcada como correta' : nextFeedback === 'incorrect' ? 'Decisão marcada como errada' : 'Avaliação removida');
+  };
+
+  const trainFromMessage = async (item: TrainingQueueItem, similarItems: TrainingQueueItem[] = [item]) => {
     if (!currentWorkspace?.id) return;
     const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
     if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
@@ -503,19 +572,28 @@ export default function AiOrchestration({
       status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type,
       suggested_response: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.official_response : null,
       suggested_responses: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.response_messages : [],
-      suggested_flow_id: firstRule.flow_id, processed_at: new Date().toISOString(),
-    }).eq('id', item.id);
+      suggested_flow_id: firstRule.flow_id,
+      matched_rule_snapshot: {
+        id: firstRule.id, example_message: firstRule.example_message, context_notes: firstRule.context_notes,
+        action_observation: firstRule.action_observation, expected_action: firstRule.expected_action,
+        action_type: firstRule.action_type, response_messages: firstRule.response_messages, flow_id: firstRule.flow_id,
+        required_tag_ids: firstRule.required_tag_ids, excluded_tag_ids: firstRule.excluded_tag_ids,
+        requires_no_tags: firstRule.requires_no_tags, country_code: firstRule.country_code,
+      },
+      processed_at: new Date().toISOString(),
+    }).in('id', similarItems.map((candidate) => candidate.id));
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
     setTrainedRules((current) => [...(rules as TrainedRule[]), ...current]);
-    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages } : currentItem));
+    const trainedIds = new Set(similarItems.map((candidate) => candidate.id));
+    setTrainingQueue((current) => current.map((currentItem) => trainedIds.has(currentItem.id) ? { ...currentItem, status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type, suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages, suggested_flow_id: firstRule.flow_id } : currentItem));
     setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingObservations((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActionTypes((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingFlowIds((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingCountrySelections((current) => { const next = { ...current }; delete next[item.id]; return next; });
-    toast.success(`${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
+    toast.success(similarItems.length > 1 ? `Cenário ensinado para ${similarItems.length} mensagens semelhantes` : `${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
@@ -700,7 +778,7 @@ export default function AiOrchestration({
                     <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-foreground">Pergunta {index + 1}</p><Button type="button" variant="ghost" size="icon" title="Excluir pergunta" onClick={() => setSupportFaqs((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>
                     <div><label className="mb-1.5 block text-xs font-medium text-foreground">Pergunta frequente</label><Textarea value={item.question} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, question: event.target.value } : faq))} rows={2} placeholder="Ex.: Quanto tempo demora a entrega?" /></div>
                     <div><label className="mb-1.5 block text-xs font-medium text-foreground">Resposta oficial</label><Textarea value={item.answer} onChange={(event) => setSupportFaqs((current) => current.map((faq, itemIndex) => itemIndex === index ? { ...faq, answer: event.target.value } : faq))} rows={4} placeholder="Escreva a resposta correta e completa que a IA deverá usar como referência." /></div>
-                  </div>)}
+                    </div>)}
                   <p className="text-xs text-muted-foreground">A base responde dúvidas específicas; ela não confirma pagamentos, altera etiquetas ou executa fluxos.</p>
                 </div>
               )}
@@ -716,7 +794,7 @@ export default function AiOrchestration({
                       <div><label className="mb-1 block text-xs font-medium text-foreground">Quantidade</label><Input type="number" min={1} step={1} value={row.quantity} onChange={(event) => updatePaymentRules({ prices: rules.prices.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(event.target.value) } : item) })} /></div>
                       <div><label className="mb-1 block text-xs font-medium text-foreground">Valor final (MXN)</label><Input type="number" min={10} max={10000} step="0.01" value={row.amount} onChange={(event) => updatePaymentRules({ prices: rules.prices.map((item, rowIndex) => rowIndex === index ? { ...item, amount: Number(event.target.value) } : item) })} /></div>
                       <Button type="button" variant="ghost" size="icon" title="Remover valor" onClick={() => updatePaymentRules({ prices: rules.prices.filter((_, rowIndex) => rowIndex !== index) })}><Trash2 className="h-4 w-4" /></Button>
-                    </div>)}
+                      </div>)}
                   </div>
                   <div><label className="mb-1.5 block text-sm font-medium text-foreground">Fluxo após identificar um possível comprovante</label><Select value={rules.receipt_flow_id || 'none'} onValueChange={(value) => updatePaymentRules({ receipt_flow_id: value === 'none' ? '' : value })}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Não executar fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select><p className="mt-1.5 text-xs text-muted-foreground">A imagem será tratada apenas como possível comprovante. A etiqueta PAGO continua dependendo da confirmação oficial.</p></div>
                 </div>;
@@ -733,8 +811,8 @@ export default function AiOrchestration({
 
                   {trainingView === 'waiting' && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Novos cenários para ensinar</p><p className="text-xs text-muted-foreground">A IA analisa a mensagem e o contexto, depois pergunta qual ação tomar e qual mensagem usar.</p></div>
-                    {visibleTrainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : visibleTrainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).map((item) => <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => navigate(`/conversations/${item.conversation_id}`)}><MessageCircle className="mr-2 h-4 w-4" />Abrir conversa</Button><Badge variant={item.status === 'matched' ? 'default' : 'secondary'}>{item.status === 'matched' ? `${Math.round(Number(item.confidence) * 100)}% compatível` : item.status === 'unmatched' ? 'Sem resposta segura' : 'Nova'}</Badge></div></div>
+                    {groupedTrainingQueue.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : groupedTrainingQueue.map((group) => { const item = group[0]; return <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                      {group.length > 1 && <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{group.length} mensagens semelhantes</Badge><span className="text-xs text-muted-foreground">Ao ensinar, este cenário será aplicado a todo o grupo.</span></div>}
                       <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
                       {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem enviada pelo cliente" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Aguardando análise visual</Badge>; })()}</div>}
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
@@ -742,13 +820,14 @@ export default function AiOrchestration({
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
                       {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-foreground">Mensagens que seriam selecionadas no teste</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-suggested-${index}`} className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
                         <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Escolha o país e configure mensagens ou fluxo para cada contexto.</p></div>{(() => { const selectedCountry = trainingCountrySelections[item.id] || item.detected_country_code || 'any'; return <><div className="max-w-sm"><label className="mb-1 block text-xs font-medium text-foreground">País desta ação</label><Select value={selectedCountry} onValueChange={(value: CountryFilter) => setTrainingCountrySelections((current) => ({ ...current, [item.id]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TRAINING_COUNTRIES.map((country) => <SelectItem key={country.code} value={country.code}>{country.label}{country.ddi ? ` (${country.ddi})` : ''}</SelectItem>)}</SelectContent></Select><p className="mt-1 text-xs text-muted-foreground">País detectado pelo telefone: {countryLabel(item.detected_country_code)}</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXTS.map((label) => { const withoutTags = label === 'Sem etiqueta'; const tag = withoutTags ? null : findContextTag(label); const available = withoutTags || Boolean(tag); const key = `${item.id}:${selectedCountry}:${withoutTags ? 'no-tags' : tag?.id || label}`; const actionType = trainingActionTypes[key] || 'reply'; const messages = trainingAnswers[key] || ['']; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><div className="flex gap-2"><Badge variant="outline">{label}</Badge><Badge variant="secondary">{countryLabel(selectedCountry)}</Badge></div>{!available && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}{withoutTags && <span className="text-xs text-muted-foreground">Nenhuma etiqueta</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Ação neste contexto</label><Select disabled={!available} value={actionType} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [key]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem><SelectItem value="wait">Não fazer nada e aguardar a próxima mensagem</SelectItem></SelectContent></Select></div><div><label className="mb-1 block text-xs font-medium text-foreground">Observação da ação</label><Textarea disabled={!available} value={trainingObservations[key] || ''} onChange={(event) => setTrainingObservations((current) => ({ ...current, [key]: event.target.value }))} rows={3} placeholder="Explique por que esta ação é a correta neste cenário. Esta observação não será enviada ao cliente." /></div>{['reply', 'reply_then_flow'].includes(actionType) && <div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-medium text-foreground">Mensagens exatas, na ordem</label><Button type="button" variant="outline" size="sm" disabled={!available} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: [...messages, ''] }))}><Plus className="mr-1 h-3.5 w-3.5" />Mensagem</Button></div>{messages.map((message, index) => <div key={`${key}-message-${index}`} className="space-y-1 rounded-md border border-border p-2"><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Mensagem {index + 1}</span><div className="flex"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para cima" disabled={index === 0} onClick={() => moveTrainingMessage(key, index, -1)}><ChevronUp className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para baixo" disabled={index === messages.length - 1} onClick={() => moveTrainingMessage(key, index, 1)}><ChevronDown className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Remover mensagem" disabled={messages.length === 1} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: messages.filter((_, messageIndex) => messageIndex !== index) }))}><Trash2 className="h-3.5 w-3.5" /></Button></div></div><Textarea disabled={!available} value={message} onChange={(event) => updateTrainingMessage(key, index, event.target.value)} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div>)}</div>}{['flow', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Fluxo</label><FlowSearchSelect flows={flows} disabled={!available} value={trainingFlowIds[key] || null} onChange={(value) => setTrainingFlowIds((current) => ({ ...current, [key]: value || '' }))} /></div>}{actionType === 'wait' && <p className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">A IA não enviará mensagem nem fluxo. Ela aguardará uma nova mensagem do cliente.</p>}</div>; })}</div></>; })()}</div>
-                        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
-                    </div>)}
+                        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item, group)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{group.length > 1 ? `Ensinar ${group.length} semelhantes` : 'Ensinar cenário'}</Button></div>
+                     </div>; })}
                   </div>}
 
                   {trainingView === 'responses' && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Cenários aprendidos</p><p className="text-xs text-muted-foreground">Revise o cenário, a ação e a mensagem literal. Desative uma regra para parar de usá-la sem excluí-la.</p></div>
                     {visibleTrainedRules.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma resposta aprendida neste país.</div> : visibleTrainedRules.map((rule) => <div key={rule.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                      {ruleConflicts[rule.id] && <div className="mb-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Possível conflito com {ruleConflicts[rule.id].length} regra{ruleConflicts[rule.id].length > 1 ? 's' : ''}.</strong> Os exemplos, país e condições de etiqueta são semelhantes; revise as instruções para deixar clara a diferença.</span></div>}
                       <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Switch checked={rule.active} onCheckedChange={(active) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, active } : item))} /><span className="text-sm font-medium text-foreground">{rule.active ? 'Ativa' : 'Desativada'}</span></div><Button type="button" variant="ghost" size="icon" title="Excluir regra" onClick={() => void deleteTrainedRule(rule.id)}><Trash2 className="h-4 w-4" /></Button></div>
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem de exemplo</label><Textarea value={rule.example_message} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, example_message: event.target.value } : item))} rows={2} /></div>
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Contexto</label><Textarea value={rule.context_notes} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, context_notes: event.target.value } : item))} rows={2} /></div>
@@ -767,10 +846,11 @@ export default function AiOrchestration({
                     </div>)}
                   </div>}
 
-                  {trainingView === 'history' && <div className="space-y-3">
-                    <div><p className="text-sm font-medium text-foreground">Histórico de decisões e envios</p><p className="text-xs text-muted-foreground">Cada análise mostra o que a IA decidiu e se a mensagem foi realmente enviada.</p></div>
-                    {visibleTrainingQueue.filter((item) => item.status !== 'pending').length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma decisão registrada neste país.</div> : visibleTrainingQueue.filter((item) => item.status !== 'pending').map((item) => { const result = historyStatus(item); const matchedRule = item.ai_trained_message_rules || trainedRules.find((rule) => rule.id === item.matched_rule_id); return <div key={`history-${item.id}`} className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
+                  {trainingView === "history" && <div className="space-y-3">
+                    <div><p className="text-sm font-medium text-foreground">Histórico de decisões e envios</p><p className="text-xs text-muted-foreground">Cada análise mostra o que a IA decidiu e se a mensagem foi realmente enviada.</p></div><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9" placeholder="Buscar no histórico por lead, telefone, mensagem, tags, ação ou fluxo..." /></div>
+                    {filteredHistory.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma decisão encontrada.</div> : filteredHistory.map((item) => { const result = historyStatus(item); const matchedRule = snapshotRule(item) || item.ai_trained_message_rules || trainedRules.find((rule) => rule.id === item.matched_rule_id); return <div key={`history-${item.id}`} className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`history-${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => navigate(`/conversations/${item.conversation_id}`)}><MessageCircle className="mr-2 h-4 w-4" />Abrir conversa</Button>{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
+                      <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted-foreground">Avaliar:</span><Button type="button" size="sm" variant={item.decision_feedback === 'correct' ? 'default' : 'outline'} disabled={trainingBusyId === item.id} onClick={() => void setDecisionFeedback(item, 'correct')}><ThumbsUp className="mr-2 h-4 w-4" />Decisão correta</Button><Button type="button" size="sm" variant={item.decision_feedback === 'incorrect' ? 'destructive' : 'outline'} disabled={trainingBusyId === item.id} onClick={() => void setDecisionFeedback(item, 'incorrect')}><ThumbsDown className="mr-2 h-4 w-4" />Decisão errada</Button></div>
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem recebida</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground whitespace-pre-wrap">{item.customer_message}</div></div>
                       {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem analisada pela IA" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Sem análise visual registrada</Badge>; })()}</div>}
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">O que a IA entendeu</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground whitespace-pre-wrap">{item.match_reason || 'Nenhuma interpretação segura foi registrada.'}</div></div>
@@ -807,7 +887,7 @@ export default function AiOrchestration({
 
         {!standalone && <section className="border-t border-border pt-6">
           <div className="mb-4"><h3 className="font-semibold text-foreground">Histórico de decisões</h3><p className="text-sm text-muted-foreground">Motivo, confiança e bloqueios usados pela Orquestradora.</p></div>
-          {decisions.length === 0 ? <div className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : <div className="overflow-hidden rounded-md border border-border bg-card">{decisions.map((decision) => <div key={decision.id} className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[180px_160px_1fr_90px] md:items-center"><div><p className="text-sm font-medium text-foreground">{decision.conversations?.contact_name || decision.conversations?.contact_phone || 'Conversa'}</p><p className="text-xs text-muted-foreground">{new Date(decision.created_at).toLocaleString('pt-BR')}</p></div><div><Badge variant={decision.selected_agent === 'none' ? 'secondary' : 'default'}>{AGENT_LABELS[decision.selected_agent] || 'Nenhuma ação'}</Badge><p className="mt-1 text-xs text-muted-foreground">{decision.action === 'recommend_only' ? 'Somente recomendação' : decision.action}</p></div><div><p className="text-sm text-foreground">{decision.reason}</p>{decision.blockers?.length > 0 && <p className="mt-1 text-xs text-destructive">{decision.blockers.join(' · ')}</p>}</div><div className="text-right"><p className="text-sm font-semibold text-foreground">{Math.round(Number(decision.confidence) * 100)}%</p><p className="text-xs text-muted-foreground">confiança</p></div></div>)}</div>}
+          {filteredDecisions.length === 0 ? <div className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : <div className="overflow-hidden rounded-md border border-border bg-card">{filteredDecisions.map((decision) => <div key={decision.id} className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[180px_160px_1fr_90px] md:items-center"><div><p className="text-sm font-medium text-foreground">{decision.conversations?.contact_name || decision.conversations?.contact_phone || 'Conversa'}</p><p className="text-xs text-muted-foreground">{new Date(decision.created_at).toLocaleString('pt-BR')}</p></div><div><Badge variant={decision.selected_agent === 'none' ? 'secondary' : 'default'}>{AGENT_LABELS[decision.selected_agent] || 'Nenhuma ação'}</Badge><p className="mt-1 text-xs text-muted-foreground">{decision.action === 'recommend_only' ? 'Somente recomendação' : decision.action}</p></div><div><p className="text-sm text-foreground">{decision.reason}</p>{decision.blockers?.length > 0 && <p className="mt-1 text-xs text-destructive">{decision.blockers.join(' · ')}</p>}</div><div className="text-right"><p className="text-sm font-semibold text-foreground">{Math.round(Number(decision.confidence) * 100)}%</p><p className="text-xs text-muted-foreground">confiança</p></div></div>)}</div>}
         </section>}
       </div>
     </div>
