@@ -136,4 +136,4 @@
 - [x] Salvar e validar o fluxo escolhido em cada cenário treinado
 - [x] Permitir editar mensagem, ação e fluxo nas respostas ativas
 - [x] Exibir o fluxo selecionado no histórico
-- [ ] Publicar e validar o painel em modo de teste
+- [x] Publicar e validar o painel em modo de teste
