@@ -97,7 +97,13 @@ const readPaymentRules = (value: Json): PaymentRules => {
   };
 };
 
-export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { initialAgentKey?: AgentKey }) {
+export default function AiOrchestration({
+  initialAgentKey = 'orchestrator',
+  standalone = false,
+}: {
+  initialAgentKey?: AgentKey;
+  standalone?: boolean;
+}) {
   const { currentWorkspace } = useWorkspace();
   const [configs, setConfigs] = useState<AgentConfig[]>(defaults);
   const [selectedKey, setSelectedKey] = useState<AgentKey>(initialAgentKey);
@@ -412,9 +418,12 @@ export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { 
 
   return (
     <div>
-      <TopBar title="Central Inteligente de IAs" subtitle="Uma decisão central, um único Atendente por vez" />
+      <TopBar
+        title={standalone ? 'Automação Inteligente' : 'Central Inteligente de IAs'}
+        subtitle={standalone ? 'Treine ações e mensagens prontas para cada cenário' : 'Uma decisão central, um único Atendente por vez'}
+      />
       <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-        <section className="border-b border-border pb-6">
+        {!standalone && <section className="border-b border-border pb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="mb-2 flex items-center gap-2"><Badge>Modo seguro</Badge><span className="text-xs text-muted-foreground">{activeCount} de {AGENTS.length} ativos</span></div>
@@ -426,10 +435,24 @@ export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { 
               <div><p className="text-sm font-medium text-foreground">Proteção contra conflitos</p><p className="text-xs text-muted-foreground">Uma decisão por mensagem</p></div>
             </div>
           </div>
-        </section>
+        </section>}
 
-        <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="space-y-2">
+        {standalone && (
+          <section className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2"><Badge>Modo de teste</Badge><span className="text-xs text-muted-foreground">Nenhuma mensagem é enviada automaticamente</span></div>
+              <h2 className="text-2xl font-semibold text-foreground">Treinamento de cenários</h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Ensine o que fazer, quais etiquetas considerar e qual mensagem exata usar em cada situação.</p>
+            </div>
+            <div className="flex items-center gap-3 rounded-md border border-border bg-card px-4 py-3">
+              <MessageSquareText className="h-5 w-5 text-primary" />
+              <div><p className="text-sm font-medium text-foreground">Resposta controlada</p><p className="text-xs text-muted-foreground">Somente textos ensinados</p></div>
+            </div>
+          </section>
+        )}
+
+        <div className={standalone ? 'grid gap-6' : 'grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]'}>
+          {!standalone && <aside className="space-y-2">
             {AGENTS.map((agent) => {
               const config = configs.find((item) => item.agent_key === agent.key);
               const Icon = agent.icon;
@@ -442,7 +465,7 @@ export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { 
                 </Button>
               );
             })}
-          </aside>
+          </aside>}
 
           <main className="min-w-0 space-y-6">
             <section className="rounded-md border border-border bg-card p-5 md:p-6">
@@ -610,10 +633,10 @@ export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { 
           </main>
         </div>
 
-        <section className="border-t border-border pt-6">
+        {!standalone && <section className="border-t border-border pt-6">
           <div className="mb-4"><h3 className="font-semibold text-foreground">Histórico de decisões</h3><p className="text-sm text-muted-foreground">Motivo, confiança e bloqueios usados pela Orquestradora.</p></div>
           {decisions.length === 0 ? <div className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : <div className="overflow-hidden rounded-md border border-border bg-card">{decisions.map((decision) => <div key={decision.id} className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[180px_160px_1fr_90px] md:items-center"><div><p className="text-sm font-medium text-foreground">{decision.conversations?.contact_name || decision.conversations?.contact_phone || 'Conversa'}</p><p className="text-xs text-muted-foreground">{new Date(decision.created_at).toLocaleString('pt-BR')}</p></div><div><Badge variant={decision.selected_agent === 'none' ? 'secondary' : 'default'}>{AGENT_LABELS[decision.selected_agent] || 'Nenhuma ação'}</Badge><p className="mt-1 text-xs text-muted-foreground">{decision.action === 'recommend_only' ? 'Somente recomendação' : decision.action}</p></div><div><p className="text-sm text-foreground">{decision.reason}</p>{decision.blockers?.length > 0 && <p className="mt-1 text-xs text-destructive">{decision.blockers.join(' · ')}</p>}</div><div className="text-right"><p className="text-sm font-semibold text-foreground">{Math.round(Number(decision.confidence) * 100)}%</p><p className="text-xs text-muted-foreground">confiança</p></div></div>)}</div>}
-        </section>
+        </section>}
       </div>
     </div>
   );
