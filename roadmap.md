@@ -204,3 +204,9 @@
 - [x] Considerar somente conversas cuja primeira mensagem ocorreu após 22/09/2026 às 20:21 (São Paulo)
 - [x] Ocultar da fila de treinamento conversas iniciadas antes do corte
 - [x] Impedir que novas mensagens de conversas antigas voltem para a fila
+
+# Etiquetas nos blocos de ação
+
+- [x] Executar de fato as ações de adicionar e remover etiqueta nos fluxos
+- [x] Restringir a alteração ao telefone e workspace corretos
+- [x] Registrar falha real no histórico quando a etiqueta estiver ausente ou inválida
