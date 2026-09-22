@@ -633,11 +633,31 @@ Deno.serve(async (req) => {
         let actionError: string | null = null;
         
         if (actionType === "add_tag" || actionType === "remove_tag") {
-          const tagId = typeof config.tag_id === "string" ? config.tag_id : "";
+          let tagId = typeof config.tag_id === "string" ? config.tag_id : "";
+          const configuredTagName = typeof config.tag_name === "string" ? config.tag_name.trim() : "";
 
-          if (!tagId) {
-            actionError = "Etiqueta não configurada no bloco de ação";
-          } else {
+          // Imported and legacy flows may only contain the tag name.
+          if (!tagId && configuredTagName) {
+            const { data: tagByName, error: tagByNameError } = await supabase
+              .from("tags")
+              .select("id")
+              .eq("workspace_id", conversation.workspace_id)
+              .ilike("name", configuredTagName)
+              .limit(1)
+              .maybeSingle();
+
+            if (tagByNameError) {
+              actionError = tagByNameError.message;
+            } else if (tagByName) {
+              tagId = tagByName.id;
+            }
+          }
+
+          if (!tagId && !actionError) {
+            actionError = configuredTagName
+              ? `Etiqueta "${configuredTagName}" não encontrada neste workspace`
+              : "Etiqueta não configurada no bloco de ação";
+          } else if (!actionError) {
             const { data: tag, error: tagLookupError } = await supabase
               .from("tags")
               .select("id, name")

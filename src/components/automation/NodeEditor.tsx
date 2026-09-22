@@ -4,6 +4,7 @@ import {
   FileText, GitFork, Zap, Bot, ListOrdered, Trash2, Save, Link2, Cog, Tag, Target
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 
 interface NodeConfig {
@@ -44,6 +45,7 @@ const conditionFields = [
 ];
 
 export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, onSave, onDelete, onClose }: NodeEditorProps) {
+  const { currentWorkspace } = useWorkspace();
   const [editLabel, setEditLabel] = useState(label);
   const [editConfig, setEditConfig] = useState<NodeConfig>(config);
   const [uploading, setUploading] = useState(false);
@@ -701,7 +703,12 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
                         const name = (editConfig._newTagName as string)?.trim();
                         if (!name) return;
                         const color = (editConfig._newTagColor as string) || '#3b82f6';
-                        const { data, error } = await supabase.from('tags').insert({ name, color }).select().single();
+                         if (!currentWorkspace) { toast.error('Workspace não selecionado'); return; }
+                         const { data, error } = await supabase
+                           .from('tags')
+                           .insert({ name, color, workspace_id: currentWorkspace.id })
+                           .select()
+                           .single();
                         if (error) { toast.error('Erro ao criar etiqueta'); return; }
                         setAvailableTags((prev) => [...prev, data]);
                         setEditConfig((p) => ({ ...p, tag_id: data.id, tag_name: data.name, _newTagName: '', _newTagColor: '#3b82f6' }));
