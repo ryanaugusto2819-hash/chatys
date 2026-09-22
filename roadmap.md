@@ -113,4 +113,4 @@
 - [x] Permitir comportamento e mensagem próprios para cada etiqueta
 - [x] Salvar uma regra independente por etiqueta sem alterar o cliente
 - [x] Filtrar correspondências pela etiqueta atual do cliente
-- [ ] Validar painel e função da IA
+- [x] Validar painel e função da IA
