@@ -516,7 +516,7 @@ export default function AiOrchestration({
     toast.success(nextFeedback === 'correct' ? 'Decisão marcada como correta' : nextFeedback === 'incorrect' ? 'Decisão marcada como errada' : 'Avaliação removida');
   };
 
-  const trainFromMessage = async (item: TrainingQueueItem) => {
+  const trainFromMessage = async (item: TrainingQueueItem, similarItems: TrainingQueueItem[] = [item]) => {
     if (!currentWorkspace?.id) return;
     const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
     if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
@@ -572,19 +572,28 @@ export default function AiOrchestration({
       status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type,
       suggested_response: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.official_response : null,
       suggested_responses: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.response_messages : [],
-      suggested_flow_id: firstRule.flow_id, processed_at: new Date().toISOString(),
-    }).eq('id', item.id);
+      suggested_flow_id: firstRule.flow_id,
+      matched_rule_snapshot: {
+        id: firstRule.id, example_message: firstRule.example_message, context_notes: firstRule.context_notes,
+        action_observation: firstRule.action_observation, expected_action: firstRule.expected_action,
+        action_type: firstRule.action_type, response_messages: firstRule.response_messages, flow_id: firstRule.flow_id,
+        required_tag_ids: firstRule.required_tag_ids, excluded_tag_ids: firstRule.excluded_tag_ids,
+        requires_no_tags: firstRule.requires_no_tags, country_code: firstRule.country_code,
+      },
+      processed_at: new Date().toISOString(),
+    }).in('id', similarItems.map((candidate) => candidate.id));
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
     setTrainedRules((current) => [...(rules as TrainedRule[]), ...current]);
-    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages } : currentItem));
+    const trainedIds = new Set(similarItems.map((candidate) => candidate.id));
+    setTrainingQueue((current) => current.map((currentItem) => trainedIds.has(currentItem.id) ? { ...currentItem, status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type, suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages, suggested_flow_id: firstRule.flow_id } : currentItem));
     setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingObservations((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActionTypes((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingFlowIds((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingCountrySelections((current) => { const next = { ...current }; delete next[item.id]; return next; });
-    toast.success(`${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
+    toast.success(similarItems.length > 1 ? `Cenário ensinado para ${similarItems.length} mensagens semelhantes` : `${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
