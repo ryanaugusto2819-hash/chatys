@@ -145,3 +145,11 @@
 - [x] Preservar respostas antigas como a primeira mensagem da sequência
 - [x] Exibir todas as mensagens na ordem correta no teste e no histórico
 - [x] Manter envios reais desativados no modo de teste
+
+# Cenário sem etiqueta
+
+- [x] Adicionar contexto fixo para clientes sem nenhuma etiqueta
+- [x] Permitir mensagens e fluxo próprios nesse contexto
+- [x] Bloquear a regra sem etiqueta quando o cliente possuir qualquer etiqueta
+- [x] Permitir identificar e editar essa condição nas respostas ativas
+- [x] Manter a automação em modo de teste
