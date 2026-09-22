@@ -455,12 +455,14 @@ export type Database = {
       }
       ai_trained_message_rules: {
         Row: {
+          action_type: string
           active: boolean
           agent_config_id: string
           context_notes: string
           created_at: string
           created_by: string | null
           example_message: string
+          expected_action: string
           id: string
           official_response: string
           source_message_id: string | null
@@ -468,12 +470,14 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          action_type?: string
           active?: boolean
           agent_config_id: string
           context_notes?: string
           created_at?: string
           created_by?: string | null
           example_message: string
+          expected_action?: string
           id?: string
           official_response: string
           source_message_id?: string | null
@@ -481,12 +485,14 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          action_type?: string
           active?: boolean
           agent_config_id?: string
           context_notes?: string
           created_at?: string
           created_by?: string | null
           example_message?: string
+          expected_action?: string
           id?: string
           official_response?: string
           source_message_id?: string | null
@@ -532,6 +538,8 @@ export type Database = {
           processed_at: string | null
           source_message_id: string
           status: string
+          suggested_action: string | null
+          suggested_action_type: string | null
           suggested_response: string | null
           updated_at: string
           workspace_id: string
@@ -550,6 +558,8 @@ export type Database = {
           processed_at?: string | null
           source_message_id: string
           status?: string
+          suggested_action?: string | null
+          suggested_action_type?: string | null
           suggested_response?: string | null
           updated_at?: string
           workspace_id: string
@@ -568,6 +578,8 @@ export type Database = {
           processed_at?: string | null
           source_message_id?: string
           status?: string
+          suggested_action?: string | null
+          suggested_action_type?: string | null
           suggested_response?: string | null
           updated_at?: string
           workspace_id?: string
