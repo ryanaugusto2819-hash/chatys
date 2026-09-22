@@ -99,6 +99,13 @@
       "when": 1790114576584,
       "tag": "0013_add_no_tag_trained_condition",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790114800231,
+      "tag": "0014_add_country_to_trained_scenarios",
+      "breakpoints": true
     }
   ]
 }

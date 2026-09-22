@@ -459,6 +459,7 @@ export type Database = {
           active: boolean
           agent_config_id: string
           context_notes: string
+          country_code: string
           created_at: string
           created_by: string | null
           example_message: string
@@ -479,6 +480,7 @@ export type Database = {
           active?: boolean
           agent_config_id: string
           context_notes?: string
+          country_code?: string
           created_at?: string
           created_by?: string | null
           example_message: string
@@ -499,6 +501,7 @@ export type Database = {
           active?: boolean
           agent_config_id?: string
           context_notes?: string
+          country_code?: string
           created_at?: string
           created_by?: string | null
           example_message?: string
@@ -553,6 +556,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           customer_message: string
+          detected_country_code: string | null
           id: string
           match_reason: string
           matched_rule_id: string | null
@@ -575,6 +579,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           customer_message?: string
+          detected_country_code?: string | null
           id?: string
           match_reason?: string
           matched_rule_id?: string | null
@@ -597,6 +602,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           customer_message?: string
+          detected_country_code?: string | null
           id?: string
           match_reason?: string
           matched_rule_id?: string | null
