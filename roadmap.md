@@ -99,4 +99,4 @@
 - [x] Separar visualmente da Central de IAs
 - [x] Remover lista dos demais Atendentes da página exclusiva
 - [x] Manter treinamento, conexões, etiquetas e cenários aprendidos
-- [ ] Validar acesso direto pelo menu
+- [x] Validar acesso direto pelo menu
