@@ -184,3 +184,9 @@
 # Busca de fluxos na Automação Inteligente
 
 - [x] Permitir pesquisar fluxos pelo nome durante o treinamento e a edição
+
+# Histórico detalhado da Automação Inteligente
+
+- [x] Mostrar mensagem recebida, entendimento da IA e ação tomada
+- [x] Exibir a instrução, o exemplo e a observação da base usada na decisão
+- [x] Manter acesso direto ao chat do cliente em cada registro
