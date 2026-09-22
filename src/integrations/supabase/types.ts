@@ -462,9 +462,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           example_message: string
+          excluded_tag_ids: string[]
           expected_action: string
           id: string
           official_response: string
+          required_tag_ids: string[]
           source_message_id: string | null
           updated_at: string
           workspace_id: string
@@ -477,9 +479,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           example_message: string
+          excluded_tag_ids?: string[]
           expected_action?: string
           id?: string
           official_response: string
+          required_tag_ids?: string[]
           source_message_id?: string | null
           updated_at?: string
           workspace_id: string
@@ -492,9 +496,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           example_message?: string
+          excluded_tag_ids?: string[]
           expected_action?: string
           id?: string
           official_response?: string
+          required_tag_ids?: string[]
           source_message_id?: string | null
           updated_at?: string
           workspace_id?: string

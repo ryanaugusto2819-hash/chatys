@@ -70,18 +70,20 @@ Deno.serve(async (req) => {
 
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
-      service.from("contact_tags").select("tags(name)").eq("contact_phone", conversation.contact_phone).limit(30),
-      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
+      service.from("contact_tags").select("tag_id, tags!inner(id, name, workspace_id)").eq("contact_phone", conversation.contact_phone).eq("tags.workspace_id", conversation.workspace_id).limit(30),
+      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response, required_tag_ids, excluded_tag_ids").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
     ]);
 
     const transcript = [...(recentMessages || [])].reverse().map((item) =>
       `${item.sender_type === "customer" ? "CLIENTE" : item.sender_label || "ATENDENTE"}: ${item.content || `[${item.message_type}]`}`
     ).join("\n").slice(-24000);
     const tagNames = (tags || []).map((row) => (row.tags as unknown as { name?: string } | null)?.name).filter(Boolean);
+    const tagIds = (tags || []).map((row) => row.tag_id).filter((value): value is string => typeof value === "string");
     const contextSnapshot = {
       funnel_stage: conversation.funnel_stage,
       sale_registered: Boolean(conversation.sale_registered_at),
       tags: tagNames,
+      tag_ids: tagIds,
       recent_transcript: transcript,
     };
 
@@ -99,7 +101,22 @@ Deno.serve(async (req) => {
 
     if (!rules?.length) return json({ success: true, queued: true, matched: false, reason: "Nenhuma resposta treinada ainda" });
 
-    const catalog = rules.map((rule, index) =>
+    const eligibleRules = rules.filter((rule) => {
+      const required = Array.isArray(rule.required_tag_ids) ? rule.required_tag_ids : [];
+      const excluded = Array.isArray(rule.excluded_tag_ids) ? rule.excluded_tag_ids : [];
+      return required.every((tagId) => tagIds.includes(tagId)) && !excluded.some((tagId) => tagIds.includes(tagId));
+    });
+    if (!eligibleRules.length) {
+      await service.from("ai_training_queue").update({
+        status: "unmatched", confidence: 0, matched_rule_id: null,
+        match_reason: "Nenhum cenário treinado atende às condições de etiquetas deste cliente.",
+        suggested_action: null, suggested_action_type: null, suggested_response: null,
+        processed_at: new Date().toISOString(),
+      }).eq("id", queued.id);
+      return json({ success: true, queued: true, matched: false, reason: "Nenhuma condição de etiqueta compatível", executed: false });
+    }
+
+    const catalog = eligibleRules.map((rule, index) =>
       `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}`
     ).join("\n\n").slice(0, 40000);
     const provider = createOpenAI({
@@ -110,13 +127,13 @@ Deno.serve(async (req) => {
     const result = streamText({
       model: provider.responses("openai/gpt-6-astra"),
       output: Output.object({ schema: MatchSchema }),
-       system: `Você compara a nova mensagem e todo o contexto com cenários treinados. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo for equivalente com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
+       system: `Você compara a nova mensagem e todo o contexto com cenários treinados que já foram previamente autorizados pelas condições determinísticas de etiquetas. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo for equivalente com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
       prompt: `NOVA MENSAGEM:\n${message.content || `[${message.message_type}]`}\n\nETAPA: ${conversation.funnel_stage || "não definida"}\nVENDA REGISTRADA: ${conversation.sale_registered_at ? "sim" : "não"}\nETIQUETAS: ${tagNames.join(", ") || "nenhuma"}\n\nCONTEXTO RECENTE:\n${transcript}\n\nREGRAS TREINADAS:\n${catalog}`,
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
     });
     const output = await result.output;
     const usage = await result.usage;
-    const selectedRule = rules.find((rule) => rule.id === output.matched_rule_id);
+    const selectedRule = eligibleRules.find((rule) => rule.id === output.matched_rule_id);
     const confidence = Math.max(0, Math.min(1, Number(output.confidence) || 0));
     const safeMatch = selectedRule && confidence >= 0.85 ? selectedRule : null;
 
