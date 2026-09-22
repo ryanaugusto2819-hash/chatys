@@ -100,3 +100,9 @@
 - [x] Remover lista dos demais Atendentes da página exclusiva
 - [x] Manter treinamento, conexões, etiquetas e cenários aprendidos
 - [x] Validar acesso direto pelo menu
+
+# Etapas no bloco de treinamento
+
+- [ ] Mostrar Etapa 1, Etapa 2, Pago e Pós-venda após a ação do cenário
+- [ ] Usar a etapa escolhida como condição por etiqueta
+- [ ] Validar salvamento e tela
