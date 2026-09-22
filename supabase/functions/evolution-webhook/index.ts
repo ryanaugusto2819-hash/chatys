@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -609,6 +610,12 @@ async function processMessageEvent(supabase: any, payload: any) {
   if (msgErr) {
     console.error("[evolution-webhook] insert message error:", msgErr);
     return;
+  }
+
+  if (!fromMe && insertedMsg?.id) {
+    triggerTrainedMessageAnalysis(insertedMsg.id).catch((error) =>
+      console.error("[evolution-webhook] trained message analysis error:", error)
+    );
   }
 
   // If media is an encrypted WhatsApp URL (.enc), decrypt via Evolution and re-host on Supabase Storage
