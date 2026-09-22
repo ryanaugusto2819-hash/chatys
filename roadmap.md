@@ -163,3 +163,7 @@
 - [x] Mostrar e editar o país nas respostas ativas e no histórico
 - [x] Mostrar nome, telefone e país nas pendências e no histórico
 - [x] Filtrar pendências, respostas ativas e histórico por país
+
+# Aguardar próxima mensagem
+
+- [x] Permitir treinar a IA para não enviar mensagem nem fluxo e aguardar o próximo contato do cliente
