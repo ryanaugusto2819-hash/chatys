@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tag_id, tags!inner(id, name, workspace_id)").eq("contact_phone", conversation.contact_phone).eq("tags.workspace_id", conversation.workspace_id).limit(30),
-      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response, required_tag_ids, excluded_tag_ids").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
+      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response, flow_id, required_tag_ids, excluded_tag_ids").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
     ]);
 
     const transcript = [...(recentMessages || [])].reverse().map((item) =>
@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
     }
 
     const catalog = eligibleRules.map((rule, index) =>
-      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}`
+      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}\nFLUXO: ${rule.flow_id || "nenhum"}`
     ).join("\n\n").slice(0, 40000);
     const provider = createOpenAI({
       baseURL: "https://ai.gateway.lovable.dev/v1",
@@ -220,7 +220,8 @@ Deno.serve(async (req) => {
       match_reason: output.reason,
        suggested_action: safeMatch?.expected_action || null,
        suggested_action_type: safeMatch?.action_type || null,
-       suggested_response: safeMatch?.action_type === "reply" ? safeMatch.official_response : null,
+       suggested_response: safeMatch && ["reply", "reply_then_flow"].includes(safeMatch.action_type) ? safeMatch.official_response : null,
+       suggested_flow_id: safeMatch?.flow_id || null,
       processed_at: new Date().toISOString(),
     }).eq("id", queued.id);
     if (updateError) return json({ error: updateError.message }, 500);
@@ -240,7 +241,8 @@ Deno.serve(async (req) => {
       matched: Boolean(safeMatch),
        action: safeMatch?.expected_action || null,
        actionType: safeMatch?.action_type || null,
-       response: safeMatch?.action_type === "reply" ? safeMatch.official_response : null,
+        response: safeMatch && ["reply", "reply_then_flow"].includes(safeMatch.action_type) ? safeMatch.official_response : null,
+       flowId: safeMatch?.flow_id || null,
       confidence,
       reason: output.reason,
       transcription: audioTranscription,
