@@ -168,3 +168,8 @@
 
 - [x] Permitir treinar a IA para não enviar mensagem nem fluxo e aguardar o próximo contato do cliente
 - [x] Exibir as etiquetas atuais do lead ou “Sem tag” nas pendências e no histórico
+
+# Imagens na Automação Inteligente
+
+- [x] Carregar imagens privadas recebidas na fila e no histórico
+- [x] Analisar imagens como possível comprovante sem confirmar o pagamento

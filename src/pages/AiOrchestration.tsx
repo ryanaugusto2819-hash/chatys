@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { MediaImage } from '@/components/chat/MediaUrl';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -43,6 +44,7 @@ type TrainingQueueItem = {
   suggested_flow_id?: string | null;
   context_snapshot: Json; created_at: string;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
+  messages?: { media_url?: string | null } | null;
 };
 type TrainedRule = {
   id: string; example_message: string; context_notes: string; expected_action: string;
@@ -167,7 +169,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone), messages(media_url)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
@@ -340,6 +342,16 @@ export default function AiOrchestration({
       const tag = workspaceTags.find((candidate) => candidate.id === id);
       return tag ? [tag.name] : [];
     });
+  };
+  const imageAnalysis = (item: TrainingQueueItem) => {
+    const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot)
+      ? item.context_snapshot as Record<string, Json | undefined>
+      : {};
+    return {
+      isReceipt: snapshot.is_possible_receipt === true,
+      confidence: typeof snapshot.receipt_confidence === 'number' ? snapshot.receipt_confidence : 0,
+      reason: typeof snapshot.receipt_reason === 'string' ? snapshot.receipt_reason : '',
+    };
   };
 
   const toggleTagCondition = (itemId: string, tagId: string, kind: 'required' | 'excluded') => {
@@ -703,6 +715,7 @@ export default function AiOrchestration({
                     {visibleTrainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : visibleTrainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).map((item) => <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><Badge variant={item.status === 'matched' ? 'default' : 'secondary'}>{item.status === 'matched' ? `${Math.round(Number(item.confidence) * 100)}% compatível` : item.status === 'unmatched' ? 'Sem resposta segura' : 'Nova'}</Badge></div>
                       <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
+                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem enviada pelo cliente" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}{analysis.reason && <span className="w-full text-xs text-muted-foreground">{analysis.reason}</span>}</div>; })()}</div>}
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
@@ -737,6 +750,7 @@ export default function AiOrchestration({
                     {visibleTrainingQueue.filter((item) => item.status !== 'pending').length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma decisão registrada neste país.</div> : visibleTrainingQueue.filter((item) => item.status !== 'pending').map((item) => { const result = historyStatus(item); return <div key={`history-${item.id}`} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`history-${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex items-center gap-2">{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem do cliente</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div></div>
+                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem analisada pela IA" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}{analysis.reason && <span className="w-full text-xs text-muted-foreground">{analysis.reason}</span>}</div>; })()}</div>}
                       {item.suggested_action && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Decisão da IA</p><p className="text-sm text-foreground">{item.suggested_action}</p></div>}
                       {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagens selecionadas, na ordem</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-history-${index}`} className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
                        {item.suggested_flow_id && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Fluxo selecionado</p><p className="text-sm text-foreground">{flows.find((flow) => flow.id === item.suggested_flow_id)?.name || 'Fluxo removido ou indisponível'}</p></div>}
