@@ -10,6 +10,11 @@ const MatchSchema = z.object({
   confidence: z.number(),
   reason: z.string(),
 });
+const ReceiptSchema = z.object({
+  is_possible_receipt: z.boolean(),
+  confidence: z.number(),
+  reason: z.string(),
+});
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers });
@@ -63,7 +68,7 @@ async function transcribeAudio(audioUrl: string, lovableKey: string) {
   return text ? { text, error: null } : { text: null, error: "O áudio não contém fala reconhecível" };
 }
 
-async function resolveAudioUrl(service: { storage: { from: (bucket: string) => { createSignedUrl: (path: string, expiresIn: number) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }> } } }, mediaUrl: string) {
+async function resolveMediaUrl(service: { storage: { from: (bucket: string) => { createSignedUrl: (path: string, expiresIn: number) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }> } } }, mediaUrl: string) {
   try {
     const parsed = new URL(mediaUrl);
     const marker = "/chat-media/";
@@ -134,12 +139,38 @@ Deno.serve(async (req) => {
       if (!message.media_url) {
         transcriptionError = "O áudio não possui um arquivo disponível para transcrição";
       } else {
-        const readableAudioUrl = await resolveAudioUrl(service, message.media_url);
+        const readableAudioUrl = await resolveMediaUrl(service, message.media_url);
         const transcription = await transcribeAudio(readableAudioUrl, lovableKey);
         audioTranscription = transcription.text;
         transcriptionError = transcription.error;
         if (audioTranscription) customerMessage = `[Áudio transcrito]: ${audioTranscription}`;
       }
+    }
+    let imageUrl: string | null = null;
+    let isPossibleReceipt: boolean | null = null;
+    let receiptConfidence: number | null = null;
+    let receiptReason: string | null = null;
+    if (message.message_type === "image" && message.media_url) {
+      imageUrl = await resolveMediaUrl(service, message.media_url);
+      const visionProvider = createOpenAI({
+        baseURL: "https://ai.gateway.lovable.dev/v1",
+        apiKey: lovableKey,
+        headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+      });
+      const visionResult = streamText({
+        model: visionProvider.responses("openai/gpt-6-astra"),
+        output: Output.object({ schema: ReceiptSchema }),
+        messages: [{ role: "user", content: [
+          { type: "text", text: "Analise esta imagem. Identifique apenas se ela parece ser um comprovante de pagamento, depósito, transferência, OXXO ou recibo financeiro. Uma imagem pode ser um possível comprovante, mas nunca confirme que o pagamento foi aprovado. Retorne motivo curto e confiança entre 0 e 1." },
+          { type: "image", image: new URL(imageUrl) },
+        ] }],
+        providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
+      });
+      const vision = await visionResult.output;
+      isPossibleReceipt = vision.is_possible_receipt;
+      receiptConfidence = Math.max(0, Math.min(1, Number(vision.confidence) || 0));
+      receiptReason = vision.reason;
+      customerMessage = `${message.content?.trim() || "[Imagem]"}\n[Análise visual: ${isPossibleReceipt ? "possível comprovante" : "não parece comprovante"}; confiança ${Math.round(receiptConfidence * 100)}%; ${receiptReason}]`;
     }
 
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
@@ -162,6 +193,10 @@ Deno.serve(async (req) => {
       recent_transcript: transcript,
       audio_transcription: audioTranscription,
       transcription_error: transcriptionError,
+      media_url: message.media_url,
+      is_possible_receipt: isPossibleReceipt,
+      receipt_confidence: receiptConfidence,
+      receipt_reason: receiptReason,
       detected_country_code: detectedCountryCode,
     };
 
@@ -276,6 +311,7 @@ Deno.serve(async (req) => {
       confidence,
       reason: output.reason,
       transcription: audioTranscription,
+      imageAnalysis: message.message_type === "image" ? { isPossibleReceipt, confidence: receiptConfidence, reason: receiptReason } : null,
       executed: false,
     });
   } catch (error) {

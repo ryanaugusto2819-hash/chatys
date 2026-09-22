@@ -30,11 +30,13 @@ export function MediaImage({
   alt,
   className,
   onClick,
+  loading = "lazy",
 }: {
   src: string;
   alt?: string;
   className?: string;
   onClick?: (resolved: string) => void;
+  loading?: "lazy" | "eager";
 }) {
   const resolved = useResolvedMediaUrl(src);
   return (
@@ -42,7 +44,7 @@ export function MediaImage({
       src={resolved || undefined}
       alt={alt}
       className={className}
-      loading="lazy"
+      loading={loading}
       onClick={() => resolved && onClick?.(resolved)}
     />
   );
