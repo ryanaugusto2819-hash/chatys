@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
 
     const { data: conversation } = await supabase
       .from("conversations")
-      .select("contact_phone, niche_id, connection_config_id, sale_registered_at")
+      .select("contact_phone, niche_id, connection_config_id, sale_registered_at, workspace_id")
       .eq("id", conversationId)
       .single();
 
@@ -630,8 +630,82 @@ Deno.serve(async (req) => {
       } else if (node.node_type === "action") {
         // Handle action nodes internally (no message sending)
         const actionType = config.action_type as string;
+        let actionError: string | null = null;
         
-        if (actionType === "set_funnel_stage") {
+        if (actionType === "add_tag" || actionType === "remove_tag") {
+          let tagId = typeof config.tag_id === "string" ? config.tag_id : "";
+          const configuredTagName = typeof config.tag_name === "string" ? config.tag_name.trim() : "";
+
+          // Imported and legacy flows may only contain the tag name.
+          if (!tagId && configuredTagName) {
+            const { data: tagByName, error: tagByNameError } = await supabase
+              .from("tags")
+              .select("id")
+              .eq("workspace_id", conversation.workspace_id)
+              .ilike("name", configuredTagName)
+              .limit(1)
+              .maybeSingle();
+
+            if (tagByNameError) {
+              actionError = tagByNameError.message;
+            } else if (tagByName) {
+              tagId = tagByName.id;
+            }
+          }
+
+          if (!tagId && !actionError) {
+            actionError = configuredTagName
+              ? `Etiqueta "${configuredTagName}" não encontrada neste workspace`
+              : "Etiqueta não configurada no bloco de ação";
+          } else if (!actionError) {
+            const { data: tag, error: tagLookupError } = await supabase
+              .from("tags")
+              .select("id, name")
+              .eq("id", tagId)
+              .eq("workspace_id", conversation.workspace_id)
+              .maybeSingle();
+
+            if (tagLookupError || !tag) {
+              actionError = tagLookupError?.message || "Etiqueta não encontrada neste workspace";
+            } else if (actionType === "add_tag") {
+              const { data: existingLink, error: existingLinkError } = await supabase
+                .from("contact_tags")
+                .select("id")
+                .eq("contact_phone", conversation.contact_phone)
+                .eq("tag_id", tagId)
+                .eq("workspace_id", conversation.workspace_id)
+                .maybeSingle();
+
+              if (existingLinkError) {
+                actionError = existingLinkError.message;
+              } else if (!existingLink) {
+                const { error: insertTagError } = await supabase.from("contact_tags").insert({
+                  contact_phone: conversation.contact_phone,
+                  tag_id: tagId,
+                  workspace_id: conversation.workspace_id,
+                });
+                if (insertTagError) actionError = insertTagError.message;
+              }
+
+              if (!actionError) {
+                console.log(`[execute-flow] Added tag "${tag.name}" to ${conversation.contact_phone}`);
+              }
+            } else {
+              const { error: removeTagError } = await supabase
+                .from("contact_tags")
+                .delete()
+                .eq("contact_phone", conversation.contact_phone)
+                .eq("tag_id", tagId)
+                .eq("workspace_id", conversation.workspace_id);
+
+              if (removeTagError) {
+                actionError = removeTagError.message;
+              } else {
+                console.log(`[execute-flow] Removed tag "${tag.name}" from ${conversation.contact_phone}`);
+              }
+            }
+          }
+        } else if (actionType === "set_funnel_stage") {
           const stage = (config.funnel_stage as string) || "etapa_1";
           await supabase
             .from("conversations")
@@ -684,7 +758,34 @@ Deno.serve(async (req) => {
             console.log(`[execute-flow] Set billing stage to "${billingStage}" for conversation ${conversationId}`);
           }
         }
-        // Other action types (add_tag, remove_tag, transfer_agent, webhook) can be handled here too
+        // Other action types (transfer_agent, webhook) can be handled here too
+
+        if (actionError) {
+          console.error(`[execute-flow] Action ${actionType} failed on node ${node.id}: ${actionError}`);
+          if (executionId) {
+            await supabase.from("flow_step_logs").insert({
+              execution_id: executionId,
+              node_id: node.id,
+              node_type: node.node_type,
+              node_label: node.label || "Ação",
+              sort_order: node.sort_order,
+              status: "failed",
+              error_message: actionError,
+            });
+            await supabase
+              .from("flow_executions")
+              .update({
+                status: "failed",
+                failed_at_node_id: node.id,
+                completed_nodes: completedCount,
+                completed_at: new Date().toISOString(),
+              })
+              .eq("id", executionId);
+          }
+          failed = true;
+          results.push({ nodeId: node.id, status: "error" });
+          break;
+        }
         
         if (executionId) {
           await supabase.from("flow_step_logs").insert({
