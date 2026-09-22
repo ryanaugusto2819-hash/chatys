@@ -169,6 +169,7 @@ export default function AiOrchestration({
   const [trainingView, setTrainingView] = useState<TrainingView>('waiting');
   const [trainingCountryFilter, setTrainingCountryFilter] = useState<CountryFilter>('any');
   const [flowSearch, setFlowSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -444,6 +445,42 @@ export default function AiOrchestration({
     return null;
   };
   const itemCountry = (item: TrainingQueueItem) => item.detected_country_code || countryFromPhone(item.conversations?.contact_phone);
+  const groupedTrainingQueue = useMemo(() => {
+  const filteredHistory = useMemo(() => {
+  const filteredDecisions = useMemo(() => {
+    if (!historySearch.trim()) return decisions;
+    const query = historySearch.toLowerCase();
+    return decisions.filter((decision) => {
+      const contactName = decision.conversations?.contact_name?.toLowerCase() || "";
+      const contactPhone = decision.conversations?.contact_phone?.toLowerCase() || "";
+      const agent = (AGENT_LABELS[decision.selected_agent] || "").toLowerCase();
+      const action = decision.action.toLowerCase();
+      const reason = decision.reason.toLowerCase();
+      return contactName.includes(query) || contactPhone.includes(query) || agent.includes(query) || action.includes(query) || reason.includes(query);
+    });
+  }, [decisions, historySearch]);
+    const history = trainingQueue.filter((item) => item.status !== "pending" && (trainingCountryFilter === "any" || itemCountry(item) === trainingCountryFilter));
+    if (!historySearch.trim()) return history;
+    const query = historySearch.toLowerCase();
+    return history.filter((item) => {
+      const contactName = item.conversations?.contact_name?.toLowerCase() || "";
+      const contactPhone = item.conversations?.contact_phone?.toLowerCase() || "";
+      const message = item.customer_message.toLowerCase();
+      const tags = snapshotTagNames(item).join(" ").toLowerCase();
+      const action = (item.suggested_action || "").toLowerCase();
+      const flow = flows.find((f) => f.id === item.suggested_flow_id)?.name.toLowerCase() || "";
+      return contactName.includes(query) || contactPhone.includes(query) || message.includes(query) || tags.includes(query) || action.includes(query) || flow.includes(query);
+    });
+  }, [trainingQueue, trainingCountryFilter, historySearch, flows]);
+    const waiting = visibleTrainingQueue.filter((item) => ["pending", "unmatched"].includes(item.status));
+    const groups: Record<string, TrainingQueueItem[]> = {};
+    waiting.forEach((item) => {
+      const key = item.customer_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+    return Object.values(groups);
+  }, [visibleTrainingQueue]);
   const visibleTrainingQueue = trainingQueue.filter((item) => trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter);
   const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
 
