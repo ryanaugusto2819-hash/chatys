@@ -190,3 +190,11 @@
 - [x] Mostrar mensagem recebida, entendimento da IA e ação tomada
 - [x] Exibir a instrução, o exemplo e a observação da base usada na decisão
 - [x] Manter acesso direto ao chat do cliente em cada registro
+
+# Inteligência e auditoria da Automação Inteligente
+
+- [ ] Salvar uma cópia imutável da base usada em cada decisão
+- [ ] Agrupar mensagens semelhantes aguardando treinamento
+- [ ] Permitir avaliar decisões como corretas ou erradas
+- [ ] Detectar e mostrar conflitos entre regras treinadas
+- [ ] Buscar no histórico por lead, telefone, mensagem, etiqueta, ação ou fluxo
