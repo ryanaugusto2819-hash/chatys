@@ -93,3 +93,10 @@
 
 - [x] Adicionar item exclusivo no menu para a IA de Mensagens Treinadas
 - [x] Abrir a área de treinamento existente sem redesenhar a Central
+
+# Painel próprio — Automação Inteligente
+
+- [ ] Separar visualmente da Central de IAs
+- [ ] Remover lista dos demais Atendentes da página exclusiva
+- [ ] Manter treinamento, conexões, etiquetas e cenários aprendidos
+- [ ] Validar acesso direto pelo menu
