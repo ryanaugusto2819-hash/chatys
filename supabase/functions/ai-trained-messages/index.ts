@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tags(name)").eq("contact_phone", conversation.contact_phone).limit(30),
-      service.from("ai_trained_message_rules").select("id, example_message, context_notes, official_response").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
+      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
     ]);
 
     const transcript = [...(recentMessages || [])].reverse().map((item) =>
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     if (!rules?.length) return json({ success: true, queued: true, matched: false, reason: "Nenhuma resposta treinada ainda" });
 
     const catalog = rules.map((rule, index) =>
-      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}`
+      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}`
     ).join("\n\n").slice(0, 40000);
     const provider = createOpenAI({
       baseURL: "https://ai.gateway.lovable.dev/v1",
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     const result = streamText({
       model: provider.responses("openai/gpt-6-astra"),
       output: Output.object({ schema: MatchSchema }),
-      system: `Você compara a nova mensagem com respostas oficiais treinadas. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva respostas. Escolha um ID somente quando houver correspondência inequívoca e segura. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
+       system: `Você compara a nova mensagem e todo o contexto com cenários treinados. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo for equivalente com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
       prompt: `NOVA MENSAGEM:\n${message.content || `[${message.message_type}]`}\n\nETAPA: ${conversation.funnel_stage || "não definida"}\nVENDA REGISTRADA: ${conversation.sale_registered_at ? "sim" : "não"}\nETIQUETAS: ${tagNames.join(", ") || "nenhuma"}\n\nCONTEXTO RECENTE:\n${transcript}\n\nREGRAS TREINADAS:\n${catalog}`,
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
     });
@@ -125,7 +125,9 @@ Deno.serve(async (req) => {
       matched_rule_id: safeMatch?.id || null,
       confidence,
       match_reason: output.reason,
-      suggested_response: safeMatch?.official_response || null,
+       suggested_action: safeMatch?.expected_action || null,
+       suggested_action_type: safeMatch?.action_type || null,
+       suggested_response: safeMatch?.action_type === "reply" ? safeMatch.official_response : null,
       processed_at: new Date().toISOString(),
     }).eq("id", queued.id);
     if (updateError) return json({ error: updateError.message }, 500);
@@ -143,7 +145,9 @@ Deno.serve(async (req) => {
       success: true,
       mode: config.operation_mode,
       matched: Boolean(safeMatch),
-      response: safeMatch?.official_response || null,
+       action: safeMatch?.expected_action || null,
+       actionType: safeMatch?.action_type || null,
+       response: safeMatch?.action_type === "reply" ? safeMatch.official_response : null,
       confidence,
       reason: output.reason,
       executed: false,

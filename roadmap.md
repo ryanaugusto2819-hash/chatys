@@ -83,3 +83,6 @@
 - [x] Preservar a resposta oficial exatamente como cadastrada
 - [x] Permitir ensinar, ignorar, marcar como não responder, editar, desativar e excluir regras
 - [x] Manter toda correspondência no modo de teste sem enviar ao cliente
+- [x] Perguntar o que fazer em cada cenário e qual mensagem literal usar
+- [x] Permitir treinar ações sem resposta, espera, encaminhamento e outras ações
+- [x] Comparar novas mensagens com o contexto completo dos cenários aprendidos
