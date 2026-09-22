@@ -198,3 +198,9 @@
 - [x] Permitir avaliar decisões como corretas ou erradas
 - [x] Detectar e mostrar conflitos entre regras treinadas
 - [x] Buscar no histórico por lead, telefone, mensagem, etiqueta, ação ou fluxo
+
+# Corte de novas conversas no treinamento
+
+- [x] Considerar somente conversas cuja primeira mensagem ocorreu após 22/09/2026 às 20:21 (São Paulo)
+- [x] Ocultar da fila de treinamento conversas iniciadas antes do corte
+- [x] Impedir que novas mensagens de conversas antigas voltem para a fila
