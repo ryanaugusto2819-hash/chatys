@@ -86,3 +86,5 @@
 - [x] Perguntar o que fazer em cada cenário e qual mensagem literal usar
 - [x] Permitir treinar ações sem resposta, espera, encaminhamento e outras ações
 - [x] Comparar novas mensagens com o contexto completo dos cenários aprendidos
+- [x] Adicionar condições obrigatórias e bloqueadoras por etiquetas em cada cenário
+- [x] Filtrar regras por etiquetas antes da comparação de significado
