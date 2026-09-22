@@ -25,6 +25,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BrainCircuit,
+  MessageSquareText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -44,6 +45,7 @@ const adminItems = [
   { to: '/webhook-mappings', icon: Webhook, label: 'Webhooks' },
   { to: '/ai', icon: Bot, label: 'Nichos & IA' },
   { to: '/ai-orchestration', icon: BrainCircuit, label: 'Central de IAs' },
+  { to: '/smart-automation', icon: MessageSquareText, label: 'Automação Inteligente' },
   { to: '/reports', icon: BarChart3, label: 'Relatórios' },
   { to: '/leads', icon: UserSearch, label: 'Extração de Leads' },
   { to: '/activity', icon: Activity, label: 'Atividade (IP)' },

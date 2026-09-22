@@ -91,5 +91,5 @@
 
 # Menu — Automação Inteligente
 
-- [ ] Adicionar item exclusivo no menu para a IA de Mensagens Treinadas
-- [ ] Abrir a área de treinamento existente sem redesenhar a Central
+- [x] Adicionar item exclusivo no menu para a IA de Mensagens Treinadas
+- [x] Abrir a área de treinamento existente sem redesenhar a Central

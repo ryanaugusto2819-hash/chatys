@@ -109,6 +109,7 @@ const App = () => (
                   <Route path="/webhook-mappings" element={<AdminRoute><WebhookMappings /></AdminRoute>} />
                   <Route path="/ai" element={<AdminRoute><AiSettings /></AdminRoute>} />
                   <Route path="/ai-orchestration" element={<AdminRoute><AiOrchestration /></AdminRoute>} />
+                  <Route path="/smart-automation" element={<AdminRoute><AiOrchestration initialAgentKey="trained_messages" /></AdminRoute>} />
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
                   <Route path="/activity" element={<AdminRoute><ActivityReport /></AdminRoute>} />
                   <Route path="/manager-ai" element={<AdminRoute><ManagerAI /></AdminRoute>} />

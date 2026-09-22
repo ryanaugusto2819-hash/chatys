@@ -97,10 +97,10 @@ const readPaymentRules = (value: Json): PaymentRules => {
   };
 };
 
-export default function AiOrchestration() {
+export default function AiOrchestration({ initialAgentKey = 'orchestrator' }: { initialAgentKey?: AgentKey }) {
   const { currentWorkspace } = useWorkspace();
   const [configs, setConfigs] = useState<AgentConfig[]>(defaults);
-  const [selectedKey, setSelectedKey] = useState<AgentKey>('orchestrator');
+  const [selectedKey, setSelectedKey] = useState<AgentKey>(initialAgentKey);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState('');
   const [decisions, setDecisions] = useState<Decision[]>([]);
