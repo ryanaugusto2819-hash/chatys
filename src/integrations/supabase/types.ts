@@ -468,6 +468,7 @@ export type Database = {
           id: string
           official_response: string
           required_tag_ids: string[]
+          response_messages: Json
           source_message_id: string | null
           updated_at: string
           workspace_id: string
@@ -486,6 +487,7 @@ export type Database = {
           id?: string
           official_response: string
           required_tag_ids?: string[]
+          response_messages?: Json
           source_message_id?: string | null
           updated_at?: string
           workspace_id: string
@@ -504,6 +506,7 @@ export type Database = {
           id?: string
           official_response?: string
           required_tag_ids?: string[]
+          response_messages?: Json
           source_message_id?: string | null
           updated_at?: string
           workspace_id?: string
@@ -558,6 +561,7 @@ export type Database = {
           suggested_action_type: string | null
           suggested_flow_id: string | null
           suggested_response: string | null
+          suggested_responses: Json
           updated_at: string
           workspace_id: string
         }
@@ -579,6 +583,7 @@ export type Database = {
           suggested_action_type?: string | null
           suggested_flow_id?: string | null
           suggested_response?: string | null
+          suggested_responses?: Json
           updated_at?: string
           workspace_id: string
         }
@@ -600,6 +605,7 @@ export type Database = {
           suggested_action_type?: string | null
           suggested_flow_id?: string | null
           suggested_response?: string | null
+          suggested_responses?: Json
           updated_at?: string
           workspace_id?: string
         }
