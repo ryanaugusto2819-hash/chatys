@@ -37,6 +37,7 @@ type PaymentRules = { payment_information: string; receipt_flow_id: string; pric
 type TrainingQueueItem = {
   id: string; source_message_id: string; customer_message: string; message_type: string;
   status: string; confidence: number; match_reason: string; suggested_response: string | null;
+  suggested_responses: Json;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
   suggested_flow_id?: string | null;
   context_snapshot: Json; created_at: string;
@@ -45,6 +46,7 @@ type TrainingQueueItem = {
 type TrainedRule = {
   id: string; example_message: string; context_notes: string; expected_action: string;
   action_type: TrainingActionType; official_response: string;
+  response_messages: Json;
   flow_id: string | null;
   required_tag_ids: string[]; excluded_tag_ids: string[];
   active: boolean; updated_at: string;
@@ -123,7 +125,7 @@ export default function AiOrchestration({
   const [trainingQueue, setTrainingQueue] = useState<TrainingQueueItem[]>([]);
   const [trainedRules, setTrainedRules] = useState<TrainedRule[]>([]);
   const [workspaceTags, setWorkspaceTags] = useState<WorkspaceTag[]>([]);
-  const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string>>({});
+  const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string[]>>({});
   const [trainingActions, setTrainingActions] = useState<Record<string, string>>({});
   const [trainingActionTypes, setTrainingActionTypes] = useState<Record<string, TrainingActionType>>({});
   const [trainingFlowIds, setTrainingFlowIds] = useState<Record<string, string>>({});
@@ -150,8 +152,8 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -337,6 +339,28 @@ export default function AiOrchestration({
     return workspaceTags.find((tag) => aliases[label].includes(normalizeTagName(tag.name)));
   };
 
+  const readMessages = (value: Json, fallback = '') => {
+    const messages = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+    return messages.length ? messages : fallback ? [fallback] : [''];
+  };
+
+  const updateTrainingMessage = (key: string, index: number, value: string) => {
+    setTrainingAnswers((current) => {
+      const messages = current[key] || [''];
+      return { ...current, [key]: messages.map((message, messageIndex) => messageIndex === index ? value : message) };
+    });
+  };
+
+  const moveTrainingMessage = (key: string, index: number, direction: -1 | 1) => {
+    setTrainingAnswers((current) => {
+      const messages = [...(current[key] || [''])];
+      const target = index + direction;
+      if (target < 0 || target >= messages.length) return current;
+      [messages[index], messages[target]] = [messages[target], messages[index]];
+      return { ...current, [key]: messages };
+    });
+  };
+
   const historyStatus = (item: TrainingQueueItem) => {
     if (item.status === 'matched') return { label: 'Teste — não enviado', variant: 'default' as const };
     if (item.status === 'unmatched') return { label: 'Sem resposta segura', variant: 'secondary' as const };
@@ -356,11 +380,12 @@ export default function AiOrchestration({
       if (!tag) return [];
       const key = `${item.id}:${tag.id}`;
       const actionType = trainingActionTypes[key] || 'reply';
-      const officialResponse = (trainingAnswers[key] || '').trim();
+      const responseMessages = (trainingAnswers[key] || ['']).map((message) => message.trim()).filter(Boolean);
+      const officialResponse = responseMessages[0] || '';
       const flowId = trainingFlowIds[key] || null;
       const selectedFlow = flows.find((flow) => flow.id === flowId);
       const expectedAction = actionType === 'reply' ? 'Responder com a mensagem oficial.' : actionType === 'flow' ? `Enviar o fluxo ${selectedFlow?.name || ''}.` : `Responder com a mensagem oficial e depois enviar o fluxo ${selectedFlow?.name || ''}.`;
-      return officialResponse || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, actionType, flowId }] : [];
+      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId }] : [];
     });
     if (!variants.length) { toast.error('Configure a ação de pelo menos uma etiqueta'); return; }
     if (variants.some((variant) => ['reply', 'reply_then_flow'].includes(variant.actionType) && !variant.officialResponse)) { toast.error('Preencha a mensagem nas ações que respondem ao cliente'); return; }
@@ -380,6 +405,7 @@ export default function AiOrchestration({
       expected_action: variant.expectedAction,
       action_type: variant.actionType,
       official_response: variant.officialResponse,
+      response_messages: variant.responseMessages,
       flow_id: variant.flowId,
       required_tag_ids: [variant.tag.id],
       excluded_tag_ids: [],
@@ -389,12 +415,13 @@ export default function AiOrchestration({
     const { error: queueError } = await supabase.from('ai_training_queue').update({
       status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type,
       suggested_response: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.official_response : null,
+      suggested_responses: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.response_messages : [],
       suggested_flow_id: firstRule.flow_id, processed_at: new Date().toISOString(),
     }).eq('id', item.id);
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
     setTrainedRules((current) => [...(rules as TrainedRule[]), ...current]);
-    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response } : currentItem));
+    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages } : currentItem));
     setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActionTypes((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
@@ -403,11 +430,13 @@ export default function AiOrchestration({
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
-    if (!rule.example_message.trim() || !rule.expected_action.trim() || (['reply', 'reply_then_flow'].includes(rule.action_type) && !rule.official_response.trim()) || (['flow', 'reply_then_flow'].includes(rule.action_type) && !rule.flow_id)) { toast.error('Preencha a mensagem e o fluxo exigidos pela ação selecionada'); return; }
+    const responseMessages = readMessages(rule.response_messages, rule.official_response).map((message) => message.trim()).filter(Boolean);
+    if (!rule.example_message.trim() || !rule.expected_action.trim() || (['reply', 'reply_then_flow'].includes(rule.action_type) && !responseMessages.length) || (['flow', 'reply_then_flow'].includes(rule.action_type) && !rule.flow_id)) { toast.error('Preencha as mensagens e o fluxo exigidos pela ação selecionada'); return; }
     setTrainingBusyId(rule.id);
     const { error } = await supabase.from('ai_trained_message_rules').update({
       example_message: rule.example_message.trim(), context_notes: rule.context_notes.trim(), expected_action: rule.expected_action.trim(),
-      action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? rule.official_response.trim() : '',
+      action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages[0] : '',
+      response_messages: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages : [],
       flow_id: ['flow', 'reply_then_flow'].includes(rule.action_type) ? rule.flow_id : null,
       required_tag_ids: rule.required_tag_ids, excluded_tag_ids: rule.excluded_tag_ids, active: rule.active,
     }).eq('id', rule.id);
