@@ -161,3 +161,5 @@
 - [x] Adicionar regra geral para qualquer país como alternativa
 - [x] Impedir correspondência com regras específicas de outro país
 - [x] Mostrar e editar o país nas respostas ativas e no histórico
+- [x] Mostrar nome, telefone e país nas pendências e no histórico
+- [x] Filtrar pendências, respostas ativas e histórico por país
