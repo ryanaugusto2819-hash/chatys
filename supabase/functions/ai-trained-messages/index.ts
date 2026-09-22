@@ -5,6 +5,7 @@ import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
 
 const headers = { ...corsHeaders, "Content-Type": "application/json" };
+const TRAINING_CONVERSATION_CUTOFF = "2026-09-22T23:21:00.000Z";
 const MatchSchema = z.object({
   matched_rule_id: z.string().nullable(),
   confidence: z.number(),
@@ -114,6 +115,18 @@ Deno.serve(async (req) => {
       id: string; workspace_id: string; connection_config_id: string | null; funnel_stage: string | null;
       sale_registered_at: string | null; contact_phone: string;
     };
+    const { data: firstMessage, error: firstMessageError } = await service
+      .from("messages")
+      .select("created_at")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (firstMessageError) return json({ error: firstMessageError.message }, 500);
+    const conversationStartedAt = firstMessage?.created_at || message.created_at;
+    if (new Date(conversationStartedAt).getTime() < new Date(TRAINING_CONVERSATION_CUTOFF).getTime()) {
+      return json({ skipped: true, reason: "Conversa iniciada antes do corte da Automação Inteligente" });
+    }
     const { data: config, error: configError } = await service
       .from("ai_agent_configs")
       .select("id, enabled, operation_mode, instructions")
@@ -209,6 +222,7 @@ Deno.serve(async (req) => {
       message_type: message.message_type,
       context_snapshot: contextSnapshot,
       detected_country_code: detectedCountryCode,
+      conversation_started_at: conversationStartedAt,
       status: "pending",
     }, { onConflict: "source_message_id" }).select("id").single();
     if (queueError || !queued) return json({ error: queueError?.message || "Falha ao registrar mensagem para treinamento" }, 500);

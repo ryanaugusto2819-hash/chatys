@@ -557,6 +557,7 @@ export type Database = {
           confidence: number
           context_snapshot: Json
           conversation_id: string
+          conversation_started_at: string | null
           created_at: string
           customer_message: string
           decision_feedback: string | null
@@ -584,6 +585,7 @@ export type Database = {
           confidence?: number
           context_snapshot?: Json
           conversation_id: string
+          conversation_started_at?: string | null
           created_at?: string
           customer_message?: string
           decision_feedback?: string | null
@@ -611,6 +613,7 @@ export type Database = {
           confidence?: number
           context_snapshot?: Json
           conversation_id?: string
+          conversation_started_at?: string | null
           created_at?: string
           customer_message?: string
           decision_feedback?: string | null

@@ -49,7 +49,7 @@ type TrainingQueueItem = {
   detected_country_code?: CountryCode | null;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
   suggested_flow_id?: string | null;
-  context_snapshot: Json; created_at: string;
+  context_snapshot: Json; created_at: string; conversation_started_at?: string | null;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
   messages?: { media_url?: string | null } | null;
   ai_trained_message_rules?: {
@@ -109,6 +109,7 @@ const TRAINING_COUNTRIES: Array<{ code: CountryFilter; label: string; ddi: strin
   { code: 'UY', label: 'Uruguai', ddi: '+598' },
   { code: 'AR', label: 'Argentina', ddi: '+54' },
 ];
+const TRAINING_CONVERSATION_CUTOFF = new Date('2026-09-22T23:21:00.000Z').getTime();
 type TrainingContext = typeof TRAINING_CONTEXTS[number];
 type TaggedTrainingContext = Exclude<TrainingContext, 'Sem etiqueta'>;
 const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
@@ -190,7 +191,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversation_started_at, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
@@ -447,7 +448,11 @@ export default function AiOrchestration({
     return null;
   };
   const itemCountry = (item: TrainingQueueItem) => item.detected_country_code || countryFromPhone(item.conversations?.contact_phone);
-  const visibleTrainingQueue = trainingQueue.filter((item) => trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter);
+  const isEligibleTrainingConversation = (item: TrainingQueueItem) => {
+    const startedAt = item.conversation_started_at ? new Date(item.conversation_started_at).getTime() : 0;
+    return Number.isFinite(startedAt) && startedAt >= TRAINING_CONVERSATION_CUTOFF;
+  };
+  const visibleTrainingQueue = trainingQueue.filter((item) => isEligibleTrainingConversation(item) && (trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter));
   const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
   const normalizedWords = (value: string) => Array.from(new Set(normalizeTagName(value).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((word) => word.length > 2)));
   const messageSimilarity = (left: string, right: string) => {
@@ -803,7 +808,7 @@ export default function AiOrchestration({
               {selectedKey === 'trained_messages' && (
                 <div className="mt-6 space-y-6 border-t border-border pt-5">
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <Button type="button" variant={trainingView === 'waiting' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('waiting')}><Clock3 className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Aguardando treinamento</span><span className="block text-xs opacity-75">{trainingQueue.filter((item) => item.status === 'pending' || item.status === 'unmatched').length} pendentes</span></span></Button>
+                    <Button type="button" variant={trainingView === 'waiting' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('waiting')}><Clock3 className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Aguardando treinamento</span><span className="block text-xs opacity-75">{visibleTrainingQueue.filter((item) => item.status === 'pending' || item.status === 'unmatched').length} pendentes</span></span></Button>
                     <Button type="button" variant={trainingView === 'responses' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('responses')}><MessageSquareText className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Respostas ativas</span><span className="block text-xs opacity-75">{trainedRules.filter((rule) => rule.active).length} editáveis</span></span></Button>
                     <Button type="button" variant={trainingView === 'history' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('history')}><History className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Histórico</span><span className="block text-xs opacity-75">{trainingQueue.filter((item) => item.status !== 'pending').length} decisões</span></span></Button>
                   </div>
