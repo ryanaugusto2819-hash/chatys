@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tag_id, tags!inner(id, name, workspace_id)").eq("contact_phone", conversation.contact_phone).eq("tags.workspace_id", conversation.workspace_id).limit(30),
-      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
+      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
     ]);
 
     const transcript = [...(recentMessages || [])].reverse().map((item) =>
@@ -180,6 +180,7 @@ Deno.serve(async (req) => {
     const eligibleRules = rules.filter((rule) => {
       const required = Array.isArray(rule.required_tag_ids) ? rule.required_tag_ids : [];
       const excluded = Array.isArray(rule.excluded_tag_ids) ? rule.excluded_tag_ids : [];
+      if (rule.requires_no_tags) return tagIds.length === 0;
       return required.every((tagId) => tagIds.includes(tagId)) && !excluded.some((tagId) => tagIds.includes(tagId));
     });
     if (!eligibleRules.length) {
@@ -193,7 +194,7 @@ Deno.serve(async (req) => {
     }
 
     const catalog = eligibleRules.map((rule, index) =>
-      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}\nFLUXO: ${rule.flow_id || "nenhum"}`
+      `${index + 1}. ID: ${rule.id}\nEXEMPLO: ${rule.example_message}\nCONTEXTO: ${rule.context_notes || "não informado"}\nCONDIÇÃO SEM ETIQUETA: ${rule.requires_no_tags ? "sim — exige zero etiquetas" : "não"}\nAÇÃO TREINADA: ${rule.expected_action}\nTIPO: ${rule.action_type}\nFLUXO: ${rule.flow_id || "nenhum"}`
     ).join("\n\n").slice(0, 40000);
     const provider = createOpenAI({
       baseURL: "https://ai.gateway.lovable.dev/v1",
@@ -203,7 +204,7 @@ Deno.serve(async (req) => {
     const result = streamText({
       model: provider.responses("openai/gpt-6-astra"),
       output: Output.object({ schema: MatchSchema }),
-        system: `Você compara a nova mensagem e todo o contexto com cenários treinados previamente para as etiquetas que o cliente já possui. As etiquetas servem somente para escolher qual comportamento e resposta usar: nunca adicione, remova ou altere etiquetas. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo e a condição de etiqueta forem equivalentes com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
+        system: `Você compara a nova mensagem e todo o contexto com cenários treinados previamente para as etiquetas que o cliente já possui. Uma regra marcada como sem etiqueta só pode ser usada quando o cliente não possui absolutamente nenhuma etiqueta. As etiquetas servem somente para escolher qual comportamento e resposta usar: nunca adicione, remova ou altere etiquetas. Compare intenção e significado, inclusive entre português do Brasil e espanhol do México. Considere o contexto recente, etapa, etiquetas e venda. Nunca invente, combine ou reescreva ações ou mensagens. Escolha um ID somente quando o cenário completo e a condição de etiqueta forem equivalentes com segurança. Em dúvida, retorne matched_rule_id null. A confiança deve ficar entre 0 e 1. ${config.instructions || ""}`,
       prompt: `NOVA MENSAGEM:\n${customerMessage}\n\nETAPA: ${conversation.funnel_stage || "não definida"}\nVENDA REGISTRADA: ${conversation.sale_registered_at ? "sim" : "não"}\nETIQUETAS: ${tagNames.join(", ") || "nenhuma"}\n\nCONTEXTO RECENTE:\n${transcript}\n\nREGRAS TREINADAS:\n${catalog}`,
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
     });

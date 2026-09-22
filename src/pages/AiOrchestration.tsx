@@ -49,6 +49,7 @@ type TrainedRule = {
   response_messages: Json;
   flow_id: string | null;
   required_tag_ids: string[]; excluded_tag_ids: string[];
+  requires_no_tags: boolean;
   active: boolean; updated_at: string;
 };
 type TrainingActionType = 'reply' | 'flow' | 'reply_then_flow' | 'no_response' | 'wait' | 'route' | 'other';
@@ -77,7 +78,9 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
 ];
 
 const AGENT_LABELS = Object.fromEntries(AGENTS.map((agent) => [agent.key, agent.name]));
-const TRAINING_CONTEXT_TAGS = ['Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
+const TRAINING_CONTEXTS = ['Sem etiqueta', 'Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
+type TrainingContext = typeof TRAINING_CONTEXTS[number];
+type TaggedTrainingContext = Exclude<TrainingContext, 'Sem etiqueta'>;
 const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
   agent_key: agent.key,
   enabled: agent.key === 'orchestrator',
@@ -153,7 +156,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
       supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -329,8 +332,8 @@ export default function AiOrchestration({
 
   const normalizeTagName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[\s_-]+/g, ' ').trim();
 
-  const findContextTag = (label: typeof TRAINING_CONTEXT_TAGS[number]) => {
-    const aliases: Record<typeof TRAINING_CONTEXT_TAGS[number], string[]> = {
+  const findContextTag = (label: TaggedTrainingContext) => {
+    const aliases: Record<TaggedTrainingContext, string[]> = {
       'Etapa 1': ['etapa 1'],
       'Etapa 2': ['etapa 2'],
       'Pago': ['pago'],
@@ -383,17 +386,18 @@ export default function AiOrchestration({
     if (!currentWorkspace?.id) return;
     const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
     if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
-    const variants = TRAINING_CONTEXT_TAGS.flatMap((label) => {
-      const tag = findContextTag(label);
-      if (!tag) return [];
-      const key = `${item.id}:${tag.id}`;
+    const variants = TRAINING_CONTEXTS.flatMap((label) => {
+      const requiresNoTags = label === 'Sem etiqueta';
+      const tag = requiresNoTags ? null : findContextTag(label);
+      if (!requiresNoTags && !tag) return [];
+      const key = `${item.id}:${requiresNoTags ? 'no-tags' : tag.id}`;
       const actionType = trainingActionTypes[key] || 'reply';
       const responseMessages = (trainingAnswers[key] || ['']).map((message) => message.trim()).filter(Boolean);
       const officialResponse = responseMessages[0] || '';
       const flowId = trainingFlowIds[key] || null;
       const selectedFlow = flows.find((flow) => flow.id === flowId);
       const expectedAction = actionType === 'reply' ? 'Responder com a mensagem oficial.' : actionType === 'flow' ? `Enviar o fluxo ${selectedFlow?.name || ''}.` : `Responder com a mensagem oficial e depois enviar o fluxo ${selectedFlow?.name || ''}.`;
-      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId }] : [];
+      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId, requiresNoTags }] : [];
     });
     if (!variants.length) { toast.error('Configure a ação de pelo menos uma etiqueta'); return; }
     if (variants.some((variant) => ['reply', 'reply_then_flow'].includes(variant.actionType) && !variant.officialResponse)) { toast.error('Preencha a mensagem nas ações que respondem ao cliente'); return; }
@@ -409,14 +413,15 @@ export default function AiOrchestration({
       agent_config_id: trainedConfig.id,
       source_message_id: item.source_message_id,
       example_message: item.customer_message,
-      context_notes: `${contextNotes}\nContexto obrigatório: cliente com etiqueta ${variant.tag.name}.`,
+      context_notes: `${contextNotes}\nContexto obrigatório: ${variant.requiresNoTags ? 'cliente sem nenhuma etiqueta' : `cliente com etiqueta ${variant.tag?.name}`}.`,
       expected_action: variant.expectedAction,
       action_type: variant.actionType,
       official_response: variant.officialResponse,
       response_messages: variant.responseMessages,
       flow_id: variant.flowId,
-      required_tag_ids: [variant.tag.id],
+      required_tag_ids: variant.tag ? [variant.tag.id] : [],
       excluded_tag_ids: [],
+      requires_no_tags: variant.requiresNoTags,
     }))).select();
     const firstRule = rules?.[0];
     if (ruleError || !firstRule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
@@ -446,7 +451,9 @@ export default function AiOrchestration({
       action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages[0] : '',
       response_messages: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages : [],
       flow_id: ['flow', 'reply_then_flow'].includes(rule.action_type) ? rule.flow_id : null,
-      required_tag_ids: rule.required_tag_ids, excluded_tag_ids: rule.excluded_tag_ids, active: rule.active,
+      required_tag_ids: rule.requires_no_tags ? [] : rule.required_tag_ids,
+      excluded_tag_ids: rule.requires_no_tags ? [] : rule.excluded_tag_ids,
+      requires_no_tags: rule.requires_no_tags, active: rule.active,
     }).eq('id', rule.id);
     setTrainingBusyId('');
     if (error) { toast.error(error.message); return; }
@@ -655,7 +662,7 @@ export default function AiOrchestration({
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
                       {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-foreground">Mensagens que seriam selecionadas no teste</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-suggested-${index}`} className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
-                        <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Escolha uma ou mais mensagens, um fluxo ou os dois em sequência para cada etiqueta.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXT_TAGS.map((label) => { const tag = findContextTag(label); const key = `${item.id}:${tag?.id || label}`; const actionType = trainingActionTypes[key] || 'reply'; const messages = trainingAnswers[key] || ['']; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!tag && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Ação nesta etiqueta</label><Select disabled={!tag} value={actionType} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [key]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem></SelectContent></Select></div>{['reply', 'reply_then_flow'].includes(actionType) && <div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-medium text-foreground">Mensagens exatas, na ordem</label><Button type="button" variant="outline" size="sm" disabled={!tag} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: [...messages, ''] }))}><Plus className="mr-1 h-3.5 w-3.5" />Mensagem</Button></div>{messages.map((message, index) => <div key={`${key}-message-${index}`} className="space-y-1 rounded-md border border-border p-2"><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Mensagem {index + 1}</span><div className="flex"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para cima" disabled={index === 0} onClick={() => moveTrainingMessage(key, index, -1)}><ChevronUp className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para baixo" disabled={index === messages.length - 1} onClick={() => moveTrainingMessage(key, index, 1)}><ChevronDown className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Remover mensagem" disabled={messages.length === 1} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: messages.filter((_, messageIndex) => messageIndex !== index) }))}><Trash2 className="h-3.5 w-3.5" /></Button></div></div><Textarea disabled={!tag} value={message} onChange={(event) => updateTrainingMessage(key, index, event.target.value)} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div>)}</div>}{['flow', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Fluxo</label><Select disabled={!tag} value={trainingFlowIds[key] || 'none'} onValueChange={(value) => setTrainingFlowIds((current) => ({ ...current, [key]: value === 'none' ? '' : value }))}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Selecione um fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select></div>}</div>; })}</div></div>
+                        <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Escolha uma ou mais mensagens, um fluxo ou os dois em sequência para cada contexto.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXTS.map((label) => { const withoutTags = label === 'Sem etiqueta'; const tag = withoutTags ? null : findContextTag(label); const available = withoutTags || Boolean(tag); const key = `${item.id}:${withoutTags ? 'no-tags' : tag?.id || label}`; const actionType = trainingActionTypes[key] || 'reply'; const messages = trainingAnswers[key] || ['']; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!available && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}{withoutTags && <span className="text-xs text-muted-foreground">Nenhuma etiqueta</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Ação neste contexto</label><Select disabled={!available} value={actionType} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [key]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem></SelectContent></Select></div>{['reply', 'reply_then_flow'].includes(actionType) && <div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-medium text-foreground">Mensagens exatas, na ordem</label><Button type="button" variant="outline" size="sm" disabled={!available} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: [...messages, ''] }))}><Plus className="mr-1 h-3.5 w-3.5" />Mensagem</Button></div>{messages.map((message, index) => <div key={`${key}-message-${index}`} className="space-y-1 rounded-md border border-border p-2"><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Mensagem {index + 1}</span><div className="flex"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para cima" disabled={index === 0} onClick={() => moveTrainingMessage(key, index, -1)}><ChevronUp className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para baixo" disabled={index === messages.length - 1} onClick={() => moveTrainingMessage(key, index, 1)}><ChevronDown className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Remover mensagem" disabled={messages.length === 1} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: messages.filter((_, messageIndex) => messageIndex !== index) }))}><Trash2 className="h-3.5 w-3.5" /></Button></div></div><Textarea disabled={!available} value={message} onChange={(event) => updateTrainingMessage(key, index, event.target.value)} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div>)}</div>}{['flow', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Fluxo</label><Select disabled={!available} value={trainingFlowIds[key] || 'none'} onValueChange={(value) => setTrainingFlowIds((current) => ({ ...current, [key]: value === 'none' ? '' : value }))}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Selecione um fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select></div>}</div>; })}</div></div>
                         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
                     </div>)}
                   </div>}
@@ -667,9 +674,9 @@ export default function AiOrchestration({
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem de exemplo</label><Textarea value={rule.example_message} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, example_message: event.target.value } : item))} rows={2} /></div>
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Contexto</label><Textarea value={rule.context_notes} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, context_notes: event.target.value } : item))} rows={2} /></div>
                        <div className="space-y-3 rounded-md border border-border bg-background p-3">
-                         <div><p className="text-xs font-medium text-foreground">Condições por etiquetas</p><p className="text-xs text-muted-foreground">Sem etiquetas selecionadas, o cenário pode valer para qualquer cliente.</p></div>
-                         <div><p className="mb-2 text-xs font-medium text-foreground">Deve ter todas</p><div className="flex flex-wrap gap-2">{workspaceTags.map((tag) => <Button key={`rule-required-${rule.id}-${tag.id}`} type="button" size="sm" variant={rule.required_tag_ids.includes(tag.id) ? 'default' : 'outline'} onClick={() => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, required_tag_ids: item.required_tag_ids.includes(tag.id) ? item.required_tag_ids.filter((id) => id !== tag.id) : [...item.required_tag_ids, tag.id], excluded_tag_ids: item.excluded_tag_ids.filter((id) => id !== tag.id) } : item))}><Checkbox checked={rule.required_tag_ids.includes(tag.id)} className="mr-2" />{tag.name}</Button>)}</div></div>
-                         <div><p className="mb-2 text-xs font-medium text-foreground">Não pode ter nenhuma</p><div className="flex flex-wrap gap-2">{workspaceTags.map((tag) => <Button key={`rule-excluded-${rule.id}-${tag.id}`} type="button" size="sm" variant={rule.excluded_tag_ids.includes(tag.id) ? 'destructive' : 'outline'} onClick={() => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, excluded_tag_ids: item.excluded_tag_ids.includes(tag.id) ? item.excluded_tag_ids.filter((id) => id !== tag.id) : [...item.excluded_tag_ids, tag.id], required_tag_ids: item.required_tag_ids.filter((id) => id !== tag.id) } : item))}><Checkbox checked={rule.excluded_tag_ids.includes(tag.id)} className="mr-2" />{tag.name}</Button>)}</div></div>
+                          <div><p className="text-xs font-medium text-foreground">Condições por etiquetas</p><p className="text-xs text-muted-foreground">A opção sem etiqueta exige que o cliente não possua nenhuma etiqueta.</p></div>
+                          <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground"><Checkbox checked={rule.requires_no_tags} onCheckedChange={(checked) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, requires_no_tags: checked === true, required_tag_ids: checked ? [] : item.required_tag_ids, excluded_tag_ids: checked ? [] : item.excluded_tag_ids } : item))} />Cliente sem nenhuma etiqueta</label>
+                          {!rule.requires_no_tags && <><div><p className="mb-2 text-xs font-medium text-foreground">Deve ter todas</p><div className="flex flex-wrap gap-2">{workspaceTags.map((tag) => <Button key={`rule-required-${rule.id}-${tag.id}`} type="button" size="sm" variant={rule.required_tag_ids.includes(tag.id) ? 'default' : 'outline'} onClick={() => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, required_tag_ids: item.required_tag_ids.includes(tag.id) ? item.required_tag_ids.filter((id) => id !== tag.id) : [...item.required_tag_ids, tag.id], excluded_tag_ids: item.excluded_tag_ids.filter((id) => id !== tag.id) } : item))}><Checkbox checked={rule.required_tag_ids.includes(tag.id)} className="mr-2" />{tag.name}</Button>)}</div></div><div><p className="mb-2 text-xs font-medium text-foreground">Não pode ter nenhuma</p><div className="flex flex-wrap gap-2">{workspaceTags.map((tag) => <Button key={`rule-excluded-${rule.id}-${tag.id}`} type="button" size="sm" variant={rule.excluded_tag_ids.includes(tag.id) ? 'destructive' : 'outline'} onClick={() => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, excluded_tag_ids: item.excluded_tag_ids.includes(tag.id) ? item.excluded_tag_ids.filter((id) => id !== tag.id) : [...item.excluded_tag_ids, tag.id], required_tag_ids: item.required_tag_ids.filter((id) => id !== tag.id) } : item))}><Checkbox checked={rule.excluded_tag_ids.includes(tag.id)} className="mr-2" />{tag.name}</Button>)}</div></div></>}
                        </div>
                        <div><label className="mb-1.5 block text-xs font-medium text-foreground">Ação correta neste cenário</label><Textarea value={rule.expected_action} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, expected_action: event.target.value } : item))} rows={3} /></div>
                         <div><label className="mb-1.5 block text-xs font-medium text-foreground">Tipo de ação</label><Select value={rule.action_type} onValueChange={(value: TrainingActionType) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, action_type: value } : item))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem><SelectItem value="no_response">Não responder</SelectItem><SelectItem value="wait">Aguardar</SelectItem><SelectItem value="route">Encaminhar</SelectItem><SelectItem value="other">Outra ação</SelectItem></SelectContent></Select></div>
