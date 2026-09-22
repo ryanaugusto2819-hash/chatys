@@ -80,6 +80,24 @@ interface ConnectionInfo {
 const statusFilters = ['all', 'last_customer'] as const;
 const statusLabels: Record<string, string> = { all: 'Todos', last_customer: 'Última Msg Cliente' };
 
+const PHONE_COUNTRIES = [
+  { ddi: '598', code: 'UY', name: 'Uruguai', flag: '🇺🇾' },
+  { ddi: '595', code: 'PY', name: 'Paraguai', flag: '🇵🇾' },
+  { ddi: '593', code: 'EC', name: 'Equador', flag: '🇪🇨' },
+  { ddi: '591', code: 'BO', name: 'Bolívia', flag: '🇧🇴' },
+  { ddi: '57', code: 'CO', name: 'Colômbia', flag: '🇨🇴' },
+  { ddi: '56', code: 'CL', name: 'Chile', flag: '🇨🇱' },
+  { ddi: '55', code: 'BR', name: 'Brasil', flag: '🇧🇷' },
+  { ddi: '54', code: 'AR', name: 'Argentina', flag: '🇦🇷' },
+  { ddi: '52', code: 'MX', name: 'México', flag: '🇲🇽' },
+  { ddi: '51', code: 'PE', name: 'Peru', flag: '🇵🇪' },
+] as const;
+
+const getPhoneCountry = (phone: string) => {
+  const digits = phone.replace(/\D/g, '').replace(/^00/, '');
+  return PHONE_COUNTRIES.find((country) => digits.startsWith(country.ddi)) || null;
+};
+
 // ─── Memoized conversation item ───
 interface ConversationItemProps {
   conversation: InboxConversation;
@@ -90,6 +108,7 @@ interface ConversationItemProps {
 
 const ConversationItem = memo(function ConversationItem({ conversation: c, isSelected, connectionInfo, hiddenTagIds, onClick }: ConversationItemProps & { hiddenTagIds: Set<string> }) {
   const cTags = (c.contact_tags || []).filter(t => !hiddenTagIds.has(t.tag_id));
+  const country = getPhoneCountry(c.contact_phone);
 
   return (
     <button
@@ -107,6 +126,28 @@ const ConversationItem = memo(function ConversationItem({ conversation: c, isSel
         <div className="flex items-center justify-between mb-0.5">
           <div className="flex items-center gap-1.5 min-w-0">
             <p className={`text-sm font-semibold truncate ${c.unread_count > 0 ? 'text-card-foreground' : 'text-card-foreground/80'}`}>{c.contact_name}</p>
+             {country && (
+               <TooltipProvider delayDuration={200}>
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                       <span aria-hidden="true">{country.flag}</span>{country.code}
+                     </span>
+                   </TooltipTrigger>
+                   <TooltipContent>{country.name} ({country.ddi.startsWith('+') ? country.ddi : `+${country.ddi}`})</TooltipContent>
+                 </Tooltip>
+               </TooltipProvider>
+             )}
+             {cTags.map(t => (
+               <span
+                 key={t.id}
+                 className="inline-flex max-w-24 shrink-0 items-center truncate rounded-full px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
+                 style={{ backgroundColor: t.color }}
+                 title={t.name}
+               >
+                 {t.name}
+               </span>
+             ))}
             <ConnectionBadge conn={connectionInfo} />
           </div>
           <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
@@ -116,15 +157,6 @@ const ConversationItem = memo(function ConversationItem({ conversation: c, isSel
         <p className={`text-xs truncate ${c.unread_count > 0 ? 'text-card-foreground font-medium' : 'text-muted-foreground'}`}>{c.last_message}</p>
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <StatusBadge status={c.status as 'new' | 'pending' | 'active' | 'resolved'} />
-          {cTags.map(t => (
-            <span
-              key={t.id}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-              style={{ backgroundColor: t.color }}
-            >
-              {t.name}
-            </span>
-          ))}
           {c.unread_count > 0 && (
             <span className="ml-auto h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
           )}
