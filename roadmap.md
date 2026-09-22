@@ -180,3 +180,7 @@
 - [x] Adicionar uma observação interna separada para cada ação treinada
 - [x] Permitir editar a observação nas respostas ativas
 - [x] Usar a observação na comparação da IA sem enviá-la ao cliente
+
+# Busca de fluxos na Automação Inteligente
+
+- [x] Permitir pesquisar fluxos pelo nome durante o treinamento e a edição
