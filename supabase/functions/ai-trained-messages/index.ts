@@ -53,6 +53,22 @@ async function transcribeAudio(audioUrl: string, lovableKey: string) {
   return text ? { text, error: null } : { text: null, error: "O áudio não contém fala reconhecível" };
 }
 
+async function resolveAudioUrl(service: ReturnType<typeof createClient>, mediaUrl: string) {
+  try {
+    const parsed = new URL(mediaUrl);
+    const marker = "/chat-media/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return mediaUrl;
+    const objectPath = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    const { data, error } = await service.storage.from("chat-media").createSignedUrl(objectPath, 600);
+    if (error || !data?.signedUrl) throw new Error(error?.message || "Não foi possível liberar o áudio para leitura");
+    return data.signedUrl;
+  } catch (error) {
+    if (error instanceof TypeError) return mediaUrl;
+    throw error;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
@@ -108,7 +124,8 @@ Deno.serve(async (req) => {
       if (!message.media_url) {
         transcriptionError = "O áudio não possui um arquivo disponível para transcrição";
       } else {
-        const transcription = await transcribeAudio(message.media_url, lovableKey);
+        const readableAudioUrl = await resolveAudioUrl(service, message.media_url);
+        const transcription = await transcribeAudio(readableAudioUrl, lovableKey);
         audioTranscription = transcription.text;
         transcriptionError = transcription.error;
         if (audioTranscription) customerMessage = `[Áudio transcrito]: ${audioTranscription}`;
