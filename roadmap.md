@@ -174,3 +174,9 @@
 - [x] Carregar imagens privadas recebidas na fila e no histórico
 - [x] Analisar imagens como possível comprovante sem confirmar o pagamento
 - [x] Abrir diretamente a conversa do cliente pela pendência ou pelo histórico
+
+# Observação contextual por ação
+
+- [x] Adicionar uma observação interna separada para cada ação treinada
+- [x] Permitir editar a observação nas respostas ativas
+- [x] Usar a observação na comparação da IA sem enviá-la ao cliente

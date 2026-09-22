@@ -455,6 +455,7 @@ export type Database = {
       }
       ai_trained_message_rules: {
         Row: {
+          action_observation: string
           action_type: string
           active: boolean
           agent_config_id: string
@@ -476,6 +477,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          action_observation?: string
           action_type?: string
           active?: boolean
           agent_config_id: string
@@ -497,6 +499,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          action_observation?: string
           action_type?: string
           active?: boolean
           agent_config_id?: string
