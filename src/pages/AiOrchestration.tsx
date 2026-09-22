@@ -447,63 +447,74 @@ export default function AiOrchestration({
     return null;
   };
   const itemCountry = (item: TrainingQueueItem) => item.detected_country_code || countryFromPhone(item.conversations?.contact_phone);
-  const groupedTrainingQueue = useMemo(() => {
-  const filteredHistory = useMemo(() => {
-  const filteredDecisions = useMemo(() => {
+  const visibleTrainingQueue = trainingQueue.filter((item) => trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter);
+  const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
+  const normalizedWords = (value: string) => Array.from(new Set(normalizeTagName(value).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((word) => word.length > 2)));
+  const messageSimilarity = (left: string, right: string) => {
+    const leftWords = normalizedWords(left);
+    const rightWords = normalizedWords(right);
+    if (!leftWords.length || !rightWords.length) return 0;
+    const intersection = leftWords.filter((word) => rightWords.includes(word)).length;
+    return intersection / Math.max(leftWords.length, rightWords.length);
+  };
   const ruleConflicts = useMemo(() => {
     const conflicts: Record<string, string[]> = {};
     trainedRules.forEach((rule, index) => {
-      const normalized = rule.example_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       trainedRules.forEach((other, otherIndex) => {
-        if (index === otherIndex) return;
-        const otherNormalized = other.example_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (normalized === otherNormalized && rule.country_code === other.country_code) {
-          const tagsOverlap = rule.requires_no_tags && other.requires_no_tags || 
-            rule.required_tag_ids.some(id => other.required_tag_ids.includes(id));
-          if (tagsOverlap) {
-            if (!conflicts[rule.id]) conflicts[rule.id] = [];
-            conflicts[rule.id].push(other.id);
-          }
-        }
+        if (index >= otherIndex || !rule.active || !other.active) return;
+        const countryOverlap = rule.country_code === other.country_code || rule.country_code === 'any' || other.country_code === 'any';
+        const tagsOverlap = (rule.requires_no_tags && other.requires_no_tags)
+          || (!rule.requires_no_tags && !other.requires_no_tags && (rule.required_tag_ids.length === 0 || other.required_tag_ids.length === 0 || rule.required_tag_ids.some((id) => other.required_tag_ids.includes(id))));
+        if (!countryOverlap || !tagsOverlap || messageSimilarity(rule.example_message, other.example_message) < 0.65) return;
+        conflicts[rule.id] = [...(conflicts[rule.id] || []), other.id];
+        conflicts[other.id] = [...(conflicts[other.id] || []), rule.id];
       });
     });
     return conflicts;
   }, [trainedRules]);
-    if (!historySearch.trim()) return decisions;
-    const query = historySearch.toLowerCase();
-    return decisions.filter((decision) => {
-      const contactName = decision.conversations?.contact_name?.toLowerCase() || "";
-      const contactPhone = decision.conversations?.contact_phone?.toLowerCase() || "";
-      const agent = (AGENT_LABELS[decision.selected_agent] || "").toLowerCase();
-      const action = decision.action.toLowerCase();
-      const reason = decision.reason.toLowerCase();
-      return contactName.includes(query) || contactPhone.includes(query) || agent.includes(query) || action.includes(query) || reason.includes(query);
-    });
-  }, [decisions, historySearch]);
+  const filteredDecisions = decisions;
+  const snapshotRule = (item: TrainingQueueItem) => {
+    const raw = item.matched_rule_snapshot && typeof item.matched_rule_snapshot === 'object' && !Array.isArray(item.matched_rule_snapshot)
+      ? item.matched_rule_snapshot as Record<string, Json | undefined>
+      : {};
+    if (typeof raw.example_message !== 'string') return null;
+    return {
+      example_message: raw.example_message,
+      context_notes: typeof raw.context_notes === 'string' ? raw.context_notes : '',
+      action_observation: typeof raw.action_observation === 'string' ? raw.action_observation : '',
+      country_code: typeof raw.country_code === 'string' ? raw.country_code : 'any',
+    };
+  };
+  const filteredHistory = useMemo(() => {
     const history = trainingQueue.filter((item) => item.status !== "pending" && (trainingCountryFilter === "any" || itemCountry(item) === trainingCountryFilter));
     if (!historySearch.trim()) return history;
-    const query = historySearch.toLowerCase();
+    const query = normalizeTagName(historySearch);
     return history.filter((item) => {
-      const contactName = item.conversations?.contact_name?.toLowerCase() || "";
-      const contactPhone = item.conversations?.contact_phone?.toLowerCase() || "";
-      const message = item.customer_message.toLowerCase();
-      const tags = snapshotTagNames(item).join(" ").toLowerCase();
-      const action = (item.suggested_action || "").toLowerCase();
-      const flow = flows.find((f) => f.id === item.suggested_flow_id)?.name.toLowerCase() || "";
-      return contactName.includes(query) || contactPhone.includes(query) || message.includes(query) || tags.includes(query) || action.includes(query) || flow.includes(query);
+      const searchable = [item.conversations?.contact_name, item.conversations?.contact_phone, item.customer_message, ...snapshotTagNames(item), item.suggested_action, ...readMessages(item.suggested_responses, item.suggested_response || ''), flows.find((flow) => flow.id === item.suggested_flow_id)?.name].filter(Boolean).join(' ');
+      return normalizeTagName(searchable).includes(query);
     });
   }, [trainingQueue, trainingCountryFilter, historySearch, flows]);
+  const groupedTrainingQueue = useMemo(() => {
     const waiting = visibleTrainingQueue.filter((item) => ["pending", "unmatched"].includes(item.status));
-    const groups: Record<string, TrainingQueueItem[]> = {};
+    const groups: TrainingQueueItem[][] = [];
     waiting.forEach((item) => {
-      const key = item.customer_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
+      const group = groups.find((candidate) => itemCountry(candidate[0]) === itemCountry(item) && messageSimilarity(candidate[0].customer_message, item.customer_message) >= 0.65);
+      if (group) group.push(item);
+      else groups.push([item]);
     });
-    return Object.values(groups);
+    return groups;
   }, [visibleTrainingQueue]);
-  const visibleTrainingQueue = trainingQueue.filter((item) => trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter);
-  const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
+
+  const setDecisionFeedback = async (item: TrainingQueueItem, feedback: 'correct' | 'incorrect') => {
+    const nextFeedback = item.decision_feedback === feedback ? null : feedback;
+    setTrainingBusyId(item.id);
+    const { data: authData } = await supabase.auth.getUser();
+    const { error } = await supabase.from('ai_training_queue').update({ decision_feedback: nextFeedback, feedback_at: nextFeedback ? new Date().toISOString() : null, feedback_by: nextFeedback ? authData.user?.id || null : null }).eq('id', item.id);
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    setTrainingQueue((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, decision_feedback: nextFeedback } : candidate));
+    toast.success(nextFeedback === 'correct' ? 'Decisão marcada como correta' : nextFeedback === 'incorrect' ? 'Decisão marcada como errada' : 'Avaliação removida');
+  };
 
   const trainFromMessage = async (item: TrainingQueueItem) => {
     if (!currentWorkspace?.id) return;
@@ -652,7 +663,6 @@ export default function AiOrchestration({
               <div className="h-2.5 w-2.5 rounded-full bg-success" />
               <div><p className="text-sm font-medium text-foreground">Proteção contra conflitos</p><p className="text-xs text-muted-foreground">Uma decisão por mensagem</p></div>
             </div>
-          </div>
         </section>}
 
         {standalone && (
@@ -791,9 +801,8 @@ export default function AiOrchestration({
 
                   {trainingView === 'waiting' && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Novos cenários para ensinar</p><p className="text-xs text-muted-foreground">A IA analisa a mensagem e o contexto, depois pergunta qual ação tomar e qual mensagem usar.</p></div>
-                    {groupedTrainingQueue.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : groupedTrainingQueue.map((group) => { const item = group[0]; <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                    {groupedTrainingQueue.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : groupedTrainingQueue.map((group) => { const item = group[0]; return <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
 {group.length > 1 && <Badge variant="secondary">{group.length} mensagens similares</Badge>}
-                      <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex items-center gap-2">{group.length > 1 && <Badge variant="secondary">{group.length} mensagens similares</Badge>}<Button type="button" variant="outline" size="sm" onClick={() => navigate(`/conversations/${item.conversation_id}`)}><MessageCircle className="mr-2 h-4 w-4" />Abrir conversa</Button><Badge variant={item.status === 'matched' ? 'default' : 'secondary'}>{item.status === 'matched' ? `${Math.round(Number(item.confidence) * 100)}% compatível` : item.status === 'unmatched' ? 'Sem resposta segura' : 'Nova'}</Badge></div></div>
                       <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
                       {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem enviada pelo cliente" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Aguardando análise visual</Badge>; })()}</div>}
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
@@ -809,7 +818,6 @@ export default function AiOrchestration({
                     <div><p className="text-sm font-medium text-foreground">Cenários aprendidos</p><p className="text-xs text-muted-foreground">Revise o cenário, a ação e a mensagem literal. Desative uma regra para parar de usá-la sem excluí-la.</p></div>
                     {visibleTrainedRules.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma resposta aprendida neste país.</div> : visibleTrainedRules.map((rule) => <div key={rule.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       {ruleConflicts[rule.id] && <div className="mb-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive"><ShieldCheck className="h-3 w-3" /><span>Possível conflito com outra regra aprendida</span></div>}
-{ruleConflicts[rule.id] && <div className="mb-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive"><ShieldCheck className="h-3 w-3" /><span>Possível conflito com outra regra aprendida</span></div>}
                       <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Switch checked={rule.active} onCheckedChange={(active) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, active } : item))} /><span className="text-sm font-medium text-foreground">{rule.active ? 'Ativa' : 'Desativada'}</span></div><Button type="button" variant="ghost" size="icon" title="Excluir regra" onClick={() => void deleteTrainedRule(rule.id)}><Trash2 className="h-4 w-4" /></Button></div>
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem de exemplo</label><Textarea value={rule.example_message} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, example_message: event.target.value } : item))} rows={2} /></div>
                       <div><label className="mb-1.5 block text-xs font-medium text-foreground">Contexto</label><Textarea value={rule.context_notes} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, context_notes: event.target.value } : item))} rows={2} /></div>
@@ -830,7 +838,6 @@ export default function AiOrchestration({
 
                   {trainingView === "history" && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Histórico de decisões e envios</p><p className="text-xs text-muted-foreground">Cada análise mostra o que a IA decidiu e se a mensagem foi realmente enviada.</p></div><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9" placeholder="Buscar no histórico por lead, telefone, mensagem, tags, ação ou fluxo..." /></div>
-<div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9" placeholder="Buscar no histórico por lead, telefone, mensagem, tags, ação ou fluxo..." /></div>
                     {filteredHistory.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma decisão registrada neste país.</div> : filteredHistory.map((item) => { const result = historyStatus(item); const matchedRule = item.ai_trained_message_rules || trainedRules.find((rule) => rule.id === item.matched_rule_id); return <div key={`history-${item.id}`} className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`history-${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => navigate(`/conversations/${item.conversation_id}`)}><MessageCircle className="mr-2 h-4 w-4" />Abrir conversa</Button>{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
 <div className="flex items-center gap-1 border-l border-border pl-2"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Decisão correta"><ChevronUp className="h-4 w-4 text-success" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Decisão incorreta"><ChevronDown className="h-4 w-4 text-destructive" /></Button></div>
@@ -872,9 +879,8 @@ export default function AiOrchestration({
           <div className="mb-4"><h3 className="font-semibold text-foreground">Histórico de decisões</h3><p className="text-sm text-muted-foreground">Motivo, confiança e bloqueios usados pela Orquestradora.</p></div>
           <div className="mb-4 relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9" placeholder="Buscar por lead, agente, motivo ou ação..." /></div>
 <div className="mb-4 relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9" placeholder="Buscar no histórico por lead, telefone, mensagem, tags, ação ou fluxo..." /></div>
-          {filteredDecisions.length === 0 ? <div className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : <div className="overflow-hidden rounded-md border border-border bg-card">{filteredDecisions.map((decision) => <div key={decision.id} className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[180px_160px_1fr_90px] md:items-center"><div><p className="text-sm font-medium text-foreground">{decision.conversations?.contact_name || decision.conversations?.contact_phone || 'Conversa'}</p><p className="text-xs text-muted-foreground">{new Date(decision.created_at).toLocaleString('pt-BR')}</p></div><div><Badge variant={decision.selected_agent === 'none' ? 'secondary' : 'default'}>{AGENT_LABELS[decision.selected_agent] || 'Nenhuma ação'}</Badge><p className="mt-1 text-xs text-muted-foreground">{decision.action === 'recommend_only' ? 'Somente recomendação' : decision.action}</p></div><div><p className="text-sm text-foreground">{decision.reason}</p>{decision.blockers?.length > 0 && <p className="mt-1 text-xs text-destructive">{decision.blockers.join(' · ')}</p>}</div><div className="text-right"><p className="text-sm font-semibold text-foreground">{Math.round(Number(decision.confidence) * 100)}%</p><p className="text-xs text-muted-foreground">confiança</p></div></div>)}</div>}
+          {filteredDecisions.length === 0 ? <div className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : <div className="overflow-hidden rounded-md border border-border bg-card">{filteredDecisions.map((decision) => <div key={decision.id} className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[180px_160px_1fr_90px] md:items-center"><div><p className="text-sm font-medium text-foreground">{decision.conversations?.contact_name || decision.conversations?.contact_phone || 'Conversa'}</p><p className="text-xs text-muted-foreground">{new Date(decision.created_at).toLocaleString('pt-BR')}</p></div><div><Badge variant={decision.selected_agent === 'none' ? 'secondary' : 'default'}>{AGENT_LABELS[decision.selected_agent] || 'Nenhuma ação'}</Badge><p className="mt-1 text-xs text-muted-foreground">{decision.action === 'recommend_only' ? 'Somente recomendação' : decision.action}</p></div><div><p className="text-sm text-foreground">{decision.reason}</p>{decision.blockers?.length > 0 && <p className="mt-1 text-xs text-destructive">{decision.blockers.join(' · ')}</p>}</div><div className="flex items-center gap-1 mr-4"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Decisão correta"><ChevronUp className="h-4 w-4 text-success" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Decisão incorreta"><ChevronDown className="h-4 w-4 text-destructive" /></Button></div>\1{Math.round(Number(decision.confidence) * 100)}%</p><p className="text-xs text-muted-foreground">confiança</p></div></div>)}</div>}
         </section>}
       </div>
-    </div>
   );
 }
