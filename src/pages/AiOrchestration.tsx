@@ -38,16 +38,18 @@ type TrainingQueueItem = {
   id: string; source_message_id: string; customer_message: string; message_type: string;
   status: string; confidence: number; match_reason: string; suggested_response: string | null;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
+  suggested_flow_id?: string | null;
   context_snapshot: Json; created_at: string;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
 };
 type TrainedRule = {
   id: string; example_message: string; context_notes: string; expected_action: string;
   action_type: TrainingActionType; official_response: string;
+  flow_id: string | null;
   required_tag_ids: string[]; excluded_tag_ids: string[];
   active: boolean; updated_at: string;
 };
-type TrainingActionType = 'reply' | 'no_response' | 'wait' | 'route' | 'other';
+type TrainingActionType = 'reply' | 'flow' | 'reply_then_flow' | 'no_response' | 'wait' | 'route' | 'other';
 type TrainingView = 'waiting' | 'responses' | 'history';
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
@@ -124,6 +126,7 @@ export default function AiOrchestration({
   const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string>>({});
   const [trainingActions, setTrainingActions] = useState<Record<string, string>>({});
   const [trainingActionTypes, setTrainingActionTypes] = useState<Record<string, TrainingActionType>>({});
+  const [trainingFlowIds, setTrainingFlowIds] = useState<Record<string, string>>({});
   const [trainingRequiredTags, setTrainingRequiredTags] = useState<Record<string, string[]>>({});
   const [trainingExcludedTags, setTrainingExcludedTags] = useState<Record<string, string[]>>({});
   const [trainingBusyId, setTrainingBusyId] = useState('');
@@ -147,8 +150,8 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -352,12 +355,16 @@ export default function AiOrchestration({
       const tag = findContextTag(label);
       if (!tag) return [];
       const key = `${item.id}:${tag.id}`;
-      const expectedAction = (trainingActions[key] || '').trim();
+      const actionType = trainingActionTypes[key] || 'reply';
       const officialResponse = (trainingAnswers[key] || '').trim();
-      return expectedAction || officialResponse ? [{ label, tag, key, expectedAction, officialResponse }] : [];
+      const flowId = trainingFlowIds[key] || null;
+      const selectedFlow = flows.find((flow) => flow.id === flowId);
+      const expectedAction = actionType === 'reply' ? 'Responder com a mensagem oficial.' : actionType === 'flow' ? `Enviar o fluxo ${selectedFlow?.name || ''}.` : `Responder com a mensagem oficial e depois enviar o fluxo ${selectedFlow?.name || ''}.`;
+      return officialResponse || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, actionType, flowId }] : [];
     });
-    if (!variants.length) { toast.error('Preencha o comportamento e a mensagem de pelo menos uma etiqueta'); return; }
-    if (variants.some((variant) => !variant.expectedAction || !variant.officialResponse)) { toast.error('Preencha o comportamento e a mensagem nas etiquetas utilizadas'); return; }
+    if (!variants.length) { toast.error('Configure a ação de pelo menos uma etiqueta'); return; }
+    if (variants.some((variant) => ['reply', 'reply_then_flow'].includes(variant.actionType) && !variant.officialResponse)) { toast.error('Preencha a mensagem nas ações que respondem ao cliente'); return; }
+    if (variants.some((variant) => ['flow', 'reply_then_flow'].includes(variant.actionType) && !variant.flowId)) { toast.error('Selecione o fluxo nas ações que executam um fluxo'); return; }
     setTrainingBusyId(item.id);
     const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot)
       ? item.context_snapshot as Record<string, Json | undefined>
@@ -371,16 +378,18 @@ export default function AiOrchestration({
       example_message: item.customer_message,
       context_notes: `${contextNotes}\nContexto obrigatório: cliente com etiqueta ${variant.tag.name}.`,
       expected_action: variant.expectedAction,
-      action_type: 'reply',
+      action_type: variant.actionType,
       official_response: variant.officialResponse,
+      flow_id: variant.flowId,
       required_tag_ids: [variant.tag.id],
       excluded_tag_ids: [],
     }))).select();
     const firstRule = rules?.[0];
     if (ruleError || !firstRule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
     const { error: queueError } = await supabase.from('ai_training_queue').update({
-      status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: 'reply',
-      suggested_response: firstRule.official_response, processed_at: new Date().toISOString(),
+      status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type,
+      suggested_response: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.official_response : null,
+      suggested_flow_id: firstRule.flow_id, processed_at: new Date().toISOString(),
     }).eq('id', item.id);
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
@@ -388,15 +397,18 @@ export default function AiOrchestration({
     setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response } : currentItem));
     setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
+    setTrainingActionTypes((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
+    setTrainingFlowIds((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     toast.success(`${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
-    if (!rule.example_message.trim() || !rule.expected_action.trim() || (rule.action_type === 'reply' && !rule.official_response.trim())) { toast.error('Preencha o cenário, a ação e a mensagem quando a ação for responder'); return; }
+    if (!rule.example_message.trim() || !rule.expected_action.trim() || (['reply', 'reply_then_flow'].includes(rule.action_type) && !rule.official_response.trim()) || (['flow', 'reply_then_flow'].includes(rule.action_type) && !rule.flow_id)) { toast.error('Preencha a mensagem e o fluxo exigidos pela ação selecionada'); return; }
     setTrainingBusyId(rule.id);
     const { error } = await supabase.from('ai_trained_message_rules').update({
       example_message: rule.example_message.trim(), context_notes: rule.context_notes.trim(), expected_action: rule.expected_action.trim(),
-      action_type: rule.action_type, official_response: rule.action_type === 'reply' ? rule.official_response.trim() : '',
+      action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? rule.official_response.trim() : '',
+      flow_id: ['flow', 'reply_then_flow'].includes(rule.action_type) ? rule.flow_id : null,
       required_tag_ids: rule.required_tag_ids, excluded_tag_ids: rule.excluded_tag_ids, active: rule.active,
     }).eq('id', rule.id);
     setTrainingBusyId('');
