@@ -53,7 +53,7 @@ async function transcribeAudio(audioUrl: string, lovableKey: string) {
   return text ? { text, error: null } : { text: null, error: "O áudio não contém fala reconhecível" };
 }
 
-async function resolveAudioUrl(service: ReturnType<typeof createClient>, mediaUrl: string) {
+async function resolveAudioUrl(service: { storage: { from: (bucket: string) => { createSignedUrl: (path: string, expiresIn: number) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }> } } }, mediaUrl: string) {
   try {
     const parsed = new URL(mediaUrl);
     const marker = "/chat-media/";
