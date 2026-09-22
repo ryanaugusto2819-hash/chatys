@@ -128,4 +128,4 @@
 - [x] Salvar a transcrição na fila e no contexto de treinamento
 - [x] Mostrar claramente que o texto veio de um áudio
 - [x] Preservar erros reais sem respostas genéricas
-- [ ] Publicar e testar com áudio real
+- [x] Publicar e testar com áudio real
