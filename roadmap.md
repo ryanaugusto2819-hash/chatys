@@ -114,3 +114,10 @@
 - [x] Salvar uma regra independente por etiqueta sem alterar o cliente
 - [x] Filtrar correspondências pela etiqueta atual do cliente
 - [x] Validar painel e função da IA
+
+# Filtros e histórico da Automação Inteligente
+
+- [x] Adicionar filtros Aguardando treinamento, Respostas ativas e Histórico
+- [x] Manter respostas aprendidas editáveis
+- [x] Mostrar decisão, confiança, motivo e estado real de envio
+- [x] Validar desktop, celular e build
