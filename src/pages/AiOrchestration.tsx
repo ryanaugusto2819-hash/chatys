@@ -672,6 +672,7 @@ export default function AiOrchestration({
               <div className="h-2.5 w-2.5 rounded-full bg-success" />
               <div><p className="text-sm font-medium text-foreground">Proteção contra conflitos</p><p className="text-xs text-muted-foreground">Uma decisão por mensagem</p></div>
             </div>
+          </div>
         </section>}
 
         {standalone && (
