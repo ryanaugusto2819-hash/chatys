@@ -129,3 +129,11 @@
 - [x] Mostrar claramente que o texto veio de um áudio
 - [x] Preservar erros reais sem respostas genéricas
 - [x] Publicar e testar com áudio real
+
+# Ações com mensagens e fluxos na Automação Inteligente
+
+- [x] Adicionar ações Responder, Enviar fluxo e Responder depois enviar fluxo
+- [x] Salvar e validar o fluxo escolhido em cada cenário treinado
+- [x] Permitir editar mensagem, ação e fluxo nas respostas ativas
+- [x] Exibir o fluxo selecionado no histórico
+- [x] Publicar e validar o painel em modo de teste

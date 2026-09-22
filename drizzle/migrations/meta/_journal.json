@@ -78,6 +78,13 @@
       "when": 1790111930650,
       "tag": "0010_add_trained_scenario_tag_conditions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790113834628,
+      "tag": "0011_add_trained_scenario_flow_actions",
+      "breakpoints": true
     }
   ]
 }
