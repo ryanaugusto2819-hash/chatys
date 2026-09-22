@@ -153,3 +153,11 @@
 - [x] Bloquear a regra sem etiqueta quando o cliente possuir qualquer etiqueta
 - [x] Permitir identificar e editar essa condição nas respostas ativas
 - [x] Manter a automação em modo de teste
+
+# Filtro de país na Automação Inteligente
+
+- [x] Identificar México, Uruguai e Argentina pelo DDI do telefone
+- [x] Permitir ações diferentes por país e contexto
+- [x] Adicionar regra geral para qualquer país como alternativa
+- [x] Impedir correspondência com regras específicas de outro país
+- [x] Mostrar e editar o país nas respostas ativas e no histórico
