@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
-  ChevronDown, ChevronUp, Clock3, History, Link2, Loader2, Megaphone, MessageCircle, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  Check, ChevronsUpDown, ChevronDown, ChevronUp, Clock3, History, Link2, Loader2, Megaphone, MessageCircle, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { MediaImage } from '@/components/chat/MediaUrl';
+import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -72,6 +75,12 @@ const DEFAULT_ORCHESTRATOR = `Analise o contexto completo antes de escolher um A
 Priorize segurança e precisão. Quando houver dúvida, não acione ninguém.
 Nunca permita duas IAs responderem à mesma mensagem.
 Respeite a etapa atual do lead, as etiquetas e o histórico de ações.`;
+
+function FlowSearchSelect({ flows, value, onChange, disabled = false }: { flows: Flow[]; value: string | null; onChange: (value: string | null) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const selected = flows.find((flow) => flow.id === value);
+  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="w-full justify-between font-normal"><span className={cn('truncate', !selected && 'text-muted-foreground')}>{selected?.name || 'Selecione um fluxo'}</span><ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger><PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start"><Command><CommandInput placeholder="Digite o nome do fluxo..." /><CommandList><CommandEmpty>Nenhum fluxo encontrado.</CommandEmpty><CommandGroup><CommandItem value="limpar seleção nenhum fluxo" onSelect={() => { onChange(null); setOpen(false); }}><Check className={cn('mr-2 h-4 w-4', !value ? 'opacity-100' : 'opacity-0')} />Selecione um fluxo</CommandItem>{flows.map((flow) => { const unavailable = !flow.is_active || flow.manual_only; return <CommandItem key={flow.id} value={`${flow.name} ${!flow.is_active ? 'pausado' : flow.manual_only ? 'somente manual' : ''}`} disabled={unavailable} onSelect={() => { onChange(flow.id); setOpen(false); }}><Check className={cn('mr-2 h-4 w-4', value === flow.id ? 'opacity-100' : 'opacity-0')} /><span className="truncate">{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</span></CommandItem>; })}</CommandGroup></CommandList></Command></PopoverContent></Popover>;
+}
 
 const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof Bot }> = [
   { key: 'orchestrator', name: 'IA Orquestradora', short: 'Decide qual único Atendente pode agir. Nunca responde ao lead.', icon: BrainCircuit },
