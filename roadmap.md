@@ -88,3 +88,8 @@
 - [x] Comparar novas mensagens com o contexto completo dos cenários aprendidos
 - [x] Adicionar condições obrigatórias e bloqueadoras por etiquetas em cada cenário
 - [x] Filtrar regras por etiquetas antes da comparação de significado
+
+# Menu — Automação Inteligente
+
+- [x] Adicionar item exclusivo no menu para a IA de Mensagens Treinadas
+- [x] Abrir a área de treinamento existente sem redesenhar a Central
