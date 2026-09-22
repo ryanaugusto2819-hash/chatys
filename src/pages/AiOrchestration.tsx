@@ -49,6 +49,7 @@ type TrainedRule = {
   response_messages: Json;
   flow_id: string | null;
   required_tag_ids: string[]; excluded_tag_ids: string[];
+  requires_no_tags: boolean;
   active: boolean; updated_at: string;
 };
 type TrainingActionType = 'reply' | 'flow' | 'reply_then_flow' | 'no_response' | 'wait' | 'route' | 'other';
@@ -77,7 +78,9 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
 ];
 
 const AGENT_LABELS = Object.fromEntries(AGENTS.map((agent) => [agent.key, agent.name]));
-const TRAINING_CONTEXT_TAGS = ['Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
+const TRAINING_CONTEXTS = ['Sem etiqueta', 'Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
+type TrainingContext = typeof TRAINING_CONTEXTS[number];
+type TaggedTrainingContext = Exclude<TrainingContext, 'Sem etiqueta'>;
 const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
   agent_key: agent.key,
   enabled: agent.key === 'orchestrator',
@@ -153,7 +156,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
       supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -329,8 +332,8 @@ export default function AiOrchestration({
 
   const normalizeTagName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[\s_-]+/g, ' ').trim();
 
-  const findContextTag = (label: typeof TRAINING_CONTEXT_TAGS[number]) => {
-    const aliases: Record<typeof TRAINING_CONTEXT_TAGS[number], string[]> = {
+  const findContextTag = (label: TaggedTrainingContext) => {
+    const aliases: Record<TaggedTrainingContext, string[]> = {
       'Etapa 1': ['etapa 1'],
       'Etapa 2': ['etapa 2'],
       'Pago': ['pago'],
@@ -383,17 +386,18 @@ export default function AiOrchestration({
     if (!currentWorkspace?.id) return;
     const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
     if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
-    const variants = TRAINING_CONTEXT_TAGS.flatMap((label) => {
-      const tag = findContextTag(label);
-      if (!tag) return [];
-      const key = `${item.id}:${tag.id}`;
+    const variants = TRAINING_CONTEXTS.flatMap((label) => {
+      const requiresNoTags = label === 'Sem etiqueta';
+      const tag = requiresNoTags ? null : findContextTag(label);
+      if (!requiresNoTags && !tag) return [];
+      const key = `${item.id}:${requiresNoTags ? 'no-tags' : tag.id}`;
       const actionType = trainingActionTypes[key] || 'reply';
       const responseMessages = (trainingAnswers[key] || ['']).map((message) => message.trim()).filter(Boolean);
       const officialResponse = responseMessages[0] || '';
       const flowId = trainingFlowIds[key] || null;
       const selectedFlow = flows.find((flow) => flow.id === flowId);
       const expectedAction = actionType === 'reply' ? 'Responder com a mensagem oficial.' : actionType === 'flow' ? `Enviar o fluxo ${selectedFlow?.name || ''}.` : `Responder com a mensagem oficial e depois enviar o fluxo ${selectedFlow?.name || ''}.`;
-      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId }] : [];
+      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId, requiresNoTags }] : [];
     });
     if (!variants.length) { toast.error('Configure a ação de pelo menos uma etiqueta'); return; }
     if (variants.some((variant) => ['reply', 'reply_then_flow'].includes(variant.actionType) && !variant.officialResponse)) { toast.error('Preencha a mensagem nas ações que respondem ao cliente'); return; }
@@ -409,14 +413,15 @@ export default function AiOrchestration({
       agent_config_id: trainedConfig.id,
       source_message_id: item.source_message_id,
       example_message: item.customer_message,
-      context_notes: `${contextNotes}\nContexto obrigatório: cliente com etiqueta ${variant.tag.name}.`,
+      context_notes: `${contextNotes}\nContexto obrigatório: ${variant.requiresNoTags ? 'cliente sem nenhuma etiqueta' : `cliente com etiqueta ${variant.tag?.name}`}.`,
       expected_action: variant.expectedAction,
       action_type: variant.actionType,
       official_response: variant.officialResponse,
       response_messages: variant.responseMessages,
       flow_id: variant.flowId,
-      required_tag_ids: [variant.tag.id],
+      required_tag_ids: variant.tag ? [variant.tag.id] : [],
       excluded_tag_ids: [],
+      requires_no_tags: variant.requiresNoTags,
     }))).select();
     const firstRule = rules?.[0];
     if (ruleError || !firstRule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
@@ -446,7 +451,9 @@ export default function AiOrchestration({
       action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages[0] : '',
       response_messages: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages : [],
       flow_id: ['flow', 'reply_then_flow'].includes(rule.action_type) ? rule.flow_id : null,
-      required_tag_ids: rule.required_tag_ids, excluded_tag_ids: rule.excluded_tag_ids, active: rule.active,
+      required_tag_ids: rule.requires_no_tags ? [] : rule.required_tag_ids,
+      excluded_tag_ids: rule.requires_no_tags ? [] : rule.excluded_tag_ids,
+      requires_no_tags: rule.requires_no_tags, active: rule.active,
     }).eq('id', rule.id);
     setTrainingBusyId('');
     if (error) { toast.error(error.message); return; }
