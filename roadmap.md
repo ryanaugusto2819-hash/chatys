@@ -121,3 +121,11 @@
 - [x] Manter respostas aprendidas editáveis
 - [x] Mostrar decisão, confiança, motivo e estado real de envio
 - [x] Validar desktop, celular e build
+
+# Transcrição de áudio na Automação Inteligente
+
+- [ ] Transcrever áudios antes da análise da IA
+- [ ] Salvar a transcrição na fila e no contexto de treinamento
+- [ ] Mostrar claramente que o texto veio de um áudio
+- [ ] Preservar erros reais sem respostas genéricas
+- [ ] Publicar e testar com áudio real
