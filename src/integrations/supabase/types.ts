@@ -464,6 +464,7 @@ export type Database = {
           example_message: string
           excluded_tag_ids: string[]
           expected_action: string
+          flow_id: string | null
           id: string
           official_response: string
           required_tag_ids: string[]
@@ -481,6 +482,7 @@ export type Database = {
           example_message: string
           excluded_tag_ids?: string[]
           expected_action?: string
+          flow_id?: string | null
           id?: string
           official_response: string
           required_tag_ids?: string[]
@@ -498,6 +500,7 @@ export type Database = {
           example_message?: string
           excluded_tag_ids?: string[]
           expected_action?: string
+          flow_id?: string | null
           id?: string
           official_response?: string
           required_tag_ids?: string[]
@@ -511,6 +514,13 @@ export type Database = {
             columns: ["agent_config_id"]
             isOneToOne: false
             referencedRelation: "ai_agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_trained_message_rules_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
             referencedColumns: ["id"]
           },
           {
@@ -546,6 +556,7 @@ export type Database = {
           status: string
           suggested_action: string | null
           suggested_action_type: string | null
+          suggested_flow_id: string | null
           suggested_response: string | null
           updated_at: string
           workspace_id: string
@@ -566,6 +577,7 @@ export type Database = {
           status?: string
           suggested_action?: string | null
           suggested_action_type?: string | null
+          suggested_flow_id?: string | null
           suggested_response?: string | null
           updated_at?: string
           workspace_id: string
@@ -586,6 +598,7 @@ export type Database = {
           status?: string
           suggested_action?: string | null
           suggested_action_type?: string | null
+          suggested_flow_id?: string | null
           suggested_response?: string | null
           updated_at?: string
           workspace_id?: string
@@ -617,6 +630,13 @@ export type Database = {
             columns: ["source_message_id"]
             isOneToOne: true
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_suggested_flow_id_fkey"
+            columns: ["suggested_flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
             referencedColumns: ["id"]
           },
           {
