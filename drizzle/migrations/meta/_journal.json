@@ -120,6 +120,13 @@
       "when": 1790118352939,
       "tag": "0016_add_trained_decision_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790119566882,
+      "tag": "0017_track_training_conversation_start",
+      "breakpoints": true
     }
   ]
 }
