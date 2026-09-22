@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
-  Clock3, History, Link2, Loader2, Megaphone, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  ChevronDown, ChevronUp, Clock3, History, Link2, Loader2, Megaphone, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ type PaymentRules = { payment_information: string; receipt_flow_id: string; pric
 type TrainingQueueItem = {
   id: string; source_message_id: string; customer_message: string; message_type: string;
   status: string; confidence: number; match_reason: string; suggested_response: string | null;
+  suggested_responses: Json;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
   suggested_flow_id?: string | null;
   context_snapshot: Json; created_at: string;
@@ -45,6 +46,7 @@ type TrainingQueueItem = {
 type TrainedRule = {
   id: string; example_message: string; context_notes: string; expected_action: string;
   action_type: TrainingActionType; official_response: string;
+  response_messages: Json;
   flow_id: string | null;
   required_tag_ids: string[]; excluded_tag_ids: string[];
   active: boolean; updated_at: string;
@@ -123,7 +125,7 @@ export default function AiOrchestration({
   const [trainingQueue, setTrainingQueue] = useState<TrainingQueueItem[]>([]);
   const [trainedRules, setTrainedRules] = useState<TrainedRule[]>([]);
   const [workspaceTags, setWorkspaceTags] = useState<WorkspaceTag[]>([]);
-  const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string>>({});
+  const [trainingAnswers, setTrainingAnswers] = useState<Record<string, string[]>>({});
   const [trainingActions, setTrainingActions] = useState<Record<string, string>>({});
   const [trainingActionTypes, setTrainingActionTypes] = useState<Record<string, TrainingActionType>>({});
   const [trainingFlowIds, setTrainingFlowIds] = useState<Record<string, string>>({});
@@ -150,8 +152,8 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -337,6 +339,36 @@ export default function AiOrchestration({
     return workspaceTags.find((tag) => aliases[label].includes(normalizeTagName(tag.name)));
   };
 
+  const readMessages = (value: Json, fallback = '') => {
+    const messages = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+    return messages.length ? messages : fallback ? [fallback] : [''];
+  };
+
+  const updateTrainingMessage = (key: string, index: number, value: string) => {
+    setTrainingAnswers((current) => {
+      const messages = current[key] || [''];
+      return { ...current, [key]: messages.map((message, messageIndex) => messageIndex === index ? value : message) };
+    });
+  };
+
+  const moveTrainingMessage = (key: string, index: number, direction: -1 | 1) => {
+    setTrainingAnswers((current) => {
+      const messages = [...(current[key] || [''])];
+      const target = index + direction;
+      if (target < 0 || target >= messages.length) return current;
+      [messages[index], messages[target]] = [messages[target], messages[index]];
+      return { ...current, [key]: messages };
+    });
+  };
+
+  const updateRuleMessages = (ruleId: string, updater: (messages: string[]) => string[]) => {
+    setTrainedRules((current) => current.map((rule) => {
+      if (rule.id !== ruleId) return rule;
+      const messages = updater(readMessages(rule.response_messages, rule.official_response));
+      return { ...rule, response_messages: messages, official_response: messages[0] || '' };
+    }));
+  };
+
   const historyStatus = (item: TrainingQueueItem) => {
     if (item.status === 'matched') return { label: 'Teste — não enviado', variant: 'default' as const };
     if (item.status === 'unmatched') return { label: 'Sem resposta segura', variant: 'secondary' as const };
@@ -356,11 +388,12 @@ export default function AiOrchestration({
       if (!tag) return [];
       const key = `${item.id}:${tag.id}`;
       const actionType = trainingActionTypes[key] || 'reply';
-      const officialResponse = (trainingAnswers[key] || '').trim();
+      const responseMessages = (trainingAnswers[key] || ['']).map((message) => message.trim()).filter(Boolean);
+      const officialResponse = responseMessages[0] || '';
       const flowId = trainingFlowIds[key] || null;
       const selectedFlow = flows.find((flow) => flow.id === flowId);
       const expectedAction = actionType === 'reply' ? 'Responder com a mensagem oficial.' : actionType === 'flow' ? `Enviar o fluxo ${selectedFlow?.name || ''}.` : `Responder com a mensagem oficial e depois enviar o fluxo ${selectedFlow?.name || ''}.`;
-      return officialResponse || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, actionType, flowId }] : [];
+      return responseMessages.length || flowId || trainingActionTypes[key] ? [{ label, tag, key, expectedAction, officialResponse, responseMessages, actionType, flowId }] : [];
     });
     if (!variants.length) { toast.error('Configure a ação de pelo menos uma etiqueta'); return; }
     if (variants.some((variant) => ['reply', 'reply_then_flow'].includes(variant.actionType) && !variant.officialResponse)) { toast.error('Preencha a mensagem nas ações que respondem ao cliente'); return; }
@@ -380,6 +413,7 @@ export default function AiOrchestration({
       expected_action: variant.expectedAction,
       action_type: variant.actionType,
       official_response: variant.officialResponse,
+      response_messages: variant.responseMessages,
       flow_id: variant.flowId,
       required_tag_ids: [variant.tag.id],
       excluded_tag_ids: [],
@@ -389,12 +423,13 @@ export default function AiOrchestration({
     const { error: queueError } = await supabase.from('ai_training_queue').update({
       status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: firstRule.action_type,
       suggested_response: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.official_response : null,
+      suggested_responses: ['reply', 'reply_then_flow'].includes(firstRule.action_type) ? firstRule.response_messages : [],
       suggested_flow_id: firstRule.flow_id, processed_at: new Date().toISOString(),
     }).eq('id', item.id);
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
     setTrainedRules((current) => [...(rules as TrainedRule[]), ...current]);
-    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response } : currentItem));
+    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response, suggested_responses: firstRule.response_messages } : currentItem));
     setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
     setTrainingActionTypes((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
@@ -403,11 +438,13 @@ export default function AiOrchestration({
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
-    if (!rule.example_message.trim() || !rule.expected_action.trim() || (['reply', 'reply_then_flow'].includes(rule.action_type) && !rule.official_response.trim()) || (['flow', 'reply_then_flow'].includes(rule.action_type) && !rule.flow_id)) { toast.error('Preencha a mensagem e o fluxo exigidos pela ação selecionada'); return; }
+    const responseMessages = readMessages(rule.response_messages, rule.official_response).map((message) => message.trim()).filter(Boolean);
+    if (!rule.example_message.trim() || !rule.expected_action.trim() || (['reply', 'reply_then_flow'].includes(rule.action_type) && !responseMessages.length) || (['flow', 'reply_then_flow'].includes(rule.action_type) && !rule.flow_id)) { toast.error('Preencha as mensagens e o fluxo exigidos pela ação selecionada'); return; }
     setTrainingBusyId(rule.id);
     const { error } = await supabase.from('ai_trained_message_rules').update({
       example_message: rule.example_message.trim(), context_notes: rule.context_notes.trim(), expected_action: rule.expected_action.trim(),
-      action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? rule.official_response.trim() : '',
+      action_type: rule.action_type, official_response: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages[0] : '',
+      response_messages: ['reply', 'reply_then_flow'].includes(rule.action_type) ? responseMessages : [],
       flow_id: ['flow', 'reply_then_flow'].includes(rule.action_type) ? rule.flow_id : null,
       required_tag_ids: rule.required_tag_ids, excluded_tag_ids: rule.excluded_tag_ids, active: rule.active,
     }).eq('id', rule.id);
@@ -617,8 +654,8 @@ export default function AiOrchestration({
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
-                      {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-foreground">Resposta que seria selecionada no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
-                        <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Escolha uma mensagem, um fluxo ou os dois em sequência para cada etiqueta.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXT_TAGS.map((label) => { const tag = findContextTag(label); const key = `${item.id}:${tag?.id || label}`; const actionType = trainingActionTypes[key] || 'reply'; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!tag && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Ação nesta etiqueta</label><Select disabled={!tag} value={actionType} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [key]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem></SelectContent></Select></div>{['reply', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Mensagem exata</label><Textarea disabled={!tag} value={trainingAnswers[key] || ''} onChange={(event) => setTrainingAnswers((current) => ({ ...current, [key]: event.target.value }))} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div>}{['flow', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Fluxo</label><Select disabled={!tag} value={trainingFlowIds[key] || 'none'} onValueChange={(value) => setTrainingFlowIds((current) => ({ ...current, [key]: value === 'none' ? '' : value }))}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Selecione um fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select></div>}</div>; })}</div></div>
+                      {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-foreground">Mensagens que seriam selecionadas no teste</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-suggested-${index}`} className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
+                        <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Escolha uma ou mais mensagens, um fluxo ou os dois em sequência para cada etiqueta.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXT_TAGS.map((label) => { const tag = findContextTag(label); const key = `${item.id}:${tag?.id || label}`; const actionType = trainingActionTypes[key] || 'reply'; const messages = trainingAnswers[key] || ['']; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!tag && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Ação nesta etiqueta</label><Select disabled={!tag} value={actionType} onValueChange={(value: TrainingActionType) => setTrainingActionTypes((current) => ({ ...current, [key]: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem></SelectContent></Select></div>{['reply', 'reply_then_flow'].includes(actionType) && <div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-medium text-foreground">Mensagens exatas, na ordem</label><Button type="button" variant="outline" size="sm" disabled={!tag} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: [...messages, ''] }))}><Plus className="mr-1 h-3.5 w-3.5" />Mensagem</Button></div>{messages.map((message, index) => <div key={`${key}-message-${index}`} className="space-y-1 rounded-md border border-border p-2"><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Mensagem {index + 1}</span><div className="flex"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para cima" disabled={index === 0} onClick={() => moveTrainingMessage(key, index, -1)}><ChevronUp className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para baixo" disabled={index === messages.length - 1} onClick={() => moveTrainingMessage(key, index, 1)}><ChevronDown className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Remover mensagem" disabled={messages.length === 1} onClick={() => setTrainingAnswers((current) => ({ ...current, [key]: messages.filter((_, messageIndex) => messageIndex !== index) }))}><Trash2 className="h-3.5 w-3.5" /></Button></div></div><Textarea disabled={!tag} value={message} onChange={(event) => updateTrainingMessage(key, index, event.target.value)} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div>)}</div>}{['flow', 'reply_then_flow'].includes(actionType) && <div><label className="mb-1 block text-xs font-medium text-foreground">Fluxo</label><Select disabled={!tag} value={trainingFlowIds[key] || 'none'} onValueChange={(value) => setTrainingFlowIds((current) => ({ ...current, [key]: value === 'none' ? '' : value }))}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Selecione um fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select></div>}</div>; })}</div></div>
                         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
                     </div>)}
                   </div>}
@@ -636,7 +673,7 @@ export default function AiOrchestration({
                        </div>
                        <div><label className="mb-1.5 block text-xs font-medium text-foreground">Ação correta neste cenário</label><Textarea value={rule.expected_action} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, expected_action: event.target.value } : item))} rows={3} /></div>
                         <div><label className="mb-1.5 block text-xs font-medium text-foreground">Tipo de ação</label><Select value={rule.action_type} onValueChange={(value: TrainingActionType) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, action_type: value } : item))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reply">Responder com mensagem</SelectItem><SelectItem value="flow">Enviar um fluxo</SelectItem><SelectItem value="reply_then_flow">Responder e depois enviar fluxo</SelectItem><SelectItem value="no_response">Não responder</SelectItem><SelectItem value="wait">Aguardar</SelectItem><SelectItem value="route">Encaminhar</SelectItem><SelectItem value="other">Outra ação</SelectItem></SelectContent></Select></div>
-                        {['reply', 'reply_then_flow'].includes(rule.action_type) && <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem oficial exata</label><Textarea value={rule.official_response} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, official_response: event.target.value } : item))} rows={4} /></div>}
+                         {['reply', 'reply_then_flow'].includes(rule.action_type) && <div className="space-y-2"><div className="flex items-center justify-between"><label className="text-xs font-medium text-foreground">Mensagens oficiais, na ordem</label><Button type="button" variant="outline" size="sm" onClick={() => updateRuleMessages(rule.id, (messages) => [...messages, ''])}><Plus className="mr-1 h-3.5 w-3.5" />Mensagem</Button></div>{readMessages(rule.response_messages, rule.official_response).map((message, index, messages) => <div key={`${rule.id}-response-${index}`} className="space-y-1 rounded-md border border-border bg-background p-2"><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Mensagem {index + 1}</span><div className="flex"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para cima" disabled={index === 0} onClick={() => updateRuleMessages(rule.id, (current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}><ChevronUp className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Mover para baixo" disabled={index === messages.length - 1} onClick={() => updateRuleMessages(rule.id, (current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })}><ChevronDown className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Remover mensagem" disabled={messages.length === 1} onClick={() => updateRuleMessages(rule.id, (current) => current.filter((_, messageIndex) => messageIndex !== index))}><Trash2 className="h-3.5 w-3.5" /></Button></div></div><Textarea value={message} onChange={(event) => updateRuleMessages(rule.id, (current) => current.map((item, messageIndex) => messageIndex === index ? event.target.value : item))} rows={3} /></div>)}</div>}
                         {['flow', 'reply_then_flow'].includes(rule.action_type) && <div><label className="mb-1.5 block text-xs font-medium text-foreground">Fluxo selecionado</label><Select value={rule.flow_id || 'none'} onValueChange={(value) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, flow_id: value === 'none' ? null : value } : item))}><SelectTrigger><SelectValue placeholder="Selecione um fluxo" /></SelectTrigger><SelectContent><SelectItem value="none">Selecione um fluxo</SelectItem>{flows.map((flow) => <SelectItem key={flow.id} value={flow.id} disabled={!flow.is_active || flow.manual_only}>{flow.name}{!flow.is_active ? ' — pausado' : flow.manual_only ? ' — somente manual' : ''}</SelectItem>)}</SelectContent></Select></div>}
                       <div className="flex justify-end"><Button type="button" variant="outline" size="sm" disabled={trainingBusyId === rule.id} onClick={() => void saveTrainedRule(rule)}>{trainingBusyId === rule.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar regra</Button></div>
                     </div>)}
@@ -648,7 +685,7 @@ export default function AiOrchestration({
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || item.conversations?.contact_phone || 'Cliente'}</p><p className="text-xs text-muted-foreground">{new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex items-center gap-2">{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem do cliente</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div></div>
                       {item.suggested_action && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Decisão da IA</p><p className="text-sm text-foreground">{item.suggested_action}</p></div>}
-                      {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem selecionada</p><div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
+                      {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagens selecionadas, na ordem</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-history-${index}`} className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
                        {item.suggested_flow_id && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Fluxo selecionado</p><p className="text-sm text-foreground">{flows.find((flow) => flow.id === item.suggested_flow_id)?.name || 'Fluxo removido ou indisponível'}</p></div>}
                       {item.match_reason && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Motivo</p><p className="text-sm text-muted-foreground">{item.match_reason}</p></div>}
                     </div>; })}
