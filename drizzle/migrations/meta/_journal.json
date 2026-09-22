@@ -64,6 +64,13 @@
       "when": 1790110845470,
       "tag": "0008_create_trained_message_ai",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790111488002,
+      "tag": "0009_add_trained_scenario_actions",
+      "breakpoints": true
     }
   ]
 }
