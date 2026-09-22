@@ -117,7 +117,7 @@
 
 # Filtros e histórico da Automação Inteligente
 
-- [ ] Adicionar filtros Aguardando treinamento, Respostas ativas e Histórico
-- [ ] Manter respostas aprendidas editáveis
-- [ ] Mostrar decisão, confiança, motivo e estado real de envio
+- [x] Adicionar filtros Aguardando treinamento, Respostas ativas e Histórico
+- [x] Manter respostas aprendidas editáveis
+- [x] Mostrar decisão, confiança, motivo e estado real de envio
 - [ ] Validar desktop, celular e build

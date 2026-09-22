@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Bot, BrainCircuit, CheckCircle2, CircleDashed, DollarSign, GitBranch, Headphones,
-  Link2, Loader2, Megaphone, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
+  Clock3, History, Link2, Loader2, Megaphone, MessageSquareText, PackageCheck, Play, Plus, Save, Search, ShieldCheck, ShoppingBag, Trash2,
 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ type PaymentRules = { payment_information: string; receipt_flow_id: string; pric
 type TrainingQueueItem = {
   id: string; source_message_id: string; customer_message: string; message_type: string;
   status: string; confidence: number; match_reason: string; suggested_response: string | null;
+  suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
   context_snapshot: Json; created_at: string;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
 };
@@ -47,6 +48,7 @@ type TrainedRule = {
   active: boolean; updated_at: string;
 };
 type TrainingActionType = 'reply' | 'no_response' | 'wait' | 'route' | 'other';
+type TrainingView = 'waiting' | 'responses' | 'history';
 type Decision = {
   id: string; selected_agent: string; action: string; reason: string; confidence: number;
   blockers: string[]; operation_mode: string; status: string; created_at: string;
@@ -125,6 +127,7 @@ export default function AiOrchestration({
   const [trainingRequiredTags, setTrainingRequiredTags] = useState<Record<string, string[]>>({});
   const [trainingExcludedTags, setTrainingExcludedTags] = useState<Record<string, string[]>>({});
   const [trainingBusyId, setTrainingBusyId] = useState('');
+  const [trainingView, setTrainingView] = useState<TrainingView>('waiting');
   const [flowSearch, setFlowSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,7 +147,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('ai_training_queue').select('id, source_message_id, customer_message, message_type, status, confidence, match_reason, suggested_response, suggested_action, suggested_action_type, processed_at, context_snapshot, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_type, official_response, required_tag_ids, excluded_tag_ids, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
@@ -329,6 +332,16 @@ export default function AiOrchestration({
       'Pós-venda': ['pos venda', 'pos-venda'],
     };
     return workspaceTags.find((tag) => aliases[label].includes(normalizeTagName(tag.name)));
+  };
+
+  const historyStatus = (item: TrainingQueueItem) => {
+    if (item.status === 'matched') return { label: 'Teste — não enviado', variant: 'default' as const };
+    if (item.status === 'unmatched') return { label: 'Sem resposta segura', variant: 'secondary' as const };
+    if (item.status === 'ignored') return { label: 'Ignorado', variant: 'outline' as const };
+    if (item.status === 'no_response') return { label: 'Não responder', variant: 'outline' as const };
+    if (item.status === 'failed') return { label: 'Falha', variant: 'destructive' as const };
+    if (item.status === 'sent') return { label: 'Enviado', variant: 'default' as const };
+    return { label: 'Treinamento concluído', variant: 'secondary' as const };
   };
 
   const trainFromMessage = async (item: TrainingQueueItem) => {
@@ -578,15 +591,15 @@ export default function AiOrchestration({
 
               {selectedKey === 'trained_messages' && (
                 <div className="mt-6 space-y-6 border-t border-border pt-5">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainingQueue.filter((item) => item.status === 'pending' || item.status === 'unmatched').length}</p><p className="text-xs text-muted-foreground">aguardando treinamento</p></div>
-                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainedRules.filter((rule) => rule.active).length}</p><p className="text-xs text-muted-foreground">respostas ativas</p></div>
-                    <div className="rounded-md border border-border bg-muted/20 p-3"><p className="text-2xl font-semibold text-foreground">{trainingQueue.filter((item) => item.status === 'matched').length}</p><p className="text-xs text-muted-foreground">correspondências em teste</p></div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Button type="button" variant={trainingView === 'waiting' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('waiting')}><Clock3 className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Aguardando treinamento</span><span className="block text-xs opacity-75">{trainingQueue.filter((item) => item.status === 'pending' || item.status === 'unmatched').length} pendentes</span></span></Button>
+                    <Button type="button" variant={trainingView === 'responses' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('responses')}><MessageSquareText className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Respostas ativas</span><span className="block text-xs opacity-75">{trainedRules.filter((rule) => rule.active).length} editáveis</span></span></Button>
+                    <Button type="button" variant={trainingView === 'history' ? 'default' : 'outline'} className="h-auto justify-start gap-3 p-3" onClick={() => setTrainingView('history')}><History className="h-4 w-4" /><span className="text-left"><span className="block text-sm font-semibold">Histórico</span><span className="block text-xs opacity-75">{trainingQueue.filter((item) => item.status !== 'pending').length} decisões</span></span></Button>
                   </div>
 
-                  <div className="space-y-3">
+                  {trainingView === 'waiting' && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Novos cenários para ensinar</p><p className="text-xs text-muted-foreground">A IA analisa a mensagem e o contexto, depois pergunta qual ação tomar e qual mensagem usar.</p></div>
-                    {trainingQueue.filter((item) => ['pending', 'unmatched', 'matched'].includes(item.status)).length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento.</div> : trainingQueue.filter((item) => ['pending', 'unmatched', 'matched'].includes(item.status)).map((item) => <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                    {trainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento.</div> : trainingQueue.filter((item) => ['pending', 'unmatched'].includes(item.status)).map((item) => <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || item.conversations?.contact_phone || 'Cliente'}</p><p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><Badge variant={item.status === 'matched' ? 'default' : 'secondary'}>{item.status === 'matched' ? `${Math.round(Number(item.confidence) * 100)}% compatível` : item.status === 'unmatched' ? 'Sem resposta segura' : 'Nova'}</Badge></div>
                       <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
@@ -596,9 +609,9 @@ export default function AiOrchestration({
                        <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Ensine uma resposta diferente conforme a etiqueta que o cliente já possui. A IA não adiciona nem remove etiquetas.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXT_TAGS.map((label) => { const tag = findContextTag(label); const key = `${item.id}:${tag?.id || label}`; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!tag && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Comportamento nesta etiqueta</label><Textarea disabled={!tag} value={trainingActions[key] || ''} onChange={(event) => setTrainingActions((current) => ({ ...current, [key]: event.target.value }))} rows={2} placeholder="Ex.: Explicar o prazo e tirar a dúvida." /></div><div><label className="mb-1 block text-xs font-medium text-foreground">Mensagem exata para esta etiqueta</label><Textarea disabled={!tag} value={trainingAnswers[key] || ''} onChange={(event) => setTrainingAnswers((current) => ({ ...current, [key]: event.target.value }))} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div></div>; })}</div></div>
                         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
                     </div>)}
-                  </div>
+                  </div>}
 
-                  <div className="space-y-3 border-t border-border pt-5">
+                  {trainingView === 'responses' && <div className="space-y-3">
                     <div><p className="text-sm font-medium text-foreground">Cenários aprendidos</p><p className="text-xs text-muted-foreground">Revise o cenário, a ação e a mensagem literal. Desative uma regra para parar de usá-la sem excluí-la.</p></div>
                     {trainedRules.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma resposta aprendida ainda.</div> : trainedRules.map((rule) => <div key={rule.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Switch checked={rule.active} onCheckedChange={(active) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, active } : item))} /><span className="text-sm font-medium text-foreground">{rule.active ? 'Ativa' : 'Desativada'}</span></div><Button type="button" variant="ghost" size="icon" title="Excluir regra" onClick={() => void deleteTrainedRule(rule.id)}><Trash2 className="h-4 w-4" /></Button></div>
@@ -614,7 +627,18 @@ export default function AiOrchestration({
                        {rule.action_type === 'reply' && <div><label className="mb-1.5 block text-xs font-medium text-foreground">Mensagem oficial exata</label><Textarea value={rule.official_response} onChange={(event) => setTrainedRules((current) => current.map((item) => item.id === rule.id ? { ...item, official_response: event.target.value } : item))} rows={4} /></div>}
                       <div className="flex justify-end"><Button type="button" variant="outline" size="sm" disabled={trainingBusyId === rule.id} onClick={() => void saveTrainedRule(rule)}>{trainingBusyId === rule.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar regra</Button></div>
                     </div>)}
-                  </div>
+                  </div>}
+
+                  {trainingView === 'history' && <div className="space-y-3">
+                    <div><p className="text-sm font-medium text-foreground">Histórico de decisões e envios</p><p className="text-xs text-muted-foreground">Cada análise mostra o que a IA decidiu e se a mensagem foi realmente enviada.</p></div>
+                    {trainingQueue.filter((item) => item.status !== 'pending').length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma decisão registrada ainda.</div> : trainingQueue.filter((item) => item.status !== 'pending').map((item) => { const result = historyStatus(item); return <div key={`history-${item.id}`} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || item.conversations?.contact_phone || 'Cliente'}</p><p className="text-xs text-muted-foreground">{new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex items-center gap-2">{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
+                      <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem do cliente</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div></div>
+                      {item.suggested_action && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Decisão da IA</p><p className="text-sm text-foreground">{item.suggested_action}</p></div>}
+                      {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem selecionada</p><div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
+                      {item.match_reason && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Motivo</p><p className="text-sm text-muted-foreground">{item.match_reason}</p></div>}
+                    </div>; })}
+                  </div>}
                 </div>
               )}
 
