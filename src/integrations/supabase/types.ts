@@ -468,6 +468,7 @@ export type Database = {
           id: string
           official_response: string
           required_tag_ids: string[]
+          requires_no_tags: boolean
           response_messages: Json
           source_message_id: string | null
           updated_at: string
@@ -487,6 +488,7 @@ export type Database = {
           id?: string
           official_response: string
           required_tag_ids?: string[]
+          requires_no_tags?: boolean
           response_messages?: Json
           source_message_id?: string | null
           updated_at?: string
@@ -506,6 +508,7 @@ export type Database = {
           id?: string
           official_response?: string
           required_tag_ids?: string[]
+          requires_no_tags?: boolean
           response_messages?: Json
           source_message_id?: string | null
           updated_at?: string
