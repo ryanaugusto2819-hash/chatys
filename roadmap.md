@@ -137,3 +137,11 @@
 - [x] Permitir editar mensagem, ação e fluxo nas respostas ativas
 - [x] Exibir o fluxo selecionado no histórico
 - [x] Publicar e validar o painel em modo de teste
+
+# Várias mensagens por cenário
+
+- [x] Permitir uma sequência ordenada de mensagens em cada resposta treinada
+- [x] Adicionar, remover e reordenar mensagens no treinamento e nas respostas ativas
+- [x] Preservar respostas antigas como a primeira mensagem da sequência
+- [x] Exibir todas as mensagens na ordem correta no teste e no histórico
+- [x] Manter envios reais desativados no modo de teste
