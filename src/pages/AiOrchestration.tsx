@@ -448,6 +448,25 @@ export default function AiOrchestration({
   const groupedTrainingQueue = useMemo(() => {
   const filteredHistory = useMemo(() => {
   const filteredDecisions = useMemo(() => {
+  const ruleConflicts = useMemo(() => {
+    const conflicts: Record<string, string[]> = {};
+    trainedRules.forEach((rule, index) => {
+      const normalized = rule.example_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      trainedRules.forEach((other, otherIndex) => {
+        if (index === otherIndex) return;
+        const otherNormalized = other.example_message.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (normalized === otherNormalized && rule.country_code === other.country_code) {
+          const tagsOverlap = rule.requires_no_tags && other.requires_no_tags || 
+            rule.required_tag_ids.some(id => other.required_tag_ids.includes(id));
+          if (tagsOverlap) {
+            if (!conflicts[rule.id]) conflicts[rule.id] = [];
+            conflicts[rule.id].push(other.id);
+          }
+        }
+      });
+    });
+    return conflicts;
+  }, [trainedRules]);
     if (!historySearch.trim()) return decisions;
     const query = historySearch.toLowerCase();
     return decisions.filter((decision) => {
