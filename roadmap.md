@@ -106,3 +106,11 @@
 - [x] Mostrar Etapa 1, Etapa 2, Pago e Pós-venda após a ação do cenário
 - [x] Salvar a etapa escolhida como a ação correta do cenário
 - [x] Validar salvamento e tela
+
+# Respostas diferentes por etiqueta
+
+- [x] Tratar Etapa 1, Etapa 2, Pago e Pós-venda somente como contexto
+- [x] Permitir comportamento e mensagem próprios para cada etiqueta
+- [x] Salvar uma regra independente por etiqueta sem alterar o cliente
+- [x] Filtrar correspondências pela etiqueta atual do cliente
+- [x] Validar painel e função da IA

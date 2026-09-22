@@ -71,7 +71,7 @@ const AGENTS: Array<{ key: AgentKey; name: string; short: string; icon: typeof B
 ];
 
 const AGENT_LABELS = Object.fromEntries(AGENTS.map((agent) => [agent.key, agent.name]));
-const TRAINING_TAG_ACTIONS = ['Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
+const TRAINING_CONTEXT_TAGS = ['Etapa 1', 'Etapa 2', 'Pago', 'Pós-venda'] as const;
 const defaults = (): AgentConfig[] => AGENTS.map((agent, index) => ({
   agent_key: agent.key,
   enabled: agent.key === 'orchestrator',
@@ -319,55 +319,63 @@ export default function AiOrchestration({
     oppositeSetter((current) => ({ ...current, [itemId]: (current[itemId] || []).filter((id) => id !== tagId) }));
   };
 
-  const selectTrainingTagAction = (itemId: string, tagName: typeof TRAINING_TAG_ACTIONS[number]) => {
-    setTrainingActions((current) => ({ ...current, [itemId]: `Aplicar a etiqueta "${tagName}".` }));
-    setTrainingActionTypes((current) => ({ ...current, [itemId]: 'other' }));
+  const normalizeTagName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[\s_-]+/g, ' ').trim();
+
+  const findContextTag = (label: typeof TRAINING_CONTEXT_TAGS[number]) => {
+    const aliases: Record<typeof TRAINING_CONTEXT_TAGS[number], string[]> = {
+      'Etapa 1': ['etapa 1'],
+      'Etapa 2': ['etapa 2'],
+      'Pago': ['pago'],
+      'Pós-venda': ['pos venda', 'pos-venda'],
+    };
+    return workspaceTags.find((tag) => aliases[label].includes(normalizeTagName(tag.name)));
   };
 
   const trainFromMessage = async (item: TrainingQueueItem) => {
     if (!currentWorkspace?.id) return;
     const trainedConfig = configs.find((config) => config.agent_key === 'trained_messages');
     if (!trainedConfig?.id) { toast.error('Salve a configuração desta IA antes de treiná-la'); return; }
-    const expectedAction = (trainingActions[item.id] || '').trim();
-    const actionType = trainingActionTypes[item.id] || 'reply';
-    const officialResponse = (trainingAnswers[item.id] || '').trim();
-    const requiredTagIds = trainingRequiredTags[item.id] ?? snapshotTagIds(item);
-    const excludedTagIds = trainingExcludedTags[item.id] || [];
-    if (!expectedAction) { toast.error('Explique o que a IA deveria fazer neste cenário'); return; }
-    if (actionType === 'reply' && !officialResponse) { toast.error('Escreva a mensagem pronta antes de salvar'); return; }
+    const variants = TRAINING_CONTEXT_TAGS.flatMap((label) => {
+      const tag = findContextTag(label);
+      if (!tag) return [];
+      const key = `${item.id}:${tag.id}`;
+      const expectedAction = (trainingActions[key] || '').trim();
+      const officialResponse = (trainingAnswers[key] || '').trim();
+      return expectedAction || officialResponse ? [{ label, tag, key, expectedAction, officialResponse }] : [];
+    });
+    if (!variants.length) { toast.error('Preencha o comportamento e a mensagem de pelo menos uma etiqueta'); return; }
+    if (variants.some((variant) => !variant.expectedAction || !variant.officialResponse)) { toast.error('Preencha o comportamento e a mensagem nas etiquetas utilizadas'); return; }
     setTrainingBusyId(item.id);
     const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot)
       ? item.context_snapshot as Record<string, Json | undefined>
       : {};
     const tags = Array.isArray(snapshot.tags) ? snapshot.tags.filter((tag) => typeof tag === 'string').join(', ') : '';
     const contextNotes = [`Etapa: ${typeof snapshot.funnel_stage === 'string' ? snapshot.funnel_stage : 'não definida'}`, `Etiquetas: ${tags || 'nenhuma'}`].join('\n');
-    const { data: rule, error: ruleError } = await supabase.from('ai_trained_message_rules').insert({
+    const { data: rules, error: ruleError } = await supabase.from('ai_trained_message_rules').insert(variants.map((variant) => ({
       workspace_id: currentWorkspace.id,
       agent_config_id: trainedConfig.id,
       source_message_id: item.source_message_id,
       example_message: item.customer_message,
-      context_notes: contextNotes,
-      expected_action: expectedAction,
-      action_type: actionType,
-      official_response: officialResponse,
-      required_tag_ids: requiredTagIds,
-      excluded_tag_ids: excludedTagIds,
-    }).select().single();
-    if (ruleError || !rule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
+      context_notes: `${contextNotes}\nContexto obrigatório: cliente com etiqueta ${variant.tag.name}.`,
+      expected_action: variant.expectedAction,
+      action_type: 'reply',
+      official_response: variant.officialResponse,
+      required_tag_ids: [variant.tag.id],
+      excluded_tag_ids: [],
+    }))).select();
+    const firstRule = rules?.[0];
+    if (ruleError || !firstRule) { setTrainingBusyId(''); toast.error(ruleError?.message || 'Não foi possível salvar o treinamento'); return; }
     const { error: queueError } = await supabase.from('ai_training_queue').update({
-      status: 'trained', matched_rule_id: rule.id, suggested_action: expectedAction, suggested_action_type: actionType,
-      suggested_response: actionType === 'reply' ? officialResponse : null, processed_at: new Date().toISOString(),
+      status: 'trained', matched_rule_id: firstRule.id, suggested_action: firstRule.expected_action, suggested_action_type: 'reply',
+      suggested_response: firstRule.official_response, processed_at: new Date().toISOString(),
     }).eq('id', item.id);
     setTrainingBusyId('');
     if (queueError) { toast.error(queueError.message); return; }
-    setTrainedRules((current) => [rule as TrainedRule, ...current]);
-    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: officialResponse } : currentItem));
-    setTrainingAnswers((current) => ({ ...current, [item.id]: '' }));
-    setTrainingActions((current) => ({ ...current, [item.id]: '' }));
-    setTrainingActionTypes((current) => ({ ...current, [item.id]: 'reply' }));
-    setTrainingRequiredTags((current) => ({ ...current, [item.id]: [] }));
-    setTrainingExcludedTags((current) => ({ ...current, [item.id]: [] }));
-    toast.success('Cenário, ação e mensagem foram aprendidos');
+    setTrainedRules((current) => [...(rules as TrainedRule[]), ...current]);
+    setTrainingQueue((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, status: 'trained', suggested_response: firstRule.official_response } : currentItem));
+    setTrainingAnswers((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
+    setTrainingActions((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${item.id}:`))));
+    toast.success(`${rules.length} resposta${rules.length > 1 ? 's' : ''} por etiqueta aprendida${rules.length > 1 ? 's' : ''}`);
   };
 
   const saveTrainedRule = async (rule: TrainedRule) => {
@@ -585,9 +593,8 @@ export default function AiOrchestration({
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
                       {item.suggested_response && <div><p className="mb-1 text-xs font-medium text-foreground">Resposta que seria selecionada no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap">{item.suggested_response}</div></div>}
-                       <div className="space-y-2"><label className="block text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</label><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{TRAINING_TAG_ACTIONS.map((tagName) => { const action = `Aplicar a etiqueta "${tagName}".`; const active = trainingActions[item.id] === action; return <Button key={`${item.id}-${tagName}`} type="button" variant={active ? 'default' : 'outline'} className="justify-start" onClick={() => selectTrainingTagAction(item.id, tagName)}><span className="mr-2 text-xs">Tag</span>{tagName}</Button>; })}</div><p className="text-xs text-muted-foreground">Escolha a etapa para a qual este cliente deve avançar.</p></div>
-                       {(trainingActionTypes[item.id] || 'reply') === 'reply' && <div><label className="mb-1.5 block text-xs font-medium text-foreground">Qual mensagem deve usar?</label><Textarea value={trainingAnswers[item.id] || ''} onChange={(event) => setTrainingAnswers((current) => ({ ...current, [item.id]: event.target.value }))} rows={4} placeholder="Digite a mensagem exatamente como deverá ser enviada ao cliente." /></div>}
-                       <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" variant="outline" size="sm" disabled={trainingBusyId === item.id} onClick={() => { setTrainingActions((current) => ({ ...current, [item.id]: 'Não responder neste cenário.' })); setTrainingActionTypes((current) => ({ ...current, [item.id]: 'no_response' })); }}>Definir sem resposta</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
+                       <div className="space-y-3"><div><p className="text-xs font-medium text-foreground">O que eu deveria fazer neste cenário?</p><p className="text-xs text-muted-foreground">Ensine uma resposta diferente conforme a etiqueta que o cliente já possui. A IA não adiciona nem remove etiquetas.</p></div><div className="grid gap-3 md:grid-cols-2">{TRAINING_CONTEXT_TAGS.map((label) => { const tag = findContextTag(label); const key = `${item.id}:${tag?.id || label}`; return <div key={key} className="space-y-3 rounded-md border border-border bg-background p-3"><div className="flex items-center justify-between"><Badge variant="outline">{label}</Badge>{!tag && <span className="text-xs text-destructive">Etiqueta não cadastrada</span>}</div><div><label className="mb-1 block text-xs font-medium text-foreground">Comportamento nesta etiqueta</label><Textarea disabled={!tag} value={trainingActions[key] || ''} onChange={(event) => setTrainingActions((current) => ({ ...current, [key]: event.target.value }))} rows={2} placeholder="Ex.: Explicar o prazo e tirar a dúvida." /></div><div><label className="mb-1 block text-xs font-medium text-foreground">Mensagem exata para esta etiqueta</label><Textarea disabled={!tag} value={trainingAnswers[key] || ''} onChange={(event) => setTrainingAnswers((current) => ({ ...current, [key]: event.target.value }))} rows={3} placeholder="Mensagem pronta que será enviada sem alterações." /></div></div>; })}</div></div>
+                        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" disabled={trainingBusyId === item.id} onClick={() => void updateTrainingStatus(item.id, 'ignored')}>Ignorar</Button><Button type="button" size="sm" disabled={trainingBusyId === item.id} onClick={() => void trainFromMessage(item)}>{trainingBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Ensinar cenário</Button></div>
                     </div>)}
                   </div>
 
