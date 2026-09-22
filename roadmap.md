@@ -120,4 +120,4 @@
 - [x] Adicionar filtros Aguardando treinamento, Respostas ativas e Histórico
 - [x] Manter respostas aprendidas editáveis
 - [x] Mostrar decisão, confiança, motivo e estado real de envio
-- [ ] Validar desktop, celular e build
+- [x] Validar desktop, celular e build
