@@ -227,3 +227,10 @@
 - [x] Mostrar somente funis do mesmo nicho durante o treinamento
 - [x] Publicar a função e validar a compilação
 - [ ] Validar a tela autenticada; a conta do solicitante ainda não existe nesta aplicação
+
+# Separação automática de Pós-Venda
+
+- [x] Remover de Todos as conversas com a etiqueta POS VENDA
+- [x] Mostrar em Pós-Venda as conversas com a etiqueta POS VENDA
+- [x] Preservar contagem, paginação e filtros da caixa de entrada
+- [x] Validar a regra com os dados atuais e confirmar a compilação
