@@ -134,6 +134,13 @@
       "when": 1790122494106,
       "tag": "0018_add_receipt_review_and_sale_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790122574102,
+      "tag": "0019_audit_receipt_reviews",
+      "breakpoints": true
     }
   ]
 }

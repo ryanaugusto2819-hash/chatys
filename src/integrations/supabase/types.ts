@@ -453,6 +453,73 @@ export type Database = {
           },
         ]
       }
+      ai_receipt_review_logs: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          currency: string | null
+          detected_amount: number | null
+          final_amount: number | null
+          id: string
+          note: string | null
+          queue_id: string
+          responsible_user_id: string | null
+          sale_order_id: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          currency?: string | null
+          detected_amount?: number | null
+          final_amount?: number | null
+          id?: string
+          note?: string | null
+          queue_id: string
+          responsible_user_id?: string | null
+          sale_order_id?: string | null
+          status: string
+          workspace_id: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          currency?: string | null
+          detected_amount?: number | null
+          final_amount?: number | null
+          id?: string
+          note?: string | null
+          queue_id?: string
+          responsible_user_id?: string | null
+          sale_order_id?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_receipt_review_logs_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "ai_training_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_receipt_review_logs_sale_order_id_fkey"
+            columns: ["sale_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_receipt_review_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_trained_message_rules: {
         Row: {
           action_observation: string
