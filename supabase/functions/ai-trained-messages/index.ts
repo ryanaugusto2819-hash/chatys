@@ -15,6 +15,9 @@ const ReceiptSchema = z.object({
   is_possible_receipt: z.boolean(),
   confidence: z.number(),
   reason: z.string(),
+  detected_amount: z.number().positive().nullable(),
+  detected_currency: z.string().length(3).nullable(),
+  amount_confidence: z.number(),
 });
 
 function json(body: unknown, status = 200) {
@@ -163,6 +166,9 @@ Deno.serve(async (req) => {
     let isPossibleReceipt: boolean | null = null;
     let receiptConfidence: number | null = null;
     let receiptReason: string | null = null;
+    let receiptDetectedAmount: number | null = null;
+    let receiptDetectedCurrency: string | null = null;
+    let receiptAmountConfidence: number | null = null;
     if (message.message_type === "image" && message.media_url) {
       imageUrl = await resolveMediaUrl(service, message.media_url);
       const visionProvider = createOpenAI({
@@ -174,7 +180,7 @@ Deno.serve(async (req) => {
         model: visionProvider.responses("openai/gpt-6-astra"),
         output: Output.object({ schema: ReceiptSchema }),
         messages: [{ role: "user", content: [
-          { type: "text", text: "Analise esta imagem. Identifique apenas se ela parece ser um comprovante de pagamento, depósito, transferência, OXXO ou recibo financeiro. Uma imagem pode ser um possível comprovante, mas nunca confirme que o pagamento foi aprovado. Retorne motivo curto e confiança entre 0 e 1." },
+          { type: "text", text: "Analise esta imagem. Identifique se ela parece ser um comprovante de pagamento, depósito, transferência, OXXO ou recibo financeiro. Extraia somente o valor total efetivamente pago e a moeda de três letras quando estiverem claramente visíveis; não use saldo, tarifa, troco, limite ou valor de referência. Se houver dúvida, retorne detected_amount e detected_currency como null. Uma imagem pode ser um possível comprovante, mas nunca confirme que o pagamento foi aprovado. Retorne motivo curto, confiança geral e confiança do valor entre 0 e 1." },
           { type: "image", image: new URL(imageUrl) },
         ] }],
         providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
@@ -183,6 +189,9 @@ Deno.serve(async (req) => {
       isPossibleReceipt = vision.is_possible_receipt;
       receiptConfidence = Math.max(0, Math.min(1, Number(vision.confidence) || 0));
       receiptReason = vision.reason;
+      receiptDetectedAmount = Number.isFinite(vision.detected_amount) ? Number(vision.detected_amount) : null;
+      receiptDetectedCurrency = vision.detected_currency?.toUpperCase() || null;
+      receiptAmountConfidence = Math.max(0, Math.min(1, Number(vision.amount_confidence) || 0));
       customerMessage = `${message.content?.trim() || "[Imagem]"}\n[Análise visual: ${isPossibleReceipt ? "possível comprovante" : "não parece comprovante"}; confiança ${Math.round(receiptConfidence * 100)}%; ${receiptReason}]`;
     }
 
@@ -210,6 +219,9 @@ Deno.serve(async (req) => {
       is_possible_receipt: isPossibleReceipt,
       receipt_confidence: receiptConfidence,
       receipt_reason: receiptReason,
+      receipt_detected_amount: receiptDetectedAmount,
+      receipt_detected_currency: receiptDetectedCurrency,
+      receipt_amount_confidence: receiptAmountConfidence,
       detected_country_code: detectedCountryCode,
     };
 
@@ -223,6 +235,10 @@ Deno.serve(async (req) => {
       context_snapshot: contextSnapshot,
       detected_country_code: detectedCountryCode,
       conversation_started_at: conversationStartedAt,
+      receipt_review_status: isPossibleReceipt ? "pending" : "not_applicable",
+      receipt_detected_amount: receiptDetectedAmount,
+      receipt_detected_currency: receiptDetectedCurrency,
+      receipt_amount_confidence: receiptAmountConfidence,
       status: "pending",
     }, { onConflict: "source_message_id" }).select("id").single();
     if (queueError || !queued) return json({ error: queueError?.message || "Falha ao registrar mensagem para treinamento" }, 500);
@@ -340,7 +356,7 @@ Deno.serve(async (req) => {
       confidence,
       reason: output.reason,
       transcription: audioTranscription,
-      imageAnalysis: message.message_type === "image" ? { isPossibleReceipt, confidence: receiptConfidence, reason: receiptReason } : null,
+      imageAnalysis: message.message_type === "image" ? { isPossibleReceipt, confidence: receiptConfidence, reason: receiptReason, detectedAmount: receiptDetectedAmount, detectedCurrency: receiptDetectedCurrency, amountConfidence: receiptAmountConfidence } : null,
       executed: false,
     });
   } catch (error) {

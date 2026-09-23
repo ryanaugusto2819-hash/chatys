@@ -210,3 +210,11 @@
 - [x] Executar de fato as ações de adicionar e remover etiqueta nos fluxos
 - [x] Restringir a alteração ao telefone e workspace corretos
 - [x] Registrar falha real no histórico quando a etiqueta estiver ausente ou inválida
+
+# Revisão de comprovantes e registro de venda
+
+- [x] Extrair valor, moeda e confiança das imagens de possíveis comprovantes
+- [x] Manter o pagamento pendente até revisão manual de um administrador
+- [x] Permitir corrigir o valor antes de aprovar e registrar a venda uma única vez
+- [x] Permitir rejeitar o comprovante sem registrar venda
+- [x] Exibir análise, revisão, valor final e resultado no histórico
