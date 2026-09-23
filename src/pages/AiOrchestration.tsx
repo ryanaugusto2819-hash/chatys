@@ -34,7 +34,8 @@ type AgentConfig = {
 };
 type Conversation = { id: string; contact_name: string | null; contact_phone: string; funnel_stage: string | null; updated_at: string };
 type Connection = { id: string; label: string; connection_id: string; status: string; is_connected: boolean };
-type Flow = { id: string; name: string; description: string | null; is_active: boolean; manual_only: boolean };
+type Flow = { id: string; name: string; description: string | null; is_active: boolean; manual_only: boolean; niche_id: string | null };
+type Niche = { id: string; name: string };
 type AgentFlow = { flow_id: string; send_when: string; do_not_send_when: string; trigger_examples: string; analyze_flow_content: boolean };
 type SupportFaq = { question: string; answer: string };
 type WorkspaceTag = { id: string; name: string; color: string };
@@ -53,6 +54,7 @@ type TrainingQueueItem = {
   receipt_amount_confidence: number | null; receipt_reviewed_at: string | null; receipt_reviewed_amount: number | null;
   receipt_review_note: string | null; receipt_sale_order_id: string | null;
   context_snapshot: Json; created_at: string; conversation_started_at?: string | null;
+  niche_id: string | null;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
   messages?: { media_url?: string | null } | null;
   ai_trained_message_rules?: {
@@ -69,6 +71,7 @@ type TrainedRule = {
   required_tag_ids: string[]; excluded_tag_ids: string[];
   requires_no_tags: boolean;
   country_code: CountryFilter;
+  niche_id: string | null;
   active: boolean; updated_at: string;
 };
 type TrainingActionType = 'reply' | 'flow' | 'reply_then_flow' | 'no_response' | 'wait' | 'route' | 'other';
@@ -157,6 +160,10 @@ export default function AiOrchestration({
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
+  const [niches, setNiches] = useState<Niche[]>([]);
+  const [trainingNicheFilter, setTrainingNicheFilter] = useState('all');
+  const [newNicheName, setNewNicheName] = useState('');
+  const [creatingNiche, setCreatingNiche] = useState(false);
   const [connectionSelections, setConnectionSelections] = useState<Record<AgentKey, string[]>>({} as Record<AgentKey, string[]>);
   const [flowSelections, setFlowSelections] = useState<AgentFlow[]>([]);
   const [supportFaqs, setSupportFaqs] = useState<SupportFaq[]>([]);
@@ -186,17 +193,18 @@ export default function AiOrchestration({
   const loadData = async () => {
     if (!currentWorkspace?.id) return;
     setLoading(true);
-    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, agentConnectionsResult, agentFlowsResult, supportFaqsResult, trainingQueueResult, trainedRulesResult, tagsResult] = await Promise.all([
+    const [configsResult, conversationsResult, decisionsResult, connectionsResult, flowsResult, nichesResult, agentConnectionsResult, agentFlowsResult, supportFaqsResult, trainingQueueResult, trainedRulesResult, tagsResult] = await Promise.all([
       supabase.from('ai_agent_configs').select('*').eq('workspace_id', currentWorkspace.id).is('niche_id', null),
       supabase.from('conversations').select('id, contact_name, contact_phone, funnel_stage, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(50),
       supabase.from('ai_orchestration_decisions').select('id, selected_agent, action, reason, confidence, blockers, operation_mode, status, created_at, conversations(contact_name, contact_phone)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(30),
       supabase.from('connection_configs').select('id, label, connection_id, status, is_connected').eq('workspace_id', currentWorkspace.id).in('connection_id', ['whatsapp', 'zapi', 'evolution', 'uazapigo']).order('created_at'),
-      supabase.from('automation_flows').select('id, name, description, is_active, manual_only').eq('workspace_id', currentWorkspace.id).order('name'),
+      supabase.from('automation_flows').select('id, name, description, is_active, manual_only, niche_id').eq('workspace_id', currentWorkspace.id).order('name'),
+      supabase.from('niches').select('id, name').eq('workspace_id', currentWorkspace.id).order('name'),
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversation_started_at, receipt_review_status, receipt_detected_amount, receipt_detected_currency, receipt_amount_confidence, receipt_reviewed_at, receipt_reviewed_amount, receipt_review_note, receipt_sale_order_id, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, niche_id, processed_at, context_snapshot, created_at, conversation_started_at, receipt_review_status, receipt_detected_amount, receipt_detected_currency, receipt_amount_confidence, receipt_reviewed_at, receipt_reviewed_amount, receipt_review_note, receipt_sale_order_id, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, niche_id, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
 
@@ -224,6 +232,7 @@ export default function AiOrchestration({
     setWorkspaceTags((tagsResult.data || []) as WorkspaceTag[]);
     setConnections((connectionsResult.data || []) as Connection[]);
     setFlows((flowsResult.data || []) as Flow[]);
+    setNiches((nichesResult.data || []) as Niche[]);
     setConversations((conversationsResult.data || []) as Conversation[]);
     setDecisions((decisionsResult.data || []) as unknown as Decision[]);
     if (conversationsResult.data?.[0]) setConversationId(conversationsResult.data[0].id);
@@ -231,6 +240,19 @@ export default function AiOrchestration({
   };
 
   useEffect(() => { void loadData(); }, [currentWorkspace?.id]);
+
+  const createTrainingNiche = async () => {
+    const name = newNicheName.trim();
+    if (!currentWorkspace?.id || !name) return;
+    setCreatingNiche(true);
+    const { data, error } = await supabase.from('niches').insert({ name, system_prompt: '', workspace_id: currentWorkspace.id }).select('id, name').single();
+    setCreatingNiche(false);
+    if (error || !data) { toast.error(error?.message || 'Não foi possível criar o nicho'); return; }
+    setNiches((current) => [...current, data].sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')));
+    setTrainingNicheFilter(data.id);
+    setNewNicheName('');
+    toast.success('Nicho criado');
+  };
 
   const updateSelected = (patch: Partial<AgentConfig>) => {
     setConfigs((current) => current.map((config) => config.agent_key === selectedKey ? { ...config, ...patch } : config));
@@ -499,8 +521,9 @@ export default function AiOrchestration({
     const startedAt = item.conversation_started_at ? new Date(item.conversation_started_at).getTime() : 0;
     return Number.isFinite(startedAt) && startedAt >= TRAINING_CONVERSATION_CUTOFF;
   };
-  const visibleTrainingQueue = trainingQueue.filter((item) => isEligibleTrainingConversation(item) && (trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter));
-  const visibleTrainedRules = trainedRules.filter((rule) => trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter);
+  const matchesNiche = (nicheId: string | null) => trainingNicheFilter === 'all' || (trainingNicheFilter === 'none' ? nicheId === null : nicheId === trainingNicheFilter);
+  const visibleTrainingQueue = trainingQueue.filter((item) => isEligibleTrainingConversation(item) && matchesNiche(item.niche_id) && (trainingCountryFilter === 'any' || itemCountry(item) === trainingCountryFilter));
+  const visibleTrainedRules = trainedRules.filter((rule) => matchesNiche(rule.niche_id) && (trainingCountryFilter === 'any' || rule.country_code === trainingCountryFilter));
   const normalizedWords = (value: string) => Array.from(new Set(normalizeTagName(value).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((word) => word.length > 2)));
   const messageSimilarity = (left: string, right: string) => {
     const leftWords = normalizedWords(left);
@@ -513,7 +536,7 @@ export default function AiOrchestration({
     const conflicts: Record<string, string[]> = {};
     trainedRules.forEach((rule, index) => {
       trainedRules.forEach((other, otherIndex) => {
-        if (index >= otherIndex || !rule.active || !other.active) return;
+        if (index >= otherIndex || !rule.active || !other.active || rule.niche_id !== other.niche_id) return;
         const countryOverlap = rule.country_code === other.country_code || rule.country_code === 'any' || other.country_code === 'any';
         const tagsOverlap = (rule.requires_no_tags && other.requires_no_tags)
           || (!rule.requires_no_tags && !other.requires_no_tags && (rule.required_tag_ids.length === 0 || other.required_tag_ids.length === 0 || rule.required_tag_ids.some((id) => other.required_tag_ids.includes(id))));
@@ -538,14 +561,14 @@ export default function AiOrchestration({
     };
   };
   const filteredHistory = useMemo(() => {
-    const history = trainingQueue.filter((item) => item.status !== "pending" && (trainingCountryFilter === "any" || itemCountry(item) === trainingCountryFilter));
+    const history = trainingQueue.filter((item) => item.status !== "pending" && matchesNiche(item.niche_id) && (trainingCountryFilter === "any" || itemCountry(item) === trainingCountryFilter));
     if (!historySearch.trim()) return history;
     const query = normalizeTagName(historySearch);
     return history.filter((item) => {
       const searchable = [item.conversations?.contact_name, item.conversations?.contact_phone, item.customer_message, ...snapshotTagNames(item), item.suggested_action, ...readMessages(item.suggested_responses, item.suggested_response || ''), flows.find((flow) => flow.id === item.suggested_flow_id)?.name].filter(Boolean).join(' ');
       return normalizeTagName(searchable).includes(query);
     });
-  }, [trainingQueue, trainingCountryFilter, historySearch, flows]);
+  }, [trainingQueue, trainingCountryFilter, trainingNicheFilter, historySearch, flows]);
   const groupedTrainingQueue = useMemo(() => {
     const waiting = visibleTrainingQueue.filter((item) => ["pending", "unmatched"].includes(item.status));
     const groups: TrainingQueueItem[][] = [];
@@ -603,6 +626,7 @@ export default function AiOrchestration({
     const contextNotes = [`Etapa: ${typeof snapshot.funnel_stage === 'string' ? snapshot.funnel_stage : 'não definida'}`, `Etiquetas: ${tags || 'nenhuma'}`].join('\n');
     const { data: rules, error: ruleError } = await supabase.from('ai_trained_message_rules').insert(variants.map((variant) => ({
       workspace_id: currentWorkspace.id,
+      niche_id: item.niche_id,
       agent_config_id: trainedConfig.id,
       source_message_id: item.source_message_id,
       example_message: item.customer_message,
@@ -630,7 +654,7 @@ export default function AiOrchestration({
         action_observation: firstRule.action_observation, expected_action: firstRule.expected_action,
         action_type: firstRule.action_type, response_messages: firstRule.response_messages, flow_id: firstRule.flow_id,
         required_tag_ids: firstRule.required_tag_ids, excluded_tag_ids: firstRule.excluded_tag_ids,
-        requires_no_tags: firstRule.requires_no_tags, country_code: firstRule.country_code,
+        requires_no_tags: firstRule.requires_no_tags, country_code: firstRule.country_code, niche_id: firstRule.niche_id,
       },
       processed_at: new Date().toISOString(),
     }).in('id', similarItems.map((candidate) => candidate.id));
@@ -700,9 +724,8 @@ export default function AiOrchestration({
   const activeCount = useMemo(() => configs.filter((config) => config.enabled).length, [configs]);
   const visibleFlows = useMemo(() => {
     const query = flowSearch.trim().toLocaleLowerCase('pt-BR');
-    if (!query) return flows;
-    return flows.filter((flow) => `${flow.name} ${flow.description || ''}`.toLocaleLowerCase('pt-BR').includes(query));
-  }, [flows, flowSearch]);
+    return flows.filter((flow) => matchesNiche(flow.niche_id) && (!query || `${flow.name} ${flow.description || ''}`.toLocaleLowerCase('pt-BR').includes(query)));
+  }, [flows, flowSearch, trainingNicheFilter]);
 
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
