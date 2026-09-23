@@ -49,6 +49,9 @@ type TrainingQueueItem = {
   detected_country_code?: CountryCode | null;
   suggested_action?: string | null; suggested_action_type?: string | null; processed_at?: string | null;
   suggested_flow_id?: string | null;
+  receipt_review_status: string; receipt_detected_amount: number | null; receipt_detected_currency: string | null;
+  receipt_amount_confidence: number | null; receipt_reviewed_at: string | null; receipt_reviewed_amount: number | null;
+  receipt_review_note: string | null; receipt_sale_order_id: string | null;
   context_snapshot: Json; created_at: string; conversation_started_at?: string | null;
   conversations?: { contact_name?: string | null; contact_phone?: string } | null;
   messages?: { media_url?: string | null } | null;
@@ -169,6 +172,7 @@ export default function AiOrchestration({
   const [trainingRequiredTags, setTrainingRequiredTags] = useState<Record<string, string[]>>({});
   const [trainingExcludedTags, setTrainingExcludedTags] = useState<Record<string, string[]>>({});
   const [trainingBusyId, setTrainingBusyId] = useState('');
+  const [receiptAmounts, setReceiptAmounts] = useState<Record<string, string>>({});
   const [trainingView, setTrainingView] = useState<TrainingView>('waiting');
   const [trainingCountryFilter, setTrainingCountryFilter] = useState<CountryFilter>('any');
   const [flowSearch, setFlowSearch] = useState('');
@@ -191,7 +195,7 @@ export default function AiOrchestration({
       supabase.from('ai_agent_connections').select('agent_config_id, connection_config_id'),
       supabase.from('ai_agent_flows').select('agent_config_id, flow_id, send_when, do_not_send_when, trigger_examples, analyze_flow_content'),
       supabase.from('ai_agent_faqs').select('agent_config_id, question, answer, sort_order').order('sort_order'),
-      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversation_started_at, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ai_training_queue').select('id, conversation_id, source_message_id, customer_message, message_type, status, confidence, match_reason, matched_rule_id, matched_rule_snapshot, decision_feedback, suggested_response, suggested_responses, suggested_action, suggested_action_type, suggested_flow_id, detected_country_code, processed_at, context_snapshot, created_at, conversation_started_at, receipt_review_status, receipt_detected_amount, receipt_detected_currency, receipt_amount_confidence, receipt_reviewed_at, receipt_reviewed_amount, receipt_review_note, receipt_sale_order_id, conversations(contact_name, contact_phone), messages(media_url), ai_trained_message_rules(id, example_message, context_notes, action_observation, expected_action, action_type, country_code)').eq('workspace_id', currentWorkspace.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('ai_trained_message_rules').select('id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, active, updated_at').eq('workspace_id', currentWorkspace.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tags').select('id, name, color').eq('workspace_id', currentWorkspace.id).order('name'),
     ]);
@@ -373,7 +377,50 @@ export default function AiOrchestration({
       isReceipt: snapshot.is_possible_receipt === true,
       confidence: typeof snapshot.receipt_confidence === 'number' ? snapshot.receipt_confidence : 0,
       reason: typeof snapshot.receipt_reason === 'string' ? snapshot.receipt_reason : '',
+      amount: item.receipt_detected_amount ?? (typeof snapshot.receipt_detected_amount === 'number' ? snapshot.receipt_detected_amount : null),
+      currency: item.receipt_detected_currency || (typeof snapshot.receipt_detected_currency === 'string' ? snapshot.receipt_detected_currency : null),
+      amountConfidence: item.receipt_amount_confidence ?? (typeof snapshot.receipt_amount_confidence === 'number' ? snapshot.receipt_amount_confidence : 0),
     };
+  };
+
+  const reviewReceipt = async (item: TrainingQueueItem, action: 'approve' | 'reject') => {
+    const fallbackAmount = item.receipt_detected_amount ? String(item.receipt_detected_amount) : '';
+    const amount = Number(receiptAmounts[item.id] ?? fallbackAmount);
+    if (action === 'approve' && (!Number.isFinite(amount) || amount <= 0)) {
+      toast.error('Confira e informe um valor válido antes de aprovar');
+      return;
+    }
+    setTrainingBusyId(item.id);
+    const { data, error } = await supabase.rpc('review_ai_payment_receipt', {
+      p_queue_id: item.id,
+      p_action: action,
+      p_amount: action === 'approve' ? amount : undefined,
+      p_currency: action === 'approve' ? item.receipt_detected_currency || 'MXN' : undefined,
+    });
+    setTrainingBusyId('');
+    if (error) { toast.error(error.message); return; }
+    const result = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, Json | undefined> : {};
+    setTrainingQueue((current) => current.map((candidate) => candidate.id === item.id ? {
+      ...candidate,
+      receipt_review_status: action === 'approve' ? 'approved' : 'rejected',
+      receipt_reviewed_at: new Date().toISOString(),
+      receipt_reviewed_amount: action === 'approve' ? amount : null,
+      receipt_sale_order_id: typeof result.sale_order_id === 'string' ? result.sale_order_id : candidate.receipt_sale_order_id,
+      receipt_review_note: action === 'approve' ? 'Comprovante aprovado e venda registrada manualmente' : 'Comprovante rejeitado na revisão manual',
+    } : candidate));
+    toast.success(action === 'approve' ? 'Comprovante aprovado e venda registrada' : 'Comprovante rejeitado');
+  };
+
+  const receiptReviewPanel = (item: TrainingQueueItem) => {
+    if (item.receipt_review_status === 'not_applicable') return null;
+    const analysis = imageAnalysis(item);
+    const status = item.receipt_review_status;
+    return <div className="space-y-3 rounded-md border border-border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold text-foreground">Revisão do comprovante</p><Badge variant={status === 'approved' ? 'default' : status === 'rejected' || status === 'failed' ? 'destructive' : 'secondary'}>{status === 'approved' ? 'Venda registrada' : status === 'rejected' ? 'Rejeitado' : status === 'failed' ? 'Falhou' : 'Aguardando revisão'}</Badge></div>
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground"><span>Valor detectado: <strong className="text-foreground">{analysis.amount ? `${analysis.currency || 'MXN'} ${analysis.amount.toFixed(2)}` : 'não identificado'}</strong></span>{analysis.amountConfidence > 0 && <span>{Math.round(analysis.amountConfidence * 100)}% de confiança no valor</span>}</div>
+      {status === 'pending' && <div className="flex flex-col gap-2 sm:flex-row sm:items-end"><div className="flex-1"><label className="mb-1 block text-xs font-medium text-foreground">Valor final revisado ({analysis.currency || 'MXN'})</label><Input type="number" min="0.01" step="0.01" value={receiptAmounts[item.id] ?? (analysis.amount ? String(analysis.amount) : '')} onChange={(event) => setReceiptAmounts((current) => ({ ...current, [item.id]: event.target.value }))} /></div><Button type="button" variant="outline" disabled={trainingBusyId === item.id} onClick={() => void reviewReceipt(item, 'reject')}>Rejeitar</Button><Button type="button" disabled={trainingBusyId === item.id} onClick={() => void reviewReceipt(item, 'approve')}>{trainingBusyId === item.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Aprovar e registrar venda</Button></div>}
+      {status !== 'pending' && <p className="text-xs text-muted-foreground">{item.receipt_review_note}{item.receipt_reviewed_amount ? ` · Valor final: ${item.receipt_detected_currency || 'MXN'} ${Number(item.receipt_reviewed_amount).toFixed(2)}` : ''}{item.receipt_reviewed_at ? ` · ${new Date(item.receipt_reviewed_at).toLocaleString('pt-BR')}` : ''}</p>}
+    </div>;
   };
 
   const toggleTagCondition = (itemId: string, tagId: string, kind: 'required' | 'excluded') => {
@@ -819,7 +866,7 @@ export default function AiOrchestration({
                     {groupedTrainingQueue.length === 0 ? <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma mensagem nova aguardando treinamento neste país.</div> : groupedTrainingQueue.map((group) => { const item = group[0]; return <div key={item.id} className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
                       {group.length > 1 && <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{group.length} mensagens semelhantes</Badge><span className="text-xs text-muted-foreground">Ao ensinar, este cenário será aplicado a todo o grupo.</span></div>}
                       <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.customer_message}</div>
-                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem enviada pelo cliente" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Aguardando análise visual</Badge>; })()}</div>}
+                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem enviada pelo cliente" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Aguardando análise visual</Badge>; })()}{receiptReviewPanel(item)}</div>}
                        {(() => { const snapshot = item.context_snapshot && typeof item.context_snapshot === 'object' && !Array.isArray(item.context_snapshot) ? item.context_snapshot as Record<string, Json | undefined> : {}; const transcript = typeof snapshot.recent_transcript === 'string' ? snapshot.recent_transcript : ''; return transcript ? <details className="rounded-md border border-border bg-background p-3"><summary className="cursor-pointer text-xs font-medium text-foreground">Ver contexto da conversa</summary><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-muted-foreground">{transcript}</pre></details> : null; })()}
                       {item.match_reason && <p className="text-xs text-muted-foreground">Análise: {item.match_reason}</p>}
                        {(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action && <div><p className="mb-1 text-xs font-medium text-foreground">Ação que seria escolhida no teste</p><div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-foreground">{(item as TrainingQueueItem & { suggested_action?: string | null }).suggested_action}</div></div>}
@@ -857,7 +904,7 @@ export default function AiOrchestration({
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{item.conversations?.contact_name || 'Cliente sem nome'}</p><Badge variant="secondary">{countryLabel(itemCountry(item))}</Badge>{snapshotTagNames(item).length ? snapshotTagNames(item).map((tag) => <Badge key={`history-${item.id}-${tag}`} variant="outline">{tag}</Badge>) : <Badge variant="outline">Sem tag</Badge>}</div><p className="text-xs text-muted-foreground">{item.conversations?.contact_phone || 'Telefone não informado'} · {new Date(item.processed_at || item.created_at).toLocaleString('pt-BR')} · {item.message_type}</p></div><div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => navigate(`/conversations/${item.conversation_id}`)}><MessageCircle className="mr-2 h-4 w-4" />Abrir conversa</Button>{Number(item.confidence) > 0 && <Badge variant="outline">{Math.round(Number(item.confidence) * 100)}% confiança</Badge>}<Badge variant={result.variant}>{result.label}</Badge></div></div>
                       <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted-foreground">Avaliar:</span><Button type="button" size="sm" variant={item.decision_feedback === 'correct' ? 'default' : 'outline'} disabled={trainingBusyId === item.id} onClick={() => void setDecisionFeedback(item, 'correct')}><ThumbsUp className="mr-2 h-4 w-4" />Decisão correta</Button><Button type="button" size="sm" variant={item.decision_feedback === 'incorrect' ? 'destructive' : 'outline'} disabled={trainingBusyId === item.id} onClick={() => void setDecisionFeedback(item, 'incorrect')}><ThumbsDown className="mr-2 h-4 w-4" />Decisão errada</Button></div>
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagem recebida</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground whitespace-pre-wrap">{item.customer_message}</div></div>
-                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem analisada pela IA" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Sem análise visual registrada</Badge>; })()}</div>}
+                      {item.message_type === 'image' && item.messages?.media_url && <div className="space-y-2"><MediaImage src={item.messages.media_url} alt="Imagem analisada pela IA" loading="eager" className="max-h-80 w-auto max-w-full rounded-md border border-border object-contain" />{(() => { const analysis = imageAnalysis(item); return analysis.reason ? <div className="flex flex-wrap items-center gap-2"><Badge variant={analysis.isReceipt ? 'default' : 'secondary'}>{analysis.isReceipt ? 'Possível comprovante' : 'Não parece comprovante'}</Badge>{analysis.confidence > 0 && <span className="text-xs text-muted-foreground">{Math.round(analysis.confidence * 100)}% de confiança</span>}<span className="w-full text-xs text-muted-foreground">{analysis.reason}</span></div> : <Badge variant="outline">Sem análise visual registrada</Badge>; })()}{receiptReviewPanel(item)}</div>}
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">O que a IA entendeu</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground whitespace-pre-wrap">{item.match_reason || 'Nenhuma interpretação segura foi registrada.'}</div></div>
                       <div><p className="mb-1 text-xs font-medium text-muted-foreground">Ação tomada pela IA</p><div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">{item.suggested_action || (item.status === 'unmatched' ? 'Nenhuma ação — não encontrou uma correspondência segura.' : item.status === 'ignored' ? 'Ignorar este cenário.' : item.status === 'no_response' ? 'Não responder ao cliente.' : 'Nenhuma ação registrada.')}</div></div>
                       {readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).length > 0 && <div><p className="mb-1 text-xs font-medium text-muted-foreground">Mensagens selecionadas, na ordem</p><div className="space-y-2">{readMessages(item.suggested_responses, item.suggested_response || '').filter(Boolean).map((message, index) => <div key={`${item.id}-history-${index}`} className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground whitespace-pre-wrap"><span className="mb-1 block text-xs font-semibold text-primary">Mensagem {index + 1}</span>{message}</div>)}</div></div>}
