@@ -573,7 +573,7 @@ export default function AiOrchestration({
     const waiting = visibleTrainingQueue.filter((item) => ["pending", "unmatched"].includes(item.status));
     const groups: TrainingQueueItem[][] = [];
     waiting.forEach((item) => {
-      const group = groups.find((candidate) => itemCountry(candidate[0]) === itemCountry(item) && messageSimilarity(candidate[0].customer_message, item.customer_message) >= 0.65);
+      const group = groups.find((candidate) => candidate[0].niche_id === item.niche_id && itemCountry(candidate[0]) === itemCountry(item) && messageSimilarity(candidate[0].customer_message, item.customer_message) >= 0.65);
       if (group) group.push(item);
       else groups.push([item]);
     });
@@ -722,6 +722,8 @@ export default function AiOrchestration({
   };
 
   const activeCount = useMemo(() => configs.filter((config) => config.enabled).length, [configs]);
+  const nicheName = (nicheId: string | null) => niches.find((niche) => niche.id === nicheId)?.name || 'Sem nicho';
+  const flowsForNiche = (nicheId: string | null) => flows.filter((flow) => flow.niche_id === nicheId);
   const visibleFlows = useMemo(() => {
     const query = flowSearch.trim().toLocaleLowerCase('pt-BR');
     return flows.filter((flow) => matchesNiche(flow.niche_id) && (!query || `${flow.name} ${flow.description || ''}`.toLocaleLowerCase('pt-BR').includes(query)));
@@ -763,6 +765,11 @@ export default function AiOrchestration({
             </div>
           </section>
         )}
+
+        {standalone && <section className="grid gap-4 border-b border-border pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
+          <div><label className="mb-1.5 block text-sm font-medium text-foreground">Nicho dos aprendizados</label><Select value={trainingNicheFilter} onValueChange={setTrainingNicheFilter}><SelectTrigger aria-label="Filtrar aprendizados por nicho"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos os nichos</SelectItem><SelectItem value="none">Sem nicho</SelectItem>{niches.map((niche) => <SelectItem key={niche.id} value={niche.id}>{niche.name}</SelectItem>)}</SelectContent></Select><p className="mt-1.5 text-xs text-muted-foreground">Mensagens, respostas e funis ficam separados pelo nicho da conversa.</p></div>
+          <div><label className="mb-1.5 block text-sm font-medium text-foreground">Criar novo nicho</label><div className="flex gap-2"><Input value={newNicheName} onChange={(event) => setNewNicheName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void createTrainingNiche(); } }} maxLength={100} placeholder="Nome do nicho" /><Button type="button" variant="outline" disabled={!newNicheName.trim() || creatingNiche} onClick={() => void createTrainingNiche()}>{creatingNiche ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}<span className="sr-only">Criar nicho</span></Button></div></div>
+        </section>}
 
         <div className={standalone ? 'grid gap-6' : 'grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]'}>
           {!standalone && <aside className="space-y-2">
