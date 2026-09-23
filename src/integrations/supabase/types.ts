@@ -570,6 +570,15 @@ export type Database = {
           matched_rule_snapshot: Json
           message_type: string
           processed_at: string | null
+          receipt_amount_confidence: number | null
+          receipt_detected_amount: number | null
+          receipt_detected_currency: string | null
+          receipt_review_note: string | null
+          receipt_review_status: string
+          receipt_reviewed_amount: number | null
+          receipt_reviewed_at: string | null
+          receipt_reviewed_by: string | null
+          receipt_sale_order_id: string | null
           source_message_id: string
           status: string
           suggested_action: string | null
@@ -598,6 +607,15 @@ export type Database = {
           matched_rule_snapshot?: Json
           message_type?: string
           processed_at?: string | null
+          receipt_amount_confidence?: number | null
+          receipt_detected_amount?: number | null
+          receipt_detected_currency?: string | null
+          receipt_review_note?: string | null
+          receipt_review_status?: string
+          receipt_reviewed_amount?: number | null
+          receipt_reviewed_at?: string | null
+          receipt_reviewed_by?: string | null
+          receipt_sale_order_id?: string | null
           source_message_id: string
           status?: string
           suggested_action?: string | null
@@ -626,6 +644,15 @@ export type Database = {
           matched_rule_snapshot?: Json
           message_type?: string
           processed_at?: string | null
+          receipt_amount_confidence?: number | null
+          receipt_detected_amount?: number | null
+          receipt_detected_currency?: string | null
+          receipt_review_note?: string | null
+          receipt_review_status?: string
+          receipt_reviewed_amount?: number | null
+          receipt_reviewed_at?: string | null
+          receipt_reviewed_by?: string | null
+          receipt_sale_order_id?: string | null
           source_message_id?: string
           status?: string
           suggested_action?: string | null
@@ -656,6 +683,13 @@ export type Database = {
             columns: ["matched_rule_id"]
             isOneToOne: false
             referencedRelation: "ai_trained_message_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_receipt_sale_order_id_fkey"
+            columns: ["receipt_sale_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
             referencedColumns: ["id"]
           },
           {
@@ -3289,6 +3323,15 @@ export type Database = {
       }
       is_workspace_admin: { Args: { _workspace_id: string }; Returns: boolean }
       is_workspace_member: { Args: { _workspace_id: string }; Returns: boolean }
+      review_ai_payment_receipt: {
+        Args: {
+          p_action: string
+          p_amount?: number
+          p_currency?: string
+          p_queue_id: string
+        }
+        Returns: Json
+      }
       shares_workspace_with: {
         Args: { _a: string; _b: string }
         Returns: boolean
