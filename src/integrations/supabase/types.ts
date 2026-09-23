@@ -535,6 +535,7 @@ export type Database = {
           expected_action: string
           flow_id: string | null
           id: string
+          niche_id: string | null
           official_response: string
           required_tag_ids: string[]
           requires_no_tags: boolean
@@ -557,6 +558,7 @@ export type Database = {
           expected_action?: string
           flow_id?: string | null
           id?: string
+          niche_id?: string | null
           official_response: string
           required_tag_ids?: string[]
           requires_no_tags?: boolean
@@ -579,6 +581,7 @@ export type Database = {
           expected_action?: string
           flow_id?: string | null
           id?: string
+          niche_id?: string | null
           official_response?: string
           required_tag_ids?: string[]
           requires_no_tags?: boolean
@@ -600,6 +603,13 @@ export type Database = {
             columns: ["flow_id"]
             isOneToOne: false
             referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_trained_message_rules_niche_id_fkey"
+            columns: ["niche_id"]
+            isOneToOne: false
+            referencedRelation: "niches"
             referencedColumns: ["id"]
           },
           {
@@ -636,6 +646,7 @@ export type Database = {
           matched_rule_id: string | null
           matched_rule_snapshot: Json
           message_type: string
+          niche_id: string | null
           processed_at: string | null
           receipt_amount_confidence: number | null
           receipt_detected_amount: number | null
@@ -673,6 +684,7 @@ export type Database = {
           matched_rule_id?: string | null
           matched_rule_snapshot?: Json
           message_type?: string
+          niche_id?: string | null
           processed_at?: string | null
           receipt_amount_confidence?: number | null
           receipt_detected_amount?: number | null
@@ -710,6 +722,7 @@ export type Database = {
           matched_rule_id?: string | null
           matched_rule_snapshot?: Json
           message_type?: string
+          niche_id?: string | null
           processed_at?: string | null
           receipt_amount_confidence?: number | null
           receipt_detected_amount?: number | null
@@ -750,6 +763,13 @@ export type Database = {
             columns: ["matched_rule_id"]
             isOneToOne: false
             referencedRelation: "ai_trained_message_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_queue_niche_id_fkey"
+            columns: ["niche_id"]
+            isOneToOne: false
+            referencedRelation: "niches"
             referencedColumns: ["id"]
           },
           {
