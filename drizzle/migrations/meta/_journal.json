@@ -148,6 +148,13 @@
       "when": 1790125599326,
       "tag": "0020_scope_intelligent_training_by_niche",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790126143308,
+      "tag": "0021_route_pos_venda_tag_in_inbox",
+      "breakpoints": true
     }
   ]
 }
