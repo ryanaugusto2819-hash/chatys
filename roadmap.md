@@ -225,4 +225,5 @@
 - [x] Isolar a comparação da IA por nicho e manter prioridade por país
 - [x] Adicionar filtro e criação de nichos na Automação Inteligente
 - [x] Mostrar somente funis do mesmo nicho durante o treinamento
-- [ ] Validar visualmente a tela e a publicação da função
+- [x] Publicar a função e validar a compilação
+- [ ] Validar a tela autenticada; a conta do solicitante ainda não existe nesta aplicação
