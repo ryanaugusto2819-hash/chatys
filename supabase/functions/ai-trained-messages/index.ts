@@ -108,14 +108,14 @@ Deno.serve(async (req) => {
     const service = createClient(url, serviceKey);
     const { data: message, error: messageError } = await service
       .from("messages")
-      .select("id, conversation_id, content, media_url, message_type, sender_type, created_at, conversations!inner(id, workspace_id, connection_config_id, funnel_stage, sale_registered_at, contact_phone)")
+      .select("id, conversation_id, content, media_url, message_type, sender_type, created_at, conversations!inner(id, workspace_id, connection_config_id, niche_id, funnel_stage, sale_registered_at, contact_phone)")
       .eq("id", sourceMessageId)
       .maybeSingle();
     if (messageError) return json({ error: messageError.message }, 500);
     if (!message || message.sender_type !== "customer") return json({ skipped: true, reason: "Mensagem de cliente não encontrada" });
 
     const conversation = message.conversations as unknown as {
-      id: string; workspace_id: string; connection_config_id: string | null; funnel_stage: string | null;
+      id: string; workspace_id: string; connection_config_id: string | null; niche_id: string | null; funnel_stage: string | null;
       sale_registered_at: string | null; contact_phone: string;
     };
     const { data: firstMessage, error: firstMessageError } = await service
@@ -195,10 +195,19 @@ Deno.serve(async (req) => {
       customerMessage = `${message.content?.trim() || "[Imagem]"}\n[Análise visual: ${isPossibleReceipt ? "possível comprovante" : "não parece comprovante"}; confiança ${Math.round(receiptConfidence * 100)}%; ${receiptReason}]`;
     }
 
+    const rulesQuery = service.from("ai_trained_message_rules")
+      .select("id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code, niche_id")
+      .eq("agent_config_id", config.id)
+      .eq("active", true)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    const scopedRulesQuery = conversation.niche_id
+      ? rulesQuery.eq("niche_id", conversation.niche_id)
+      : rulesQuery.is("niche_id", null);
     const [{ data: recentMessages }, { data: tags }, { data: rules }] = await Promise.all([
       service.from("messages").select("sender_type, sender_label, content, message_type, created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(20),
       service.from("contact_tags").select("tag_id, tags!inner(id, name, workspace_id)").eq("contact_phone", conversation.contact_phone).eq("tags.workspace_id", conversation.workspace_id).limit(30),
-      service.from("ai_trained_message_rules").select("id, example_message, context_notes, expected_action, action_observation, action_type, official_response, response_messages, flow_id, required_tag_ids, excluded_tag_ids, requires_no_tags, country_code").eq("agent_config_id", config.id).eq("active", true).order("updated_at", { ascending: false }).limit(100),
+      scopedRulesQuery,
     ]);
 
     const transcript = [...(recentMessages || [])].reverse().map((item) =>
@@ -227,6 +236,7 @@ Deno.serve(async (req) => {
 
     const { data: queued, error: queueError } = await service.from("ai_training_queue").upsert({
       workspace_id: conversation.workspace_id,
+      niche_id: conversation.niche_id,
       agent_config_id: config.id,
       conversation_id: conversation.id,
       source_message_id: message.id,
@@ -323,6 +333,7 @@ Deno.serve(async (req) => {
         excluded_tag_ids: safeMatch.excluded_tag_ids,
         requires_no_tags: safeMatch.requires_no_tags,
         country_code: safeMatch.country_code,
+        niche_id: safeMatch.niche_id,
       } : {},
       confidence,
       match_reason: output.reason,

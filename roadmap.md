@@ -218,3 +218,12 @@
 - [x] Permitir corrigir o valor antes de aprovar e registrar a venda uma única vez
 - [x] Permitir rejeitar o comprovante sem registrar venda
 - [x] Exibir análise, revisão, valor final e resultado no histórico
+
+# Aprendizados por nicho e país
+
+- [x] Vincular fila de treinamento e regras aprendidas ao nicho da conversa
+- [x] Isolar a comparação da IA por nicho e manter prioridade por país
+- [x] Adicionar filtro e criação de nichos na Automação Inteligente
+- [x] Mostrar somente funis do mesmo nicho durante o treinamento
+- [x] Publicar a função e validar a compilação
+- [ ] Validar a tela autenticada; a conta do solicitante ainda não existe nesta aplicação
