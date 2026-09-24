@@ -1,10 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check, Tag } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check, Tag, Pencil, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface KBItem {
   id: string;
@@ -47,6 +56,12 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   const [uploading, setUploading] = useState(false);
   const [tags, setTags] = useState<TagOption[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [editingItem, setEditingItem] = useState<KBItem | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editCountryCode, setEditCountryCode] = useState('any');
+  const [editTagIds, setEditTagIds] = useState<string[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [textTitle, setTextTitle] = useState('');
   const [textContent, setTextContent] = useState('');
@@ -295,6 +310,86 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       setItems((prev) => prev.filter((i) => i.id !== item.id));
       toast.success('Item excluído');
     }
+  };
+
+  const openEditItem = (item: KBItem) => {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditContent(item.content);
+    setEditCountryCode(item.country_code || 'any');
+    setEditTagIds(item.tag_ids);
+  };
+
+  const toggleEditTag = (tagId: string) => {
+    setEditTagIds((current) => current.includes(tagId)
+      ? current.filter((id) => id !== tagId)
+      : [...current, tagId]);
+  };
+
+  const saveEditedItem = async () => {
+    if (!editingItem || !currentWorkspace?.id) return;
+    if (!editTitle.trim() || !editContent.trim()) {
+      toast.error('Preencha título e conteúdo');
+      return;
+    }
+
+    setSavingEdit(true);
+    const { error: itemError } = await supabase
+      .from('knowledge_base_items')
+      .update({
+        title: editTitle.trim(),
+        content: editContent.trim().substring(0, 50000),
+        country_code: editCountryCode,
+      })
+      .eq('id', editingItem.id)
+      .eq('workspace_id', currentWorkspace.id);
+
+    if (itemError) {
+      toast.error(`Não foi possível salvar: ${itemError.message}`);
+      setSavingEdit(false);
+      return;
+    }
+
+    const previousTags = new Set(editingItem.tag_ids);
+    const nextTags = new Set(editTagIds);
+    const tagsToAdd = editTagIds.filter((tagId) => !previousTags.has(tagId));
+    const tagsToRemove = editingItem.tag_ids.filter((tagId) => !nextTags.has(tagId));
+
+    const [removeResult, addResult] = await Promise.all([
+      tagsToRemove.length
+        ? supabase.from('knowledge_base_item_tags').delete()
+            .eq('knowledge_base_item_id', editingItem.id)
+            .eq('workspace_id', currentWorkspace.id)
+            .in('tag_id', tagsToRemove)
+        : Promise.resolve({ error: null }),
+      tagsToAdd.length
+        ? supabase.from('knowledge_base_item_tags').insert(tagsToAdd.map((tagId) => ({
+            knowledge_base_item_id: editingItem.id,
+            tag_id: tagId,
+            workspace_id: currentWorkspace.id,
+          })))
+        : Promise.resolve({ error: null }),
+    ]);
+
+    if (removeResult.error || addResult.error) {
+      toast.error('O conteúdo foi salvo, mas algumas etiquetas não foram atualizadas');
+      await fetchItems();
+      setSavingEdit(false);
+      return;
+    }
+
+    setItems((current) => current.map((item) => item.id === editingItem.id
+      ? {
+          ...item,
+          title: editTitle.trim(),
+          content: editContent.trim().substring(0, 50000),
+          country_code: editCountryCode,
+          tag_ids: editTagIds,
+        }
+      : item));
+    setEditingItem(null);
+    setSavingEdit(false);
+    toast.success('Conhecimento atualizado');
   };
 
   const [flows, setFlows] = useState<FlowWithNodes[]>([]);
@@ -725,13 +820,30 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
                     {item.country_code === 'any' ? 'Qualquer país' : item.country_code}
                   </span>
                 </div>
-                <button
-                  onClick={() => deleteItem(item)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                  title="Excluir"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => openEditItem(item)}
+                    title="Editar"
+                    aria-label={`Editar ${item.title}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteItem(item)}
+                    title="Excluir"
+                    aria-label={`Excluir ${item.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2 ml-5.5">
                 {item.type === 'qa' ? `R: ${item.content}` : item.content.substring(0, 150)}
@@ -764,6 +876,85 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
           serviços, preços e políticas. Quanto mais contexto a IA tiver, melhor serão as respostas.
         </p>
       </div>
+
+      <Dialog open={Boolean(editingItem)} onOpenChange={(open) => !open && !savingEdit && setEditingItem(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar conhecimento</DialogTitle>
+            <DialogDescription>
+              Atualize as informações que a IA usa para responder aos clientes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {editingItem?.type === 'qa' ? 'Pergunta' : 'Título'}
+              </label>
+              <input
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {editingItem?.type === 'qa' ? 'Resposta' : 'Conteúdo'}
+              </label>
+              <textarea
+                value={editContent}
+                onChange={(event) => setEditContent(event.target.value)}
+                rows={8}
+                className="w-full resize-y rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">País deste conteúdo</label>
+              <select
+                value={editCountryCode}
+                onChange={(event) => setEditCountryCode(event.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="any">Qualquer país</option>
+                <option value="MX">México</option>
+                <option value="UY">Uruguai</option>
+                <option value="AR">Argentina</option>
+                <option value="BR">Brasil</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Etiquetas desta base</label>
+                <p className="mt-1 text-xs text-muted-foreground">Sem seleção, o conteúdo será geral para qualquer cliente.</p>
+              </div>
+              {tags.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhuma etiqueta cadastrada.</p>
+              ) : (
+                <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-lg border border-border bg-background p-3">
+                  {tags.map((tag) => (
+                    <label key={`edit-${tag.id}`} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-muted">
+                      <Checkbox checked={editTagIds.includes(tag.id)} onCheckedChange={() => toggleEditTag(tag.id)} />
+                      <Tag className="h-3 w-3 text-primary" />
+                      {tag.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={savingEdit} onClick={() => setEditingItem(null)}>Cancelar</Button>
+            <Button type="button" disabled={savingEdit} onClick={saveEditedItem}>
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
