@@ -193,14 +193,14 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
   const iconMap: Record<string, React.ElementType> = {
     trigger: Zap, message: MessageSquare, delay: Clock, wait_for_response: MessageSquare, image: Image,
     audio: Music, video: Video, document: FileText, condition: GitFork, smart_condition: Bot,
-    quick_reply: ListOrdered, ai_reply: Bot, smart_reply: Bot, action: Cog, call_button: Zap,
+    quick_reply: ListOrdered, ai_reply: Bot, smart_reply: Bot, receipt_detector: Image, action: Cog, call_button: Zap,
   };
   const Icon = iconMap[nodeType] || MessageSquare;
 
   const typeLabels: Record<string, string> = {
     trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', wait_for_response: 'Aguardando Resposta', image: 'Imagem',
     audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição', smart_condition: 'Condição Inteligente',
-    quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', smart_reply: 'Resposta Inteligente', action: 'Ação',
+    quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', smart_reply: 'Resposta Inteligente', receipt_detector: 'Reconhecer Comprovante', action: 'Ação',
     call_button: 'Botão de Ligação',
   };
 
@@ -854,6 +854,39 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
             <div className="rounded-lg border border-border bg-secondary/30 p-3">
               <p className="text-[11px] text-muted-foreground">
                 Conecte as saídas Respondeu, Sem resposta e Erro. Sem resposta segura, a conversa fica disponível para um atendente.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {nodeType === 'receipt_detector' && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-primary">Análise visual segura</p>
+              <p className="text-[11px] text-muted-foreground">
+                A IA analisa a imagem mais recente do cliente, extrai o possível valor e envia o resultado para revisão administrativa.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Confiança mínima</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={50}
+                  max={100}
+                  step={5}
+                  value={Math.round((Number(editConfig.minimum_confidence) || 0.75) * 100)}
+                  onChange={(event) => setEditConfig((previous) => ({ ...previous, minimum_confidence: Number(event.target.value) / 100 }))}
+                  className="h-2 flex-1 accent-primary"
+                />
+                <span className="w-10 text-right text-sm font-semibold text-foreground">
+                  {Math.round((Number(editConfig.minimum_confidence) || 0.75) * 100)}%
+                </span>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-[11px] text-muted-foreground">
+                Conecte as saídas Comprovante, Não é comprovante e Erro. A IA nunca confirma pagamento nem registra venda sozinha.
               </p>
             </div>
           </div>

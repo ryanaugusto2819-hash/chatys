@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createOpenAI } from "npm:@ai-sdk/openai";
 import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
+import { analyzePaymentReceipt } from "../_shared/receipt-analysis.ts";
 
 const headers = { ...corsHeaders, "Content-Type": "application/json" };
 const TRAINING_CONVERSATION_CUTOFF = "2026-09-22T23:21:00.000Z";
@@ -10,14 +11,6 @@ const MatchSchema = z.object({
   matched_rule_id: z.string().nullable(),
   confidence: z.number(),
   reason: z.string(),
-});
-const ReceiptSchema = z.object({
-  is_possible_receipt: z.boolean(),
-  confidence: z.number(),
-  reason: z.string(),
-  detected_amount: z.number().positive().nullable(),
-  detected_currency: z.string().length(3).nullable(),
-  amount_confidence: z.number(),
 });
 
 function json(body: unknown, status = 200) {
@@ -171,21 +164,7 @@ Deno.serve(async (req) => {
     let receiptAmountConfidence: number | null = null;
     if (message.message_type === "image" && message.media_url) {
       imageUrl = await resolveMediaUrl(service, message.media_url);
-      const visionProvider = createOpenAI({
-        baseURL: "https://ai.gateway.lovable.dev/v1",
-        apiKey: lovableKey,
-        headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-      });
-      const visionResult = streamText({
-        model: visionProvider.responses("openai/gpt-6-astra"),
-        output: Output.object({ schema: ReceiptSchema }),
-        messages: [{ role: "user", content: [
-          { type: "text", text: "Analise esta imagem. Identifique se ela parece ser um comprovante de pagamento, depósito, transferência, OXXO ou recibo financeiro. Extraia somente o valor total efetivamente pago e a moeda de três letras quando estiverem claramente visíveis; não use saldo, tarifa, troco, limite ou valor de referência. Se houver dúvida, retorne detected_amount e detected_currency como null. Uma imagem pode ser um possível comprovante, mas nunca confirme que o pagamento foi aprovado. Retorne motivo curto, confiança geral e confiança do valor entre 0 e 1." },
-          { type: "image", image: new URL(imageUrl) },
-        ] }],
-        providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
-      });
-      const vision = await visionResult.output;
+      const { analysis: vision } = await analyzePaymentReceipt(imageUrl, lovableKey);
       isPossibleReceipt = vision.is_possible_receipt;
       receiptConfidence = Math.max(0, Math.min(1, Number(vision.confidence) || 0));
       receiptReason = vision.reason;
