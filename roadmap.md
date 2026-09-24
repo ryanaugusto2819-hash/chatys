@@ -234,3 +234,11 @@
 - [x] Mostrar em Pós-Venda as conversas com a etiqueta POS VENDA
 - [x] Preservar contagem, paginação e filtros da caixa de entrada
 - [x] Validar a regra com os dados atuais e confirmar a compilação
+
+# Condição Inteligente X/Y
+
+- [ ] Adicionar o bloco visual com duas saídas conectáveis
+- [ ] Salvar e recarregar as conexões X/Y
+- [ ] Classificar última resposta com contexto e executar somente um caminho
+- [ ] Parar e registrar revisão quando não houver correspondência clara
+- [ ] Publicar e validar fluxos novos e antigos
