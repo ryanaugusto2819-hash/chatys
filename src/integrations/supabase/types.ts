@@ -1498,9 +1498,16 @@ export type Database = {
           failed_at_node_id: string | null
           flow_id: string
           id: string
+          response_resume_node_id: string | null
+          resume_reason: string | null
+          resumed_at: string | null
           started_at: string
           status: string
+          timeout_resume_node_id: string | null
           total_nodes: number
+          wait_timeout_at: string | null
+          waiting_node_id: string | null
+          waiting_since: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -1510,9 +1517,16 @@ export type Database = {
           failed_at_node_id?: string | null
           flow_id: string
           id?: string
+          response_resume_node_id?: string | null
+          resume_reason?: string | null
+          resumed_at?: string | null
           started_at?: string
           status?: string
+          timeout_resume_node_id?: string | null
           total_nodes?: number
+          wait_timeout_at?: string | null
+          waiting_node_id?: string | null
+          waiting_since?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -1522,9 +1536,16 @@ export type Database = {
           failed_at_node_id?: string | null
           flow_id?: string
           id?: string
+          response_resume_node_id?: string | null
+          resume_reason?: string | null
+          resumed_at?: string | null
           started_at?: string
           status?: string
+          timeout_resume_node_id?: string | null
           total_nodes?: number
+          wait_timeout_at?: string | null
+          waiting_node_id?: string | null
+          waiting_since?: string | null
         }
         Relationships: [
           {
@@ -1546,6 +1567,27 @@ export type Database = {
             columns: ["flow_id"]
             isOneToOne: false
             referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_executions_response_resume_node_id_fkey"
+            columns: ["response_resume_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_executions_timeout_resume_node_id_fkey"
+            columns: ["timeout_resume_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_executions_waiting_node_id_fkey"
+            columns: ["waiting_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_nodes"
             referencedColumns: ["id"]
           },
         ]
@@ -3261,6 +3303,19 @@ export type Database = {
       check_workspace_limit: {
         Args: { p_resource: string; p_workspace_id: string }
         Returns: Json
+      }
+      claim_waiting_flow: {
+        Args: {
+          p_conversation_id: string
+          p_execution_id?: string
+          p_reason: string
+        }
+        Returns: {
+          conversation_id: string
+          execution_id: string
+          flow_id: string
+          resume_node_id: string
+        }[]
       }
       create_workspace_for_user: {
         Args: {
