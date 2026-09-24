@@ -411,6 +411,9 @@ export default function FlowEditor() {
   const [leadSteps, setLeadSteps] = useState<LeadStep[]>([]);
 
   const selectedExecution = leadExecutions.find((execution) => execution.execution_id === selectedExecutionId) || null;
+  const hasUnavailableDetailedTrace = Boolean(
+    selectedExecution && selectedExecution.completed_nodes > 0 && leadSteps.length === 0,
+  );
   const leadTrace = useMemo(() => {
     if (!selectedExecution) return null;
     const orderedSteps = [...leadSteps].sort((a, b) => a.sort_order - b.sort_order || a.executed_at.localeCompare(b.executed_at));
@@ -1104,8 +1107,17 @@ export default function FlowEditor() {
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
                       <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary/50" />Passou</span>
                       <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary ring-2 ring-primary/30" />Está aqui</span>
-                      <span>{leadSteps.length} etapa(s) registrada(s)</span>
+                      <span>
+                        {hasUnavailableDetailedTrace
+                          ? `${selectedExecution.completed_nodes} etapa(s) executada(s)`
+                          : `${leadSteps.length} etapa(s) registrada(s)`}
+                      </span>
                     </div>
+                    {hasUnavailableDetailedTrace && (
+                      <p className="mt-2 rounded-md border border-border bg-secondary px-2 py-1.5 text-[10px] text-muted-foreground">
+                        O fluxo foi executado, mas o caminho detalhado desta execução antiga não está mais disponível. Novas execuções manterão o histórico completo mesmo após editar ou salvar o fluxo.
+                      </p>
+                    )}
                     {selectedExecution.status === 'failed' && leadSteps.find((step) => step.status === 'failed')?.error_message && (
                       <p className="mt-2 rounded-md bg-destructive/10 px-2 py-1.5 text-[10px] text-destructive">
                         {leadSteps.find((step) => step.status === 'failed')?.error_message}

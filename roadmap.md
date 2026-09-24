@@ -4,6 +4,8 @@
 - [x] Mostrar as execuções recentes e permitir alternar entre elas
 - [x] Destacar os blocos percorridos, as conexões usadas e o bloco atual
 - [x] Exibir estado, horário e erro real sem alterar a execução do lead
+- [x] Preservar o histórico dos blocos quando o fluxo for editado ou salvo
+- [x] Diferenciar execuções antigas sem detalhes de uma execução com zero etapas
 
 # Implementação uazapiGO
 
