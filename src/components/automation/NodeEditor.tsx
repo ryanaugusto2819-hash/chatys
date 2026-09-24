@@ -70,8 +70,20 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
       if (workspaceId) tagsQuery = tagsQuery.eq('workspace_id', workspaceId);
       tagsQuery
         .then(({ data }) => { if (data) setAvailableTags(data); });
-      supabase.from('profiles').select('id, full_name')
-        .then(({ data }) => { if (data) setAgents(data); });
+      if (workspaceId) {
+        supabase.from('workspace_members').select('user_id').eq('workspace_id', workspaceId)
+          .then(async ({ data: members }) => {
+            const userIds = (members || []).map((member) => member.user_id);
+            if (userIds.length === 0) {
+              setAgents([]);
+              return;
+            }
+            const { data } = await supabase.from('profiles').select('id, full_name').in('user_id', userIds).order('full_name');
+            setAgents(data || []);
+          });
+      } else {
+        setAgents([]);
+      }
       if (workspaceId) {
         supabase.from('automation_flows').select('id, name, is_active').eq('workspace_id', workspaceId).order('name')
           .then(({ data }) => { if (data) setAvailableFlows(data.filter((flow) => flow.id !== currentFlowId)); });
@@ -742,6 +754,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
                 <option value="set_funnel_stage">Definir Etapa do Funil</option>
                 <option value="set_billing_stage">Definir Etapa da Cobrança</option>
                 <option value="send_flow">Enviar Outro Fluxo</option>
+                 <option value="transfer_human">Transferir para Atendimento Humano</option>
                 <option value="transfer_agent">Transferir para Agente</option>
                 <option value="webhook">Enviar Webhook</option>
               </select>
@@ -820,6 +833,14 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
             )}
 
             {/* Transfer agent */}
+             {(editConfig.action_type as string) === 'transfer_human' && (
+               <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                 <p className="text-[11px] text-primary">
+                   A conversa ficará ativa e sem atendente definido, disponível na fila para atendimento humano.
+                 </p>
+               </div>
+             )}
+
             {(editConfig.action_type as string) === 'transfer_agent' && (
               <div className="space-y-2">
                 <label className={labelClass}>Agente</label>
@@ -975,8 +996,10 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
                     ? 'Define a etapa da cobrança do lead — sincroniza com a plataforma de atendimento via webhook'
                     : (editConfig.action_type as string) === 'send_flow'
                     ? 'Inicia o fluxo selecionado para o mesmo lead e registra o resultado no histórico'
+                     : (editConfig.action_type as string) === 'transfer_human'
+                     ? 'Encerra esta automação e disponibiliza a conversa na fila de atendimento humano'
                     : (editConfig.action_type as string) === 'transfer_agent'
-                    ? 'Transfere a conversa para o agente selecionado'
+                     ? 'Encerra esta automação e transfere a conversa para o atendente selecionado'
                     : 'Envia uma requisição HTTP para o endpoint configurado'}
               </p>
             </div>

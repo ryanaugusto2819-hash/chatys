@@ -273,3 +273,9 @@
 - [x] Iniciar o fluxo escolhido para o mesmo lead
 - [x] Validar workspace e impedir encadeamentos circulares
 - [x] Publicar a função e validar a execução
+
+# Transferência humana pelo bloco Ação
+
+- [x] Adicionar a opção de transferir para a fila de atendimento humano
+- [x] Executar a transferência para a fila geral ou para um atendente escolhido
+- [x] Validar o atendente no workspace e encerrar a automação após a transferência
