@@ -3487,6 +3487,24 @@ export type Database = {
         Args: { p_connection_id: string; p_limit?: number }
         Returns: number
       }
+      find_flow_lead_executions_by_phone: {
+        Args: { p_flow_id: string; p_limit?: number; p_phone: string }
+        Returns: {
+          completed_at: string
+          completed_nodes: number
+          contact_name: string
+          contact_phone: string
+          conversation_id: string
+          execution_id: string
+          failed_at_node_id: string
+          started_at: string
+          status: string
+          total_nodes: number
+          wait_timeout_at: string
+          waiting_node_id: string
+          waiting_since: string
+        }[]
+      }
       find_latest_conversation_by_phone: {
         Args: { p_phone: string }
         Returns: {
