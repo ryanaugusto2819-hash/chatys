@@ -288,9 +288,9 @@
 
 # Bloco IA — Reconhecer Comprovante
 
-- [ ] Adicionar o bloco visual com confiança mínima e três saídas obrigatórias
-- [ ] Analisar a imagem mais recente quando o fluxo chegar ao bloco
-- [ ] Criar uma pendência administrativa sem confirmar pagamento nem registrar venda
-- [ ] Registrar resultado, valor, moeda, confiança, motivo, erros e consumo da IA
-- [ ] Garantir idempotência por mensagem e publicar a função
+- [x] Adicionar o bloco visual com confiança mínima e três saídas obrigatórias
+- [x] Analisar a imagem mais recente quando o fluxo chegar ao bloco
+- [x] Criar uma pendência administrativa sem confirmar pagamento nem registrar venda
+- [x] Registrar resultado, valor, moeda, confiança, motivo, erros e consumo da IA
+- [x] Garantir idempotência por mensagem e publicar a função
 - [ ] Validar o bloco e os três caminhos na tela autenticada
