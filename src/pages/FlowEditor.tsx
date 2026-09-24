@@ -65,17 +65,28 @@ const getRequiredSourceHandles = (node: Node) => {
 
 const normalizeLegacyBranchEdges = (nodes: Node[], edges: Edge[]) => {
   const normalized = edges.map((edge) => ({ ...edge }));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   nodes.forEach((node) => {
     const requiredHandles = getRequiredSourceHandles(node);
     if (requiredHandles.length === 0) return;
 
     const outgoing = normalized.filter((edge) => edge.source === node.id);
+    outgoing.forEach((edge) => {
+      const normalizedHandle = String(edge.sourceHandle || '').trim().toLowerCase();
+      edge.sourceHandle = requiredHandles.includes(normalizedHandle) ? normalizedHandle : null;
+    });
+
     const usedHandles = new Set(outgoing.map((edge) => edge.sourceHandle).filter(Boolean));
     const availableHandles = requiredHandles.filter((handle) => !usedHandles.has(handle));
 
     outgoing
       .filter((edge) => !edge.sourceHandle)
+      .sort((first, second) => {
+        const firstTarget = nodeById.get(first.target);
+        const secondTarget = nodeById.get(second.target);
+        return (firstTarget?.position.x ?? 0) - (secondTarget?.position.x ?? 0);
+      })
       .forEach((edge, index) => {
         const inferredHandle = availableHandles[index];
         if (inferredHandle) edge.sourceHandle = inferredHandle;
