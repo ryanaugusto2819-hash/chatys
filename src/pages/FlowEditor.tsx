@@ -287,6 +287,19 @@ const safelyFixFlow = (nodes: Node[], edges: Edge[]) => {
   return { nodes: fixedNodes, edges: fixedEdges };
 };
 
+const countSafeRepairs = (nodes: Node[], edges: Edge[]) => {
+  const fixed = safelyFixFlow(nodes, edges);
+  const nodeChanges = fixed.nodes.filter((node, index) =>
+    JSON.stringify(node.data.config || {}) !== JSON.stringify(nodes[index]?.data.config || {}),
+  ).length;
+  const originalEdges = new Map(edges.map((edge) => [edge.id, edge]));
+  const edgeChanges = Math.abs(edges.length - fixed.edges.length) + fixed.edges.filter((edge) => {
+    const original = originalEdges.get(edge.id);
+    return original && original.sourceHandle !== edge.sourceHandle;
+  }).length;
+  return nodeChanges + edgeChanges;
+};
+
 interface ToolCategory {
   label: string;
   items: { type: string; label: string; icon: React.ElementType; desc: string }[];
@@ -623,16 +636,24 @@ export default function FlowEditor() {
     // open in the editor with valid-looking connections whose handle is null.
     // Normalize those in memory so the user can save without reloading or
     // rebuilding work already present on the canvas.
+    const safeRepairCount = countSafeRepairs(nodes, edges);
     const fixed = safelyFixFlow(nodes, edges);
     const normalizedEdges = fixed.edges;
     const issues = getFlowIssues(fixed.nodes, normalizedEdges, flowName);
-    setNodes(fixed.nodes);
-    setEdges(normalizedEdges);
-    if (issues.length > 0) {
-      setSaveIssues(issues);
+    if (safeRepairCount > 0 || issues.length > 0) {
+      const reportedIssues = safeRepairCount > 0
+        ? [{
+            id: 'safe-repairs',
+            block: 'Correções automáticas disponíveis',
+            problem: `${safeRepairCount} configuração(ões) ou conexão(ões) antiga(s) precisa(m) ser normalizada(s).`,
+            solution: 'Clique em “Corrigir automaticamente”. Nenhum bloco ou conteúdo será apagado.',
+            autoFixable: true,
+          }, ...issues]
+        : issues;
+      setSaveIssues(reportedIssues);
       setIssuesOpen(true);
       const manualCount = issues.filter((issue) => !issue.autoFixable).length;
-      toast.error(`${issues.length} problema(s) encontrado(s). ${manualCount} precisa(m) da sua atenção.`);
+      toast.error(`${reportedIssues.length} problema(s) encontrado(s). ${manualCount} precisa(m) da sua atenção.`);
       return;
     }
     if (!id) {
@@ -711,7 +732,7 @@ export default function FlowEditor() {
       toast.success('Problemas automáticos corrigidos. Clique em Salvar novamente.');
       return;
     }
-    const correctedCount = saveIssues.length - remaining.length;
+    const correctedCount = Math.max(1, saveIssues.length - remaining.length);
     toast.success(correctedCount > 0
       ? `${correctedCount} problema(s) corrigido(s). Restam ${remaining.length} ajuste(s) manual(is).`
       : 'As correções automáticas já foram aplicadas. Veja os ajustes manuais restantes.');
