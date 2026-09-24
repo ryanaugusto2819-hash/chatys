@@ -372,6 +372,7 @@ export default function FlowEditor() {
   const [toolbarOpen, setToolbarOpen] = useState(true);
   const [saveIssues, setSaveIssues] = useState<FlowIssue[]>([]);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [savedWithIssues, setSavedWithIssues] = useState(false);
 
   const handleNodeDelete = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -640,21 +641,20 @@ export default function FlowEditor() {
     const fixed = safelyFixFlow(nodes, edges);
     const normalizedEdges = fixed.edges;
     const issues = getFlowIssues(fixed.nodes, normalizedEdges, flowName);
+    setNodes(fixed.nodes);
+    setEdges(normalizedEdges);
     if (safeRepairCount > 0 || issues.length > 0) {
       const reportedIssues = safeRepairCount > 0
         ? [{
             id: 'safe-repairs',
-            block: 'Correções automáticas disponíveis',
-            problem: `${safeRepairCount} configuração(ões) ou conexão(ões) antiga(s) precisa(m) ser normalizada(s).`,
-            solution: 'Clique em “Corrigir automaticamente”. Nenhum bloco ou conteúdo será apagado.',
-            autoFixable: true,
+            block: 'Correções automáticas aplicadas',
+            problem: `${safeRepairCount} configuração(ões) ou conexão(ões) antiga(s) foi/foram normalizada(s) antes de salvar.`,
+            solution: 'Nenhuma ação é necessária. Seus blocos e conteúdos foram preservados.',
+            autoFixable: false,
           }, ...issues]
         : issues;
       setSaveIssues(reportedIssues);
-      setIssuesOpen(true);
-      const manualCount = issues.filter((issue) => !issue.autoFixable).length;
-      toast.error(`${reportedIssues.length} problema(s) encontrado(s). ${manualCount} precisa(m) da sua atenção.`);
-      return;
+      setSavedWithIssues(true);
     }
     if (!id) {
       toast.error('Não foi possível identificar este fluxo. Volte à lista e abra-o novamente.');
@@ -680,7 +680,7 @@ export default function FlowEditor() {
 
       const { error } = await supabase.rpc('save_automation_flow_atomic', {
         p_flow_id: id,
-        p_name: flowName.trim(),
+        p_name: flowName.trim() || 'Fluxo sem nome',
         p_description: flowDescription,
         p_manual_only: manualOnly,
         p_niche_id: flowNicheId as any,
@@ -697,13 +697,20 @@ export default function FlowEditor() {
           solution: 'Seu trabalho continua nesta tela. Confira sua conexão e tente salvar novamente; nada do fluxo anterior foi apagado.',
           autoFixable: false,
         }]);
+        setSavedWithIssues(false);
         setIssuesOpen(true);
         toast.error(`Não foi possível salvar: ${detail}`);
         return;
       }
-      setSaveIssues([]);
-      setIssuesOpen(false);
-      toast.success('Fluxo salvo com segurança');
+      if (issues.length > 0 || safeRepairCount > 0) {
+        setIssuesOpen(true);
+        toast.warning(`Fluxo salvo com ${issues.length + safeRepairCount} aviso(s). Veja como corrigir.`);
+      } else {
+        setSaveIssues([]);
+        setIssuesOpen(false);
+        setSavedWithIssues(false);
+        toast.success('Fluxo salvo com segurança');
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Erro inesperado durante a gravação.';
       console.error('Unexpected flow save error:', error);
@@ -714,6 +721,7 @@ export default function FlowEditor() {
         solution: 'Seu trabalho permanece aberto. Tente salvar novamente; se persistir, copie esta mensagem para o suporte.',
         autoFixable: false,
       }]);
+      setSavedWithIssues(false);
       setIssuesOpen(true);
       toast.error(`Não foi possível salvar: ${detail}`);
     } finally {
@@ -929,11 +937,13 @@ export default function FlowEditor() {
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-6 py-5">
             <DialogTitle className="flex items-center gap-2">
-              <CircleAlert className="h-5 w-5 text-destructive" />
-              Problemas encontrados ao salvar
+              <CircleAlert className={`h-5 w-5 ${savedWithIssues ? 'text-primary' : 'text-destructive'}`} />
+              {savedWithIssues ? 'Fluxo salvo com avisos' : 'Não foi possível salvar'}
             </DialogTitle>
             <DialogDescription>
-              Nada foi apagado. Corrija os itens abaixo e tente salvar novamente.
+              {savedWithIssues
+                ? 'Seu trabalho foi salvo. Veja abaixo o que pode impedir a execução correta do fluxo.'
+                : 'Nada foi apagado. Veja abaixo o problema e tente novamente.'}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[52vh] space-y-2 overflow-y-auto px-6 py-4">
@@ -956,7 +966,9 @@ export default function FlowEditor() {
             ))}
           </div>
           <DialogFooter className="border-t border-border px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setIssuesOpen(false)}>Continuar editando</Button>
+            <Button type="button" variant="outline" onClick={() => setIssuesOpen(false)}>
+              {savedWithIssues ? 'Fechar avisos' : 'Continuar editando'}
+            </Button>
             {saveIssues.some((issue) => issue.autoFixable) && (
               <Button type="button" onClick={fixAllSafeIssues}>
                 <Wrench className="h-4 w-4" />

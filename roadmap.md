@@ -303,3 +303,4 @@
 - [x] Remover conexões inválidas e duplicadas sem recarregar a página
 - [x] Salvar fluxo, blocos e conexões em uma única operação protegida
 - [x] Validar visualmente fluxos com erros e um salvamento completo
+- [x] Permitir salvar mesmo com pendências, mantendo os avisos e orientações
