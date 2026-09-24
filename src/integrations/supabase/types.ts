@@ -848,6 +848,7 @@ export type Database = {
           created_at: string
           flow_id: string
           id: string
+          source_handle: string | null
           source_node_id: string
           target_node_id: string
         }
@@ -855,6 +856,7 @@ export type Database = {
           created_at?: string
           flow_id: string
           id?: string
+          source_handle?: string | null
           source_node_id: string
           target_node_id: string
         }
@@ -862,6 +864,7 @@ export type Database = {
           created_at?: string
           flow_id?: string
           id?: string
+          source_handle?: string | null
           source_node_id?: string
           target_node_id?: string
         }
