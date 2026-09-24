@@ -176,6 +176,13 @@
       "when": 1790271085513,
       "tag": "0024_add_smart_reply_knowledge_scope_and_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790274698027,
+      "tag": "0025_link_knowledge_base_to_multiple_tags",
+      "breakpoints": true
     }
   ]
 }
