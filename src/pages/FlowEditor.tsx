@@ -641,14 +641,16 @@ export default function FlowEditor() {
     const fixed = safelyFixFlow(nodes, edges);
     const normalizedEdges = fixed.edges;
     const issues = getFlowIssues(fixed.nodes, normalizedEdges, flowName);
+    setNodes(fixed.nodes);
+    setEdges(normalizedEdges);
     if (safeRepairCount > 0 || issues.length > 0) {
       const reportedIssues = safeRepairCount > 0
         ? [{
             id: 'safe-repairs',
-            block: 'Correções automáticas disponíveis',
-            problem: `${safeRepairCount} configuração(ões) ou conexão(ões) antiga(s) precisa(m) ser normalizada(s).`,
-            solution: 'Clique em “Corrigir automaticamente”. Nenhum bloco ou conteúdo será apagado.',
-            autoFixable: true,
+            block: 'Correções automáticas aplicadas',
+            problem: `${safeRepairCount} configuração(ões) ou conexão(ões) antiga(s) foi/foram normalizada(s) antes de salvar.`,
+            solution: 'Nenhuma ação é necessária. Seus blocos e conteúdos foram preservados.',
+            autoFixable: false,
           }, ...issues]
         : issues;
       setSaveIssues(reportedIssues);
@@ -678,7 +680,7 @@ export default function FlowEditor() {
 
       const { error } = await supabase.rpc('save_automation_flow_atomic', {
         p_flow_id: id,
-        p_name: flowName.trim(),
+        p_name: flowName.trim() || 'Fluxo sem nome',
         p_description: flowDescription,
         p_manual_only: manualOnly,
         p_niche_id: flowNicheId as any,
