@@ -70,8 +70,20 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
       if (workspaceId) tagsQuery = tagsQuery.eq('workspace_id', workspaceId);
       tagsQuery
         .then(({ data }) => { if (data) setAvailableTags(data); });
-      supabase.from('profiles').select('id, full_name')
-        .then(({ data }) => { if (data) setAgents(data); });
+      if (workspaceId) {
+        supabase.from('workspace_members').select('user_id').eq('workspace_id', workspaceId)
+          .then(async ({ data: members }) => {
+            const userIds = (members || []).map((member) => member.user_id);
+            if (userIds.length === 0) {
+              setAgents([]);
+              return;
+            }
+            const { data } = await supabase.from('profiles').select('id, full_name').in('user_id', userIds).order('full_name');
+            setAgents(data || []);
+          });
+      } else {
+        setAgents([]);
+      }
       if (workspaceId) {
         supabase.from('automation_flows').select('id, name, is_active').eq('workspace_id', workspaceId).order('name')
           .then(({ data }) => { if (data) setAvailableFlows(data.filter((flow) => flow.id !== currentFlowId)); });

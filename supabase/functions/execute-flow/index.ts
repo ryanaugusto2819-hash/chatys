@@ -1309,7 +1309,6 @@ Deno.serve(async (req) => {
                 .select("user_id")
                 .eq("workspace_id", conversation.workspace_id)
                 .eq("user_id", targetAgent.user_id)
-                .eq("is_active", true)
                 .maybeSingle();
 
               if (membershipError || !membership) {
