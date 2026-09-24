@@ -3634,6 +3634,18 @@ export type Database = {
         }
         Returns: Json
       }
+      save_automation_flow_atomic: {
+        Args: {
+          p_description: string
+          p_edges: Json
+          p_flow_id: string
+          p_manual_only: boolean
+          p_name: string
+          p_niche_id: string
+          p_nodes: Json
+        }
+        Returns: Json
+      }
       shares_workspace_with: {
         Args: { _a: string; _b: string }
         Returns: boolean
