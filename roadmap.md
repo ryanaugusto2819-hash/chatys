@@ -266,3 +266,10 @@
 - [x] Organizar os conteúdos por nicho e país
 - [x] Permitir cadastrar textos e instruções oficiais
 - [x] Validar seleção de nicho, país e formulário na tela autenticada
+
+# Enviar outro fluxo pelo bloco Ação
+
+- [x] Adicionar a opção e o seletor de fluxo no bloco Ação
+- [x] Iniciar o fluxo escolhido para o mesmo lead
+- [x] Validar workspace e impedir encadeamentos circulares
+- [x] Publicar a função e validar a execução
