@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createOpenAI } from "npm:@ai-sdk/openai";
 import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
+import { analyzePaymentReceipt } from "../_shared/receipt-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,25 @@ function safeAiError(error: unknown): string {
   if (status === 403) return message || "Uso de IA bloqueado neste workspace";
   if (status === 429) return "Lovable AI temporariamente sobrecarregada";
   return message.slice(0, 500);
+}
+
+async function resolvePrivateMediaUrl(
+  service: ReturnType<typeof createClient>,
+  mediaUrl: string,
+): Promise<string> {
+  try {
+    const parsed = new URL(mediaUrl);
+    const marker = "/chat-media/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return mediaUrl;
+    const objectPath = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    const { data, error } = await service.storage.from("chat-media").createSignedUrl(objectPath, 600);
+    if (error || !data?.signedUrl) throw new Error(error?.message || "Não foi possível acessar a imagem");
+    return data.signedUrl;
+  } catch (error) {
+    if (error instanceof TypeError) return mediaUrl;
+    throw error;
+  }
 }
 
 async function generateSmartReply(params: {
@@ -752,6 +772,169 @@ Deno.serve(async (req) => {
         } else {
           results.push({ nodeId: node.id, status: `branch_${decision.branch}` });
           currentNode = chosenNext;
+        }
+        continue;
+      }
+
+      if (node.node_type === "receipt_detector") {
+        const receiptNext = nextNode(node.id, "receipt");
+        const notReceiptNext = nextNode(node.id, "not_receipt");
+        const errorNext = nextNode(node.id, "error");
+        if (!executionId || !receiptNext || !notReceiptNext || !errorNext) {
+          failed = true;
+          results.push({ nodeId: node.id, status: "invalid_receipt_detector_configuration" });
+          if (executionId) await supabase.from("flow_step_logs").insert({
+            execution_id: executionId,
+            node_id: node.id,
+            node_type: node.node_type,
+            node_label: node.label || "Reconhecer Comprovante",
+            sort_order: node.sort_order,
+            status: "failed",
+            error_message: "Conecte as saídas Comprovante, Não é comprovante e Erro",
+          });
+          break;
+        }
+
+        const { data: latestImage, error: imageLookupError } = await supabase
+          .from("messages")
+          .select("id, content, media_url, message_type, created_at")
+          .eq("conversation_id", conversationId)
+          .eq("sender_type", "customer")
+          .eq("message_type", "image")
+          .not("media_url", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (imageLookupError) {
+          const errorMessage = imageLookupError.message;
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Reconhecer Comprovante", sort_order: node.sort_order,
+            status: "failed", error_message: errorMessage,
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: "image_lookup_error" });
+          currentNode = errorNext;
+          continue;
+        }
+
+        if (!latestImage?.media_url) {
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Reconhecer Comprovante", sort_order: node.sort_order,
+            status: "completed", error_message: "Nenhuma imagem do cliente encontrada",
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: "not_receipt_no_image" });
+          currentNode = notReceiptNext;
+          continue;
+        }
+
+        try {
+          const minimumConfidence = Math.max(0.5, Math.min(1, Number(config.minimum_confidence) || 0.75));
+          const { data: existingQueue } = await supabase.from("ai_training_queue")
+            .select("id, receipt_review_status, context_snapshot, receipt_detected_amount, receipt_detected_currency, receipt_amount_confidence")
+            .eq("source_message_id", latestImage.id)
+            .maybeSingle();
+          const existingSnapshot = existingQueue?.context_snapshot && typeof existingQueue.context_snapshot === "object" && !Array.isArray(existingQueue.context_snapshot)
+            ? existingQueue.context_snapshot as Record<string, unknown>
+            : {};
+          const hasExistingAnalysis = typeof existingSnapshot.is_possible_receipt === "boolean";
+
+          let isPossibleReceipt = hasExistingAnalysis ? existingSnapshot.is_possible_receipt === true : false;
+          let confidence = hasExistingAnalysis ? Math.max(0, Math.min(1, Number(existingSnapshot.receipt_confidence) || 0)) : 0;
+          let reason = hasExistingAnalysis && typeof existingSnapshot.receipt_reason === "string" ? existingSnapshot.receipt_reason : "";
+          let detectedAmount = existingQueue?.receipt_detected_amount ?? null;
+          let detectedCurrency = existingQueue?.receipt_detected_currency ?? null;
+          let amountConfidence = existingQueue?.receipt_amount_confidence ?? 0;
+
+          if (!hasExistingAnalysis) {
+            const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+            if (!lovableKey) throw Object.assign(new Error("Lovable AI não está configurada"), { statusCode: 401 });
+            const readableImageUrl = await resolvePrivateMediaUrl(supabase, latestImage.media_url);
+            const generated = await analyzePaymentReceipt(readableImageUrl, lovableKey);
+            isPossibleReceipt = generated.analysis.is_possible_receipt;
+            confidence = generated.analysis.confidence;
+            reason = generated.analysis.reason;
+            detectedAmount = generated.analysis.detected_amount;
+            detectedCurrency = generated.analysis.detected_currency;
+            amountConfidence = generated.analysis.amount_confidence;
+            await supabase.from("ai_usage_logs").insert({
+              function_name: "execute-flow-receipt-detector",
+              model: "openai/gpt-6-astra",
+              input_tokens: generated.usage.inputTokens,
+              output_tokens: generated.usage.outputTokens,
+              total_tokens: generated.usage.totalTokens,
+              conversation_id: conversationId,
+            });
+          }
+
+          const recognized = isPossibleReceipt && confidence >= minimumConfidence;
+          let queueId = existingQueue?.id || null;
+          if (!existingQueue || !["approved", "rejected"].includes(existingQueue.receipt_review_status)) {
+            const { data: trainedConfig, error: trainedConfigError } = await supabase.from("ai_agent_configs")
+              .select("id")
+              .eq("workspace_id", conversation.workspace_id)
+              .eq("agent_key", "trained_messages")
+              .is("niche_id", null)
+              .maybeSingle();
+            if (trainedConfigError || !trainedConfig) throw new Error(trainedConfigError?.message || "Automação Inteligente não está configurada neste workspace");
+            const countryCode = detectCountryCode(conversation.contact_phone);
+            const queuePayload = {
+              workspace_id: conversation.workspace_id,
+              niche_id: conversation.niche_id,
+              agent_config_id: trainedConfig.id,
+              conversation_id: conversationId,
+              source_message_id: latestImage.id,
+              customer_message: latestImage.content?.trim() || "[Imagem]",
+              message_type: "image",
+              context_snapshot: {
+                ...existingSnapshot,
+                media_url: latestImage.media_url,
+                is_possible_receipt: isPossibleReceipt,
+                receipt_confidence: confidence,
+                receipt_reason: reason,
+                receipt_detected_amount: detectedAmount,
+                receipt_detected_currency: detectedCurrency,
+                receipt_amount_confidence: amountConfidence,
+                receipt_flow_execution_id: executionId,
+                receipt_flow_node_id: node.id,
+              },
+              detected_country_code: ["MX", "UY", "AR"].includes(countryCode) ? countryCode : null,
+              receipt_review_status: recognized ? "pending" : "not_applicable",
+              receipt_detected_amount: detectedAmount,
+              receipt_detected_currency: detectedCurrency,
+              receipt_amount_confidence: amountConfidence,
+              status: "pending",
+            };
+            const { data: queued, error: queueError } = await supabase.from("ai_training_queue")
+              .upsert(queuePayload, { onConflict: "source_message_id" })
+              .select("id")
+              .single();
+            if (queueError || !queued) throw new Error(queueError?.message || "Não foi possível criar a revisão do comprovante");
+            queueId = queued.id;
+          }
+
+          const summary = `resultado=${recognized ? "comprovante" : "não é comprovante"}; confiança=${Math.round(confidence * 100)}%; valor=${detectedAmount ?? "não identificado"}; moeda=${detectedCurrency || "não identificada"}; revisão=${queueId || "não criada"}; motivo=${reason}`;
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Reconhecer Comprovante", sort_order: node.sort_order,
+            status: "completed", error_message: summary,
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: recognized ? "receipt_pending_review" : "not_receipt" });
+          currentNode = recognized ? receiptNext : notReceiptNext;
+        } catch (error) {
+          const errorMessage = safeAiError(error);
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Reconhecer Comprovante", sort_order: node.sort_order,
+            status: "failed", error_message: errorMessage,
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: "receipt_analysis_error" });
+          currentNode = errorNext;
         }
         continue;
       }

@@ -81,6 +81,7 @@ const toolCategories: ToolCategory[] = [
       { type: 'quick_reply', label: 'Resposta Rápida', icon: ListOrdered, desc: 'Botões de resposta rápida' },
       { type: 'call_button', label: 'Botão de Ligação', icon: Zap, desc: 'Botão para o cliente ligar' },
       { type: 'smart_reply', label: 'Resposta Inteligente', icon: Bot, desc: 'Responde dúvidas usando a base oficial' },
+      { type: 'receipt_detector', label: 'Reconhecer Comprovante', icon: Image, desc: 'Analisa a última imagem com IA' },
     ],
   },
   {
@@ -217,6 +218,7 @@ export default function FlowEditor() {
       const selectedCount = Array.isArray(config?.knowledge_base_item_ids) ? config.knowledge_base_item_ids.length : 0;
       return config?.knowledge_source_mode === 'selected' ? `${selectedCount} conteúdo(s) escolhido(s)` : 'Toda a base por nicho e país';
     }
+    if (type === 'receipt_detector') return `Confiança mínima ${Math.round((Number(config?.minimum_confidence) || 0.75) * 100)}%`;
     if (type === 'condition') return `${config?.condition_field || ''} ${config?.condition_operator || ''} ${config?.condition_value || ''}`;
     if (type === 'action') {
       const at = config?.action_type as string;
@@ -285,6 +287,7 @@ export default function FlowEditor() {
       defaultConfig.context_message_limit = 20;
     }
     if (type === 'smart_reply') { defaultConfig.context_message_limit = 20; defaultConfig.minimum_confidence = 0.75; }
+    if (type === 'receipt_detector') { defaultConfig.minimum_confidence = 0.75; }
     if (type === 'action') { defaultConfig.action_type = 'add_tag'; }
 
     const lastNode = nodes[nodes.length - 1];
@@ -415,6 +418,17 @@ export default function FlowEditor() {
     if (invalidSmartReply) {
       toast.error('Conecte as saídas Respondeu, Sem resposta e Erro');
       setSelectedNode(invalidSmartReply);
+      return;
+    }
+    const invalidReceiptDetector = nodes.find((node) => {
+      if (node.data.nodeType !== 'receipt_detector') return false;
+      return !['receipt', 'not_receipt', 'error'].every((handle) =>
+        edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
+      );
+    });
+    if (invalidReceiptDetector) {
+      toast.error('Conecte as saídas Comprovante, Não é comprovante e Erro');
+      setSelectedNode(invalidReceiptDetector);
       return;
     }
     const smartReplyWithoutKnowledge = nodes.find((node) => {
