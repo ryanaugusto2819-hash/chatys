@@ -15,8 +15,93 @@ const SmartConditionSchema = z.object({
   confidence: z.number(),
   reason: z.string(),
 });
+const SmartReplySchema = z.object({
+  answer: z.string(),
+  confidence: z.number(),
+  source_ids: z.array(z.string()),
+  reason: z.string(),
+});
 
 type SmartConditionDecision = z.infer<typeof SmartConditionSchema>;
+type SmartReplyDecision = z.infer<typeof SmartReplySchema>;
+
+function detectCountryCode(phone: string): "MX" | "UY" | "AR" | "BR" | "any" {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("52")) return "MX";
+  if (digits.startsWith("598")) return "UY";
+  if (digits.startsWith("54")) return "AR";
+  if (digits.startsWith("55")) return "BR";
+  return "any";
+}
+
+function safeAiError(error: unknown): string {
+  const status = Number((error as { statusCode?: number })?.statusCode || 0);
+  const message = error instanceof Error ? error.message : "Falha ao consultar a IA";
+  if (status === 401) return "Lovable AI não está configurada";
+  if (status === 402) return message || "Créditos de IA insuficientes";
+  if (status === 403) return message || "Uso de IA bloqueado neste workspace";
+  if (status === 429) return "Lovable AI temporariamente sobrecarregada";
+  return message.slice(0, 500);
+}
+
+async function generateSmartReply(params: {
+  lovableKey: string;
+  transcript: string;
+  latestCustomerMessage: string;
+  sources: Array<{ id: string; type: string; title: string; content: string; country_code: string }>;
+}): Promise<{ decision: SmartReplyDecision; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
+  const provider = createOpenAI({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey: params.lovableKey,
+    headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+  });
+  const sourceCatalog = params.sources.map((source) =>
+    `[FONTE ${source.id}] [${source.country_code}] ${source.title}\n${source.content}`
+  ).join("\n\n").slice(0, 60000);
+  const prompt = [
+    "Responda à dúvida do cliente usando SOMENTE fatos presentes nas FONTES OFICIAIS.",
+    "Você pode redigir e adaptar a linguagem, mas não pode inventar, completar lacunas, alterar etiquetas, registrar vendas nem executar ações.",
+    "Responda no idioma usado pelo cliente. Se as fontes não forem suficientes, retorne answer vazio, source_ids vazio e confiança baixa.",
+    "source_ids deve conter somente IDs exatos das fontes realmente usadas. A resposta deve ser pronta para envio no WhatsApp.",
+    `ÚLTIMA MENSAGEM DO CLIENTE:\n${params.latestCustomerMessage}`,
+    `CONTEXTO RECENTE:\n${params.transcript}`,
+    `FONTES OFICIAIS:\n${sourceCatalog}`,
+  ].join("\n\n");
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = streamText({
+        model: provider.responses("openai/gpt-6-astra"),
+        output: Output.object({ schema: SmartReplySchema }),
+        prompt,
+        maxRetries: 0,
+        providerOptions: {
+          openai: {
+            forceReasoning: true,
+            reasoningEffort: "low",
+            reasoningSummary: "auto",
+            store: false,
+            include: ["reasoning.encrypted_content"],
+          },
+        },
+      });
+      const [decision, usage] = await Promise.all([result.output, result.usage]);
+      return {
+        decision,
+        usage: {
+          inputTokens: usage.inputTokens || 0,
+          outputTokens: usage.outputTokens || 0,
+          totalTokens: usage.totalTokens || 0,
+        },
+      };
+    } catch (error) {
+      const status = Number((error as { statusCode?: number })?.statusCode || 0);
+      if (attempt >= 2 || (status !== 429 && status < 500)) throw error;
+      await sleep(750 * 2 ** attempt);
+    }
+  }
+  throw new Error("A resposta inteligente não retornou um resultado");
+}
 
 async function classifySmartCondition(params: {
   lovableKey: string;
@@ -575,6 +660,8 @@ Deno.serve(async (req) => {
       }
       visited.add(node.id);
       const config = node.config as Record<string, unknown>;
+      let smartReplyLogId: string | null = null;
+      let smartReplyContent = "";
 
       if (node.node_type === "trigger") {
         if (executionId) {
@@ -739,9 +826,155 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      if (node.node_type === "smart_reply") {
+        const answeredNext = nextNode(node.id, "answered");
+        const noAnswerNext = nextNode(node.id, "no_answer");
+        const errorNext = nextNode(node.id, "error");
+        if (!executionId || !answeredNext || !noAnswerNext || !errorNext) {
+          failed = true;
+          results.push({ nodeId: node.id, status: "invalid_smart_reply_configuration" });
+          if (executionId) await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Resposta Inteligente", sort_order: node.sort_order,
+            status: "failed", error_message: "Conecte as saídas Respondeu, Sem resposta e Erro",
+          });
+          break;
+        }
+
+        const { data: existingReply } = await supabase.from("ai_smart_reply_logs")
+          .select("id, outcome, generated_response")
+          .eq("execution_id", executionId).eq("node_id", node.id).maybeSingle();
+        if (existingReply?.outcome === "answered") {
+          completedCount++;
+          results.push({ nodeId: node.id, status: "already_answered" });
+          currentNode = answeredNext;
+          continue;
+        }
+        if (existingReply) {
+          completedCount++;
+          results.push({ nodeId: node.id, status: existingReply.outcome === "no_answer" ? "no_answer" : "ai_error" });
+          currentNode = existingReply.outcome === "no_answer" ? noAnswerNext : errorNext;
+          continue;
+        }
+
+        const countryCode = detectCountryCode(conversation.contact_phone);
+        const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
+        const { data: recentMessages, error: recentError } = await supabase.from("messages")
+          .select("sender_type, sender_label, content, message_type, created_at")
+          .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(messageLimit);
+        const orderedMessages = [...(recentMessages || [])].reverse();
+        const latestCustomerMessage = [...orderedMessages].reverse().find((message) => message.sender_type === "customer")?.content || "";
+        const transcript = orderedMessages.map((message) =>
+          `${message.sender_type === "customer" ? "CLIENTE" : message.sender_label || "ATENDIMENTO"}: ${message.content || `[${message.message_type}]`}`
+        ).join("\n").slice(-24000);
+
+        let sourceQuery = supabase.from("knowledge_base_items")
+          .select("id, type, title, content, country_code")
+          .eq("workspace_id", conversation.workspace_id)
+          .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
+          .order("created_at", { ascending: false }).limit(50);
+        sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
+        const { data: rawSources, error: sourceError } = await sourceQuery;
+        const sources = [...(rawSources || [])].sort((a, b) =>
+          Number(b.country_code === countryCode) - Number(a.country_code === countryCode)
+        );
+        const consultedSourceIds = sources.map((source) => source.id);
+
+        const { data: logRow, error: logError } = await supabase.from("ai_smart_reply_logs").insert({
+          workspace_id: conversation.workspace_id,
+          execution_id: executionId,
+          conversation_id: conversationId,
+          flow_id: flowId,
+          node_id: node.id,
+          niche_id: conversation.niche_id,
+          country_code: countryCode,
+          customer_message: latestCustomerMessage,
+          context_snapshot: transcript,
+          consulted_source_ids: consultedSourceIds,
+          outcome: "processing",
+        }).select("id").single();
+        if (logError) {
+          if (logError.code === "23505") {
+            completedCount++;
+            results.push({ nodeId: node.id, status: "duplicate_blocked" });
+            currentNode = errorNext;
+            continue;
+          }
+          throw logError;
+        }
+        smartReplyLogId = logRow.id;
+
+        if (conversation.sale_registered_at || recentError || sourceError || !sources?.length || !latestCustomerMessage.trim()) {
+          const reason = conversation.sale_registered_at ? "Venda já registrada; resposta automática bloqueada"
+            : recentError?.message || sourceError?.message || (!sources?.length ? "Nenhuma fonte disponível para este nicho e país" : "Mensagem do cliente não encontrada");
+          await supabase.from("ai_smart_reply_logs").update({ outcome: "no_answer", confidence: 0, reason, completed_at: new Date().toISOString() }).eq("id", smartReplyLogId);
+          await supabase.from("conversations").update({ status: "active" }).eq("id", conversationId);
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Resposta Inteligente", sort_order: node.sort_order,
+            status: "review_required", error_message: reason,
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: "no_answer" });
+          currentNode = noAnswerNext;
+          continue;
+        }
+
+        try {
+          const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+          if (!lovableKey) throw Object.assign(new Error("Lovable AI não está configurada"), { statusCode: 401 });
+          const generated = await generateSmartReply({ lovableKey, transcript, latestCustomerMessage, sources });
+          const validSourceIds = new Set(consultedSourceIds);
+          const usedSourceIds = generated.decision.source_ids.filter((id) => validSourceIds.has(id));
+          const confidence = Math.max(0, Math.min(1, Number(generated.decision.confidence) || 0));
+          smartReplyContent = generated.decision.answer.trim();
+          await supabase.from("ai_usage_logs").insert({
+            function_name: "execute-flow-smart-reply", model: "openai/gpt-6-astra",
+            input_tokens: generated.usage.inputTokens, output_tokens: generated.usage.outputTokens,
+            total_tokens: generated.usage.totalTokens, conversation_id: conversationId,
+          });
+
+          if (!smartReplyContent || confidence < 0.75 || usedSourceIds.length === 0) {
+            const reason = generated.decision.reason || "A base não foi suficiente para uma resposta segura";
+            await supabase.from("ai_smart_reply_logs").update({
+              outcome: "no_answer", generated_response: smartReplyContent || null, confidence,
+              used_source_ids: usedSourceIds, reason, completed_at: new Date().toISOString(),
+            }).eq("id", smartReplyLogId);
+            await supabase.from("conversations").update({ status: "active" }).eq("id", conversationId);
+            await supabase.from("flow_step_logs").insert({
+              execution_id: executionId, node_id: node.id, node_type: node.node_type,
+              node_label: node.label || "Resposta Inteligente", sort_order: node.sort_order,
+              status: "review_required", error_message: `confiança=${Math.round(confidence * 100)}%; ${reason}`,
+            });
+            completedCount++;
+            results.push({ nodeId: node.id, status: "no_answer" });
+            currentNode = noAnswerNext;
+            continue;
+          }
+          await supabase.from("ai_smart_reply_logs").update({
+            generated_response: smartReplyContent, confidence, used_source_ids: usedSourceIds,
+            reason: generated.decision.reason,
+          }).eq("id", smartReplyLogId);
+        } catch (error) {
+          const safeError = safeAiError(error);
+          await supabase.from("ai_smart_reply_logs").update({ outcome: "error", safe_error: safeError, completed_at: new Date().toISOString() }).eq("id", smartReplyLogId);
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId, node_id: node.id, node_type: node.node_type,
+            node_label: node.label || "Resposta Inteligente", sort_order: node.sort_order,
+            status: "failed", error_message: safeError,
+          });
+          completedCount++;
+          results.push({ nodeId: node.id, status: "ai_error" });
+          currentNode = errorNext;
+          continue;
+        }
+      }
+
       let waPayload: Record<string, unknown>;
 
-      if (node.node_type === "message") {
+      if (node.node_type === "smart_reply") {
+        waPayload = { messaging_product: "whatsapp", to: phone, type: "text", text: { body: smartReplyContent } };
+      } else if (node.node_type === "message") {
         const content = replaceVariables((config.content as string) || "");
         if (!content.trim()) {
           if (executionId) {
@@ -1115,7 +1348,7 @@ Deno.serve(async (req) => {
               message: extText,
               mediaUrl: extMedia,
               type: extType,
-              senderLabel: requestedLabel || "fluxo",
+              senderLabel: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo",
             }),
           });
 
@@ -1144,7 +1377,7 @@ Deno.serve(async (req) => {
           const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-send`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-            body: JSON.stringify({ conversationId, message: uazapiText, mediaUrl: uazapiMedia, type: uazapiType, senderLabel: requestedLabel || "fluxo" }),
+            body: JSON.stringify({ conversationId, message: uazapiText, mediaUrl: uazapiMedia, type: uazapiType, senderLabel: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo" }),
           });
           waResult = await response.json().catch(() => ({}));
           waResponse = new Response(JSON.stringify(waResult), { status: response.status });
@@ -1318,7 +1551,9 @@ Deno.serve(async (req) => {
         let failedMediaUrl: string | null = null;
         let failedType = "text";
 
-        if (node.node_type === "message") {
+        if (node.node_type === "smart_reply") {
+          failedContent = smartReplyContent;
+        } else if (node.node_type === "message") {
           failedContent = (config.content as string) || "";
         } else if (node.node_type === "image") {
           failedContent = (config.caption as string) || "";
@@ -1364,7 +1599,7 @@ Deno.serve(async (req) => {
           status: "failed",
           provider_status: String(waResponse.status),
           provider_error: providerErrorPayload,
-          sender_label: requestedLabel || "fluxo",
+          sender_label: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo",
         });
 
         if (executionId) {
@@ -1388,6 +1623,15 @@ Deno.serve(async (req) => {
             })
             .eq("id", executionId);
         }
+        if (smartReplyLogId) await supabase.from("ai_smart_reply_logs").update({
+          outcome: "error", safe_error: errorDetail, completed_at: new Date().toISOString(),
+        }).eq("id", smartReplyLogId);
+        if (node.node_type === "smart_reply") {
+          completedCount++;
+          results.push({ nodeId: node.id, status: "send_error" });
+          currentNode = nextNode(node.id, "error");
+          continue;
+        }
         failed = true;
         results.push({ nodeId: node.id, status: "error" });
         break;
@@ -1403,7 +1647,9 @@ Deno.serve(async (req) => {
       let msgMediaUrl: string | null = null;
       let normalizedType = "text";
 
-      if (node.node_type === "message") {
+      if (node.node_type === "smart_reply") {
+        msgContent = smartReplyContent;
+      } else if (node.node_type === "message") {
         msgContent = (config.content as string) || "";
       } else if (node.node_type === "image") {
         msgContent = (config.caption as string) || "";
@@ -1434,7 +1680,7 @@ Deno.serve(async (req) => {
         status: useEvolution ? "sent" : providerMessageId ? "pending" : "sent",
         provider_message_id: providerMessageId,
         provider_status: providerMessageId ? (useEvolution ? "sent" : "accepted") : null,
-        sender_label: requestedLabel || "fluxo",
+        sender_label: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo",
       })).error;
 
       if (messageInsertError) {
@@ -1452,9 +1698,12 @@ Deno.serve(async (req) => {
           error_message: messageInsertError ? `message_insert: ${messageInsertError.message}` : null,
         });
       }
+      if (smartReplyLogId) await supabase.from("ai_smart_reply_logs").update({
+        outcome: "answered", provider_message_id: providerMessageId, completed_at: new Date().toISOString(),
+      }).eq("id", smartReplyLogId);
       completedCount++;
       results.push({ nodeId: node.id, status: "sent" });
-      currentNode = nextNode(node.id);
+      currentNode = node.node_type === "smart_reply" ? nextNode(node.id, "answered") : nextNode(node.id);
     }
 
     if (executionId && !failed && !waitingForResponse) {

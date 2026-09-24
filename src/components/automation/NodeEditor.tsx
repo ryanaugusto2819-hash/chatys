@@ -143,14 +143,14 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
   const iconMap: Record<string, React.ElementType> = {
     trigger: Zap, message: MessageSquare, delay: Clock, wait_for_response: MessageSquare, image: Image,
     audio: Music, video: Video, document: FileText, condition: GitFork, smart_condition: Bot,
-    quick_reply: ListOrdered, ai_reply: Bot, action: Cog, call_button: Zap,
+    quick_reply: ListOrdered, ai_reply: Bot, smart_reply: Bot, action: Cog, call_button: Zap,
   };
   const Icon = iconMap[nodeType] || MessageSquare;
 
   const typeLabels: Record<string, string> = {
     trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', wait_for_response: 'Aguardando Resposta', image: 'Imagem',
     audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição', smart_condition: 'Condição Inteligente',
-    quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', action: 'Ação',
+    quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', smart_reply: 'Resposta Inteligente', action: 'Ação',
     call_button: 'Botão de Ligação',
   };
 
@@ -686,6 +686,33 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
             <div className="rounded-lg bg-fuchsia-50 dark:bg-fuchsia-900/10 border border-fuchsia-200 dark:border-fuchsia-800 p-3">
               <p className="text-[11px] text-fuchsia-700 dark:text-fuchsia-300">
                 🤖 A IA gerará uma resposta baseada no contexto da conversa e neste prompt
+              </p>
+            </div>
+          </div>
+        )}
+
+        {nodeType === 'smart_reply' && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-primary">Base oficial automática</p>
+              <p className="text-[11px] text-muted-foreground">
+                A IA usa a última mensagem e o histórico recente, buscando somente conteúdos do nicho e país desta conversa.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Mensagens de contexto</label>
+              <input
+                type="number"
+                min={2}
+                max={30}
+                value={(editConfig.context_message_limit as number) || 20}
+                onChange={(e) => setEditConfig((p) => ({ ...p, context_message_limit: Math.max(2, Math.min(30, parseInt(e.target.value) || 20)) }))}
+                className={inputClass}
+              />
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-[11px] text-muted-foreground">
+                Conecte as saídas Respondeu, Sem resposta e Erro. Sem resposta segura, a conversa fica disponível para um atendente.
               </p>
             </div>
           </div>

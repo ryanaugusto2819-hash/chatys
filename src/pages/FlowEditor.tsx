@@ -68,7 +68,7 @@ const toolCategories: ToolCategory[] = [
     items: [
       { type: 'quick_reply', label: 'Resposta Rápida', icon: ListOrdered, desc: 'Botões de resposta rápida' },
       { type: 'call_button', label: 'Botão de Ligação', icon: Zap, desc: 'Botão para o cliente ligar' },
-      { type: 'ai_reply', label: 'Resposta IA', icon: Bot, desc: 'Resposta gerada por IA' },
+      { type: 'smart_reply', label: 'Resposta Inteligente', icon: Bot, desc: 'Responde dúvidas usando a base oficial' },
     ],
   },
   {
@@ -201,7 +201,7 @@ export default function FlowEditor() {
     if (type === 'image' || type === 'video' || type === 'document') return (config?.caption as string) || '';
     if (type === 'audio') return config?.media_url ? 'Áudio anexado' : '';
     if (type === 'quick_reply') return (config?.content as string)?.slice(0, 40) || '';
-    if (type === 'ai_reply') return (config?.ai_prompt as string)?.slice(0, 40) || '';
+    if (type === 'smart_reply') return 'Base automática por nicho e país';
     if (type === 'condition') return `${config?.condition_field || ''} ${config?.condition_operator || ''} ${config?.condition_value || ''}`;
     if (type === 'action') {
       const at = config?.action_type as string;
@@ -266,6 +266,7 @@ export default function FlowEditor() {
       defaultConfig.option_y = '';
       defaultConfig.context_message_limit = 20;
     }
+    if (type === 'smart_reply') { defaultConfig.context_message_limit = 20; defaultConfig.minimum_confidence = 0.75; }
     if (type === 'action') { defaultConfig.action_type = 'add_tag'; }
 
     const lastNode = nodes[nodes.length - 1];
@@ -376,6 +377,17 @@ export default function FlowEditor() {
     if (invalidWait) {
       toast.error('Defina o prazo e conecte as saídas Respondeu e Tempo esgotado');
       setSelectedNode(invalidWait);
+      return;
+    }
+    const invalidSmartReply = nodes.find((node) => {
+      if (node.data.nodeType !== 'smart_reply') return false;
+      return !['answered', 'no_answer', 'error'].every((handle) =>
+        edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
+      );
+    });
+    if (invalidSmartReply) {
+      toast.error('Conecte as saídas Respondeu, Sem resposta e Erro');
+      setSelectedNode(invalidSmartReply);
       return;
     }
     if (!id) return;

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface KBItem {
   id: string;
@@ -11,6 +12,7 @@ interface KBItem {
   content: string;
   file_url: string | null;
   niche_id: string | null;
+  country_code: string;
   created_at: string;
 }
 
@@ -29,6 +31,7 @@ interface Props {
 }
 
 export default function KnowledgeBase({ nicheId }: Props) {
+  const { currentWorkspace } = useWorkspace();
   const [items, setItems] = useState<KBItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('text');
@@ -38,6 +41,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
   const [textContent, setTextContent] = useState('');
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState('');
+  const [countryCode, setCountryCode] = useState('any');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +68,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const addTextItem = async () => {
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
     if (!textTitle.trim() || !textContent.trim()) {
       toast.error('Preencha título e conteúdo');
       return;
@@ -73,6 +81,8 @@ export default function KnowledgeBase({ nicheId }: Props) {
       title: textTitle.trim(),
       content: textContent.trim(),
       niche_id: nicheId || null,
+      workspace_id: currentWorkspace?.id,
+      country_code: countryCode,
     });
     if (error) {
       toast.error('Erro ao adicionar');
@@ -85,6 +95,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const addQAItem = async () => {
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
     if (!qaQuestion.trim() || !qaAnswer.trim()) {
       toast.error('Preencha pergunta e resposta');
       return;
@@ -94,6 +108,8 @@ export default function KnowledgeBase({ nicheId }: Props) {
       title: qaQuestion.trim(),
       content: qaAnswer.trim(),
       niche_id: nicheId || null,
+      workspace_id: currentWorkspace?.id,
+      country_code: countryCode,
     });
     if (error) {
       toast.error('Erro ao adicionar');
@@ -108,6 +124,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
 
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
@@ -146,6 +166,8 @@ export default function KnowledgeBase({ nicheId }: Props) {
       content: content.substring(0, 50000),
       file_url: urlData.publicUrl,
       niche_id: nicheId || null,
+      workspace_id: currentWorkspace?.id,
+      country_code: countryCode,
     });
 
     if (error) {
@@ -254,6 +276,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const importFlow = async (flow: FlowWithNodes) => {
+    if (!currentWorkspace?.id) return;
     setImportingFlowId(flow.id);
     const content = formatFlowAsKnowledge(flow);
     const { error } = await supabase.from('knowledge_base_items').insert({
@@ -261,6 +284,8 @@ export default function KnowledgeBase({ nicheId }: Props) {
       title: `Fluxo: ${flow.name}`,
       content: content.substring(0, 50000),
       niche_id: nicheId || null,
+      workspace_id: currentWorkspace?.id,
+      country_code: countryCode,
     });
     if (error) {
       toast.error('Erro ao importar fluxo');
@@ -272,7 +297,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const importAllFlows = async () => {
-    if (flows.length === 0) return;
+    if (flows.length === 0 || !currentWorkspace?.id) return;
     setImportingFlowId('all');
     let success = 0;
     for (const flow of flows) {
@@ -282,6 +307,8 @@ export default function KnowledgeBase({ nicheId }: Props) {
         title: `Fluxo: ${flow.name}`,
         content: content.substring(0, 50000),
         niche_id: nicheId || null,
+        workspace_id: currentWorkspace?.id,
+        country_code: countryCode,
       });
       if (!error) success++;
     }
@@ -350,6 +377,22 @@ export default function KnowledgeBase({ nicheId }: Props) {
       </div>
 
       {/* Add Forms */}
+      {activeTab !== 'flows' && (
+        <div className="mb-4 space-y-1.5">
+          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">País deste conteúdo</label>
+          <select
+            value={countryCode}
+            onChange={(event) => setCountryCode(event.target.value)}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="any">Qualquer país</option>
+            <option value="MX">México</option>
+            <option value="UY">Uruguai</option>
+            <option value="AR">Argentina</option>
+            <option value="BR">Brasil</option>
+          </select>
+        </div>
+      )}
       {activeTab === 'text' && (
         <div className="space-y-3 mb-6">
           <input
@@ -542,6 +585,9 @@ export default function KnowledgeBase({ nicheId }: Props) {
                   <span className="text-sm font-medium text-foreground truncate">{item.title}</span>
                   <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {typeLabel(item.type)}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {item.country_code === 'any' ? 'Qualquer país' : item.country_code}
                   </span>
                 </div>
                 <button
