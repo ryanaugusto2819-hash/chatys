@@ -672,6 +672,23 @@ Deno.serve(async (req) => {
 
         if (!responseNext || !timeoutNext || !executionId) {
           failed = true;
+          if (executionId) {
+            await supabase.from("flow_step_logs").insert({
+              execution_id: executionId,
+              node_id: node.id,
+              node_type: node.node_type,
+              node_label: node.label || "Aguardando Resposta",
+              sort_order: node.sort_order,
+              status: "failed",
+              error_message: "Conecte as saídas Respondeu e Tempo esgotado",
+            });
+            await supabase.from("flow_executions").update({
+              status: "failed",
+              failed_at_node_id: node.id,
+              completed_nodes: completedCount,
+              completed_at: new Date().toISOString(),
+            }).eq("id", executionId);
+          }
           results.push({ nodeId: node.id, status: "invalid_wait_configuration" });
           break;
         }
