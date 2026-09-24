@@ -337,6 +337,8 @@ export default function FlowEditor() {
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [toolbarOpen, setToolbarOpen] = useState(true);
+  const [saveIssues, setSaveIssues] = useState<FlowIssue[]>([]);
+  const [issuesOpen, setIssuesOpen] = useState(false);
 
   const handleNodeDelete = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -601,108 +603,26 @@ export default function FlowEditor() {
     // open in the editor with valid-looking connections whose handle is null.
     // Normalize those in memory so the user can save without reloading or
     // rebuilding work already present on the canvas.
-    const normalizedEdges = normalizeLegacyBranchEdges(nodes, edges);
-    const invalidSmartCondition = nodes.find((node) => {
-      if (node.data.nodeType !== 'smart_condition') return false;
-      const config = (node.data.config as Record<string, unknown>) || {};
-      const optionLabels = smartConditionLabels.slice(0, getSmartConditionOptionCount(config));
-      return optionLabels.some((optionLabel) => {
-        const handle = optionLabel.toLowerCase();
-        return !String(config[`option_${handle}`] || '').trim()
-          || !normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle);
-      });
-    });
-    if (invalidSmartCondition) {
-      toast.error('Preencha e conecte todas as saídas da Condição Inteligente');
-      setSelectedNode(invalidSmartCondition);
+    const fixed = safelyFixFlow(nodes, edges);
+    const normalizedEdges = fixed.edges;
+    const issues = getFlowIssues(fixed.nodes, normalizedEdges, flowName);
+    setNodes(fixed.nodes);
+    setEdges(normalizedEdges);
+    if (issues.length > 0) {
+      setSaveIssues(issues);
+      setIssuesOpen(true);
+      const manualCount = issues.filter((issue) => !issue.autoFixable).length;
+      toast.error(`${issues.length} problema(s) encontrado(s). ${manualCount} precisa(m) da sua atenção.`);
       return;
     }
-    const invalidWait = nodes.find((node) => {
-      if (node.data.nodeType !== 'wait_for_response') return false;
-      const config = (node.data.config as Record<string, unknown>) || {};
-      // The editor and node preview both display 24 hours when an older/imported
-      // node has no explicit timeout yet, so validation must honor that default.
-      const validTimeout = Number(config.timeout_value ?? 24) > 0;
-      const hasResponse = normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === 'response');
-      const hasTimeout = normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === 'timeout');
-      return !validTimeout || !hasResponse || !hasTimeout;
-    });
-    if (invalidWait) {
-      toast.error('Defina o prazo e conecte as saídas Respondeu e Tempo esgotado');
-      setSelectedNode(invalidWait);
+    if (!id) {
+      toast.error('Não foi possível identificar este fluxo. Volte à lista e abra-o novamente.');
       return;
     }
-    const invalidSmartReply = nodes.find((node) => {
-      if (node.data.nodeType !== 'smart_reply') return false;
-      return !['answered', 'no_answer', 'error'].every((handle) =>
-        normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
-      );
-    });
-    if (invalidSmartReply) {
-      toast.error('Conecte as saídas Respondeu, Sem resposta e Erro');
-      setSelectedNode(invalidSmartReply);
-      return;
-    }
-    const invalidReceiptDetector = nodes.find((node) => {
-      if (node.data.nodeType !== 'receipt_detector') return false;
-      return !['receipt', 'not_receipt', 'error'].every((handle) =>
-        normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
-      );
-    });
-    if (invalidReceiptDetector) {
-      toast.error('Conecte as saídas Comprovante, Não é comprovante e Erro');
-      setSelectedNode(invalidReceiptDetector);
-      return;
-    }
-    const smartReplyWithoutKnowledge = nodes.find((node) => {
-      if (node.data.nodeType !== 'smart_reply') return false;
-      const config = (node.data.config as Record<string, unknown>) || {};
-      return config.knowledge_source_mode === 'selected'
-        && (!Array.isArray(config.knowledge_base_item_ids) || config.knowledge_base_item_ids.length === 0);
-    });
-    if (smartReplyWithoutKnowledge) {
-      toast.error('Escolha ao menos um conteúdo da Base de Conhecimento');
-      setSelectedNode(smartReplyWithoutKnowledge);
-      return;
-    }
-    const invalidFlowAction = nodes.find((node) => {
-      if (node.data.nodeType !== 'action') return false;
-      const config = (node.data.config as Record<string, unknown>) || {};
-      return config.action_type === 'send_flow' && !config.flow_id;
-    });
-    if (invalidFlowAction) {
-      toast.error('Selecione o fluxo que será enviado no bloco Ação');
-      setSelectedNode(invalidFlowAction);
-      return;
-    }
-    const invalidAgentTransfer = nodes.find((node) => {
-      if (node.data.nodeType !== 'action') return false;
-      const config = (node.data.config as Record<string, unknown>) || {};
-      return config.action_type === 'transfer_agent' && !config.agent_id;
-    });
-    if (invalidAgentTransfer) {
-      toast.error('Selecione o atendente que receberá a conversa');
-      setSelectedNode(invalidAgentTransfer);
-      return;
-    }
-    if (!id) return;
     setSaving(true);
-
-    await supabase
-      .from('automation_flows')
-      .update({ name: flowName, description: flowDescription, manual_only: manualOnly, niche_id: flowNicheId } as any)
-      .eq('id', id);
-
-    // Nodes are saved as-is (connection_ids are already in each trigger node's config)
-    const updatedNodes = nodes;
-
-    await supabase.from('automation_edges').delete().eq('flow_id', id);
-    await supabase.from('automation_nodes').delete().eq('flow_id', id);
-
-    if (updatedNodes.length > 0) {
-      const nodeInserts = updatedNodes.map((n, i) => ({
+    try {
+      const nodeInserts = fixed.nodes.map((n, i) => ({
         id: n.id,
-        flow_id: id,
         node_type: n.data.nodeType as string,
         label: n.data.label as string,
         config: JSON.parse(JSON.stringify((n.data.config as Record<string, unknown>) || {})),
@@ -710,37 +630,80 @@ export default function FlowEditor() {
         position_y: n.position.y,
         sort_order: i,
       }));
-
-      const { error: nodesError } = await supabase.from('automation_nodes').insert(nodeInserts);
-      if (nodesError) {
-        console.error('Error saving nodes:', nodesError);
-        toast.error('Erro ao salvar nós');
-        setSaving(false);
-        return;
-      }
-    }
-
-    if (normalizedEdges.length > 0) {
       const edgeInserts = normalizedEdges.map((e) => ({
         id: crypto.randomUUID(),
-        flow_id: id,
-         source_node_id: e.source,
+        source_node_id: e.source,
         target_node_id: e.target,
-         source_handle: e.sourceHandle || null,
+        source_handle: e.sourceHandle || null,
       }));
 
-      const { error: edgesError } = await supabase.from('automation_edges').insert(edgeInserts);
-      if (edgesError) {
-        console.error('Error saving edges:', edgesError);
-        toast.error('Erro ao salvar conexões');
-        setSaving(false);
+      const { error } = await supabase.rpc('save_automation_flow_atomic', {
+        p_flow_id: id,
+        p_name: flowName.trim(),
+        p_description: flowDescription,
+        p_manual_only: manualOnly,
+        p_niche_id: flowNicheId,
+        p_nodes: nodeInserts,
+        p_edges: edgeInserts,
+      });
+      if (error) {
+        console.error('Error saving flow atomically:', error);
+        const detail = error.message || 'A gravação foi recusada.';
+        setSaveIssues([{
+          id: 'database-save',
+          block: 'Gravação do fluxo',
+          problem: detail,
+          solution: 'Seu trabalho continua nesta tela. Confira sua conexão e tente salvar novamente; nada do fluxo anterior foi apagado.',
+          autoFixable: false,
+        }]);
+        setIssuesOpen(true);
+        toast.error(`Não foi possível salvar: ${detail}`);
         return;
       }
-      setEdges(normalizedEdges);
+      setSaveIssues([]);
+      setIssuesOpen(false);
+      toast.success('Fluxo salvo com segurança');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Erro inesperado durante a gravação.';
+      console.error('Unexpected flow save error:', error);
+      setSaveIssues([{
+        id: 'unexpected-save',
+        block: 'Gravação do fluxo',
+        problem: detail,
+        solution: 'Seu trabalho permanece aberto. Tente salvar novamente; se persistir, copie esta mensagem para o suporte.',
+        autoFixable: false,
+      }]);
+      setIssuesOpen(true);
+      toast.error(`Não foi possível salvar: ${detail}`);
+    } finally {
+      setSaving(false);
     }
+  };
 
-    toast.success('Fluxo salvo com sucesso');
-    setSaving(false);
+  const fixAllSafeIssues = () => {
+    const fixed = safelyFixFlow(nodes, edges);
+    setNodes(fixed.nodes);
+    setEdges(fixed.edges);
+    const remaining = getFlowIssues(fixed.nodes, fixed.edges, flowName);
+    setSaveIssues(remaining);
+    if (remaining.length === 0) {
+      setIssuesOpen(false);
+      toast.success('Problemas automáticos corrigidos. Clique em Salvar novamente.');
+      return;
+    }
+    const correctedCount = saveIssues.length - remaining.length;
+    toast.success(correctedCount > 0
+      ? `${correctedCount} problema(s) corrigido(s). Restam ${remaining.length} ajuste(s) manual(is).`
+      : 'As correções automáticas já foram aplicadas. Veja os ajustes manuais restantes.');
+  };
+
+  const openIssueNode = (issue: FlowIssue) => {
+    if (!issue.nodeId) return;
+    const node = nodes.find((item) => item.id === issue.nodeId);
+    if (node) {
+      setSelectedNode(node);
+      setIssuesOpen(false);
+    }
   };
 
   if (loading) {
@@ -920,6 +883,48 @@ export default function FlowEditor() {
           />
         )}
       </div>
+
+      <Dialog open={issuesOpen} onOpenChange={setIssuesOpen}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <DialogTitle className="flex items-center gap-2">
+              <CircleAlert className="h-5 w-5 text-destructive" />
+              Problemas encontrados ao salvar
+            </DialogTitle>
+            <DialogDescription>
+              Nada foi apagado. Corrija os itens abaixo e tente salvar novamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[52vh] space-y-2 overflow-y-auto px-6 py-4">
+            {saveIssues.map((issue, index) => (
+              <button
+                key={issue.id}
+                type="button"
+                onClick={() => openIssueNode(issue)}
+                disabled={!issue.nodeId}
+                className="flex w-full items-start gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-secondary/60 disabled:cursor-default disabled:hover:bg-card"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-xs font-bold text-destructive">{index + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-foreground">{issue.block}</span>
+                  <span className="mt-0.5 block text-xs text-destructive">Problema: {issue.problem}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Como arrumar: {issue.solution}</span>
+                </span>
+                {issue.nodeId && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />}
+              </button>
+            ))}
+          </div>
+          <DialogFooter className="border-t border-border px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => setIssuesOpen(false)}>Continuar editando</Button>
+            {saveIssues.some((issue) => issue.autoFixable) && (
+              <Button type="button" onClick={fixAllSafeIssues}>
+                <Wrench className="h-4 w-4" />
+                Corrigir automaticamente
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
