@@ -272,4 +272,4 @@
 - [x] Adicionar a opção e o seletor de fluxo no bloco Ação
 - [x] Iniciar o fluxo escolhido para o mesmo lead
 - [x] Validar workspace e impedir encadeamentos circulares
-- [ ] Publicar a função e validar a execução
+- [x] Publicar a função e validar a execução
