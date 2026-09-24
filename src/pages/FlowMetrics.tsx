@@ -159,7 +159,7 @@ export default function FlowMetrics() {
         countStatus(), countStatus('completed'), countStatus('failed'), countStatus('waiting_for_response'),
         supabase.from('ai_smart_reply_logs')
           .select('id, niche_id, country_code, customer_message, context_snapshot, confidence, outcome, reason, safe_error, created_at, conversations(contact_name, contact_phone), niches(name)')
-          .eq('flow_id', id).in('outcome', ['no_answer', 'error']).order('created_at', { ascending: false }).limit(300),
+          .eq('flow_id', id).eq('outcome', 'no_answer').order('created_at', { ascending: false }).limit(300),
       ]);
 
       if (flowRes.error || executionsRes.error || repliesRes.error) {
