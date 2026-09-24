@@ -204,6 +204,13 @@
       "when": 1790289981013,
       "tag": "0028_fix_claim_waiting_flow_ambiguity",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790292284199,
+      "tag": "0029_preserve_flow_execution_history_on_save",
+      "breakpoints": true
     }
   ]
 }
