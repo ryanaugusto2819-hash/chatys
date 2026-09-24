@@ -921,18 +921,21 @@ Deno.serve(async (req) => {
             return query;
           };
 
-          const { data: linkedRows, error: linkError } = await supabase
-            .from("knowledge_base_item_tags")
-            .select("knowledge_base_item_id, tag_id")
-            .eq("workspace_id", conversation.workspace_id)
-            .limit(50);
+          const automaticResult = await commonQuery().order("created_at", { ascending: false }).limit(50);
+          const candidateIds = (automaticResult.data || []).map((source) => source.id);
+          const { data: linkedRows, error: linkError } = candidateIds.length > 0
+            ? await supabase
+              .from("knowledge_base_item_tags")
+              .select("knowledge_base_item_id, tag_id")
+              .eq("workspace_id", conversation.workspace_id)
+              .in("knowledge_base_item_id", candidateIds)
+            : { data: [], error: null };
           const linkedItemIds = new Set((linkedRows || []).map((row) => row.knowledge_base_item_id));
           const matchingItemIds = new Set(
             (linkedRows || [])
               .filter((row) => contactTagIds.includes(row.tag_id))
               .map((row) => row.knowledge_base_item_id),
           );
-          const automaticResult = await commonQuery().order("created_at", { ascending: false }).limit(50);
           rawSources = (automaticResult.data || []).filter((source) =>
             !linkedItemIds.has(source.id) || matchingItemIds.has(source.id)
           );
