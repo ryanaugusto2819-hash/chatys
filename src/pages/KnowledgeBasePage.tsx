@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BookOpen, Layers, Loader2 } from 'lucide-react';
 import TopBar from '@/components/layout/TopBar';
 import KnowledgeBase from '@/components/ai/KnowledgeBase';
@@ -19,6 +20,8 @@ interface NicheOption {
 
 export default function KnowledgeBasePage() {
   const { currentWorkspace } = useWorkspace();
+  const [searchParams] = useSearchParams();
+  const requestedNicheId = searchParams.get('niche') || '';
   const [niches, setNiches] = useState<NicheOption[]>([]);
   const [selectedNicheId, setSelectedNicheId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,13 +45,15 @@ export default function KnowledgeBasePage() {
       const nextNiches = (data || []) as NicheOption[];
       setNiches(nextNiches);
       setSelectedNicheId((current) =>
-        nextNiches.some((niche) => niche.id === current) ? current : nextNiches[0]?.id || '',
+        nextNiches.some((niche) => niche.id === requestedNicheId)
+          ? requestedNicheId
+          : nextNiches.some((niche) => niche.id === current) ? current : nextNiches[0]?.id || '',
       );
       setLoading(false);
     };
 
     loadNiches();
-  }, [currentWorkspace?.id]);
+  }, [currentWorkspace?.id, requestedNicheId]);
 
   return (
     <div>
