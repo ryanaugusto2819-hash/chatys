@@ -49,6 +49,42 @@ const getSmartConditionOptionCount = (config: Record<string, unknown>) => {
   return lastConfiguredIndex + 1;
 };
 
+const getRequiredSourceHandles = (node: Node) => {
+  const nodeType = node.data.nodeType as string;
+  if (nodeType === 'smart_condition') {
+    const config = (node.data.config as Record<string, unknown>) || {};
+    return smartConditionLabels
+      .slice(0, getSmartConditionOptionCount(config))
+      .map((label) => label.toLowerCase());
+  }
+  if (nodeType === 'wait_for_response') return ['response', 'timeout'];
+  if (nodeType === 'smart_reply') return ['answered', 'no_answer', 'error'];
+  if (nodeType === 'receipt_detector') return ['receipt', 'not_receipt', 'error'];
+  return [];
+};
+
+const normalizeLegacyBranchEdges = (nodes: Node[], edges: Edge[]) => {
+  const normalized = edges.map((edge) => ({ ...edge }));
+
+  nodes.forEach((node) => {
+    const requiredHandles = getRequiredSourceHandles(node);
+    if (requiredHandles.length === 0) return;
+
+    const outgoing = normalized.filter((edge) => edge.source === node.id);
+    const usedHandles = new Set(outgoing.map((edge) => edge.sourceHandle).filter(Boolean));
+    const availableHandles = requiredHandles.filter((handle) => !usedHandles.has(handle));
+
+    outgoing
+      .filter((edge) => !edge.sourceHandle)
+      .forEach((edge, index) => {
+        const inferredHandle = availableHandles[index];
+        if (inferredHandle) edge.sourceHandle = inferredHandle;
+      });
+  });
+
+  return normalized;
+};
+
 interface ToolCategory {
   label: string;
   items: { type: string; label: string; icon: React.ElementType; desc: string }[];
@@ -379,6 +415,11 @@ export default function FlowEditor() {
   };
 
   const saveFlow = async () => {
+    // Flows created before named branch handles were introduced can still be
+    // open in the editor with valid-looking connections whose handle is null.
+    // Normalize those in memory so the user can save without reloading or
+    // rebuilding work already present on the canvas.
+    const normalizedEdges = normalizeLegacyBranchEdges(nodes, edges);
     const invalidSmartCondition = nodes.find((node) => {
       if (node.data.nodeType !== 'smart_condition') return false;
       const config = (node.data.config as Record<string, unknown>) || {};
@@ -386,7 +427,7 @@ export default function FlowEditor() {
       return optionLabels.some((optionLabel) => {
         const handle = optionLabel.toLowerCase();
         return !String(config[`option_${handle}`] || '').trim()
-          || !edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle);
+          || !normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle);
       });
     });
     if (invalidSmartCondition) {
@@ -400,8 +441,8 @@ export default function FlowEditor() {
       // The editor and node preview both display 24 hours when an older/imported
       // node has no explicit timeout yet, so validation must honor that default.
       const validTimeout = Number(config.timeout_value ?? 24) > 0;
-      const hasResponse = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'response');
-      const hasTimeout = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'timeout');
+      const hasResponse = normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === 'response');
+      const hasTimeout = normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === 'timeout');
       return !validTimeout || !hasResponse || !hasTimeout;
     });
     if (invalidWait) {
@@ -412,7 +453,7 @@ export default function FlowEditor() {
     const invalidSmartReply = nodes.find((node) => {
       if (node.data.nodeType !== 'smart_reply') return false;
       return !['answered', 'no_answer', 'error'].every((handle) =>
-        edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
+        normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
       );
     });
     if (invalidSmartReply) {
@@ -423,7 +464,7 @@ export default function FlowEditor() {
     const invalidReceiptDetector = nodes.find((node) => {
       if (node.data.nodeType !== 'receipt_detector') return false;
       return !['receipt', 'not_receipt', 'error'].every((handle) =>
-        edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
+        normalizedEdges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)
       );
     });
     if (invalidReceiptDetector) {
@@ -497,8 +538,8 @@ export default function FlowEditor() {
       }
     }
 
-    if (edges.length > 0) {
-      const edgeInserts = edges.map((e) => ({
+    if (normalizedEdges.length > 0) {
+      const edgeInserts = normalizedEdges.map((e) => ({
         id: crypto.randomUUID(),
         flow_id: id,
          source_node_id: e.source,
@@ -513,6 +554,7 @@ export default function FlowEditor() {
         setSaving(false);
         return;
       }
+      setEdges(normalizedEdges);
     }
 
     toast.success('Fluxo salvo com sucesso');
