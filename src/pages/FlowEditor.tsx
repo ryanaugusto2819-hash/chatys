@@ -136,6 +136,9 @@ const getFlowIssues = (nodes: Node[], edges: Edge[], flowName: string): FlowIssu
   if (!flowName.trim()) {
     issues.push({ id: 'flow-name', block: 'Dados do fluxo', problem: 'O fluxo está sem nome.', solution: 'Digite um nome no campo superior.', autoFixable: false });
   }
+  if (!nodes.some((node) => node.data.nodeType === 'trigger')) {
+    issues.push({ id: 'missing-trigger', block: 'Início do fluxo', problem: 'O fluxo não possui um gatilho.', solution: 'Adicione ao menos um gatilho para definir como o fluxo começa.', autoFixable: false });
+  }
 
   const duplicatedNodeIds = nodes.filter((node, index) => nodes.findIndex((item) => item.id === node.id) !== index);
   duplicatedNodeIds.forEach((node) => addNodeIssue(node, 'duplicate-id', 'Este bloco possui uma identificação duplicada.', 'Remova o bloco duplicado e crie-o novamente.'));
@@ -151,6 +154,23 @@ const getFlowIssues = (nodes: Node[], edges: Edge[], flowName: string): FlowIssu
       });
     }
   });
+
+  const adjacency = new Map<string, string[]>();
+  edges.forEach((edge) => adjacency.set(edge.source, [...(adjacency.get(edge.source) || []), edge.target]));
+  const visited = new Set<string>();
+  const activePath = new Set<string>();
+  const hasCycleFrom = (nodeId: string): boolean => {
+    if (activePath.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+    visited.add(nodeId);
+    activePath.add(nodeId);
+    const hasCycle = (adjacency.get(nodeId) || []).some(hasCycleFrom);
+    activePath.delete(nodeId);
+    return hasCycle;
+  };
+  if (nodes.some((node) => hasCycleFrom(node.id))) {
+    issues.push({ id: 'flow-cycle', block: 'Caminho circular', problem: 'Uma sequência de linhas volta para um bloco anterior e pode repetir para sempre.', solution: 'Remova a linha que faz o caminho retornar a um bloco já percorrido.', autoFixable: false });
+  }
 
   const seenEdges = new Set<string>();
   edges.forEach((edge) => {
@@ -582,8 +602,8 @@ export default function FlowEditor() {
           : n
       )
     );
-    const savedNode = nodes.find((node) => node.id === nodeId);
-    if (savedNode?.data.nodeType === 'smart_condition') {
+    const savedNodeType = nodes.find((node) => node.id === nodeId)?.data.nodeType;
+    if (savedNodeType === 'smart_condition') {
       const activeHandles = new Set(smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((item) => item.toLowerCase()));
       setEdges((currentEdges) => currentEdges.filter((edge) => edge.source !== nodeId || !edge.sourceHandle || activeHandles.has(edge.sourceHandle)));
     }
@@ -642,7 +662,7 @@ export default function FlowEditor() {
         p_name: flowName.trim(),
         p_description: flowDescription,
         p_manual_only: manualOnly,
-        p_niche_id: flowNicheId,
+        p_niche_id: flowNicheId as any,
         p_nodes: nodeInserts,
         p_edges: edgeInserts,
       });
