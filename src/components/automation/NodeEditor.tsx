@@ -95,13 +95,12 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
       }
     }
     if (nodeType === 'smart_reply' && currentWorkspace?.id) {
-      let knowledgeQuery = supabase
+      supabase
         .from('knowledge_base_items')
-        .select('id, title, type, country_code')
+        .select('id, title, type, country_code, niche_id, niches(name)')
         .eq('workspace_id', currentWorkspace.id)
-        .order('title');
-      knowledgeQuery = nicheId ? knowledgeQuery.eq('niche_id', nicheId) : knowledgeQuery.is('niche_id', null);
-      knowledgeQuery.then(({ data }) => setKnowledgeItems(data || []));
+        .order('title')
+        .then(({ data }) => setKnowledgeItems(data || []));
     }
   }, [nodeType, nicheId, currentFlowId, currentWorkspace?.id]);
   // Reset state when nodeId changes
@@ -772,7 +771,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
                           <span className="min-w-0">
                             <span className="block truncate text-xs font-medium text-card-foreground">{item.title}</span>
                             <span className="block text-[10px] text-muted-foreground">
-                              {item.country_code === 'any' ? 'Qualquer país' : item.country_code} · {item.type === 'qa' ? 'Pergunta e resposta' : 'Texto'}
+                              {item.niches?.name || 'Sem nicho'} · {item.country_code === 'any' ? 'Qualquer país' : item.country_code} · {item.type === 'qa' ? 'Pergunta e resposta' : 'Texto'}
                             </span>
                           </span>
                         </label>
@@ -781,7 +780,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
                   </div>
                 ) : (
                   <p className="rounded-lg border border-dashed border-border p-3 text-[10px] text-muted-foreground">
-                    Nenhum conteúdo cadastrado para o nicho deste fluxo.
+                    Nenhum conteúdo cadastrado na Base de Conhecimento.
                   </p>
                 )}
                 <p className="text-[10px] text-muted-foreground">
