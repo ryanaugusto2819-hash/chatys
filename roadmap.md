@@ -241,4 +241,4 @@
 - [x] Salvar e recarregar as conexões X/Y
 - [x] Classificar última resposta com contexto e executar somente um caminho
 - [x] Parar e registrar revisão quando não houver correspondência clara
-- [ ] Publicar e validar fluxos novos e antigos
+- [x] Publicar e validar fluxos novos e antigos
