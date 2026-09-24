@@ -259,6 +259,7 @@
 - [x] Transferir para atendente quando não houver resposta segura
 - [x] Registrar fontes, confiança, resultado, erro e consumo da IA
 - [x] Publicar e validar os três caminhos do bloco
+- [x] Permitir escolher conteúdos específicos da Base de Conhecimento em cada bloco
 
 # Página Base de Conhecimento
 

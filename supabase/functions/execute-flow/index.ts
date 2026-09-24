@@ -885,6 +885,23 @@ Deno.serve(async (req) => {
           .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
           .order("created_at", { ascending: false }).limit(50);
         sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
+        const sourceMode = config.knowledge_source_mode === "selected" ? "selected" : "automatic";
+        const selectedSourceIds = Array.isArray(config.knowledge_base_item_ids)
+          ? config.knowledge_base_item_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
+          : [];
+        if (sourceMode === "selected") {
+          if (selectedSourceIds.length === 0) {
+            failed = true;
+            results.push({ nodeId: node.id, status: "knowledge_source_required" });
+            await supabase.from("flow_step_logs").insert({
+              execution_id: executionId, node_id: node.id, node_type: node.node_type,
+              node_label: node.label || "Resposta Inteligente", sort_order: node.sort_order,
+              status: "failed", error_message: "Nenhum conteúdo da Base de Conhecimento foi selecionado",
+            });
+            break;
+          }
+          sourceQuery = sourceQuery.in("id", selectedSourceIds);
+        }
         const { data: rawSources, error: sourceError } = await sourceQuery;
         const sources = [...(rawSources || [])].sort((a, b) =>
           Number(b.country_code === countryCode) - Number(a.country_code === countryCode)

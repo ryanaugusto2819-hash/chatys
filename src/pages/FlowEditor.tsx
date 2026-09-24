@@ -201,7 +201,10 @@ export default function FlowEditor() {
     if (type === 'image' || type === 'video' || type === 'document') return (config?.caption as string) || '';
     if (type === 'audio') return config?.media_url ? 'Áudio anexado' : '';
     if (type === 'quick_reply') return (config?.content as string)?.slice(0, 40) || '';
-    if (type === 'smart_reply') return 'Base automática por nicho e país';
+    if (type === 'smart_reply') {
+      const selectedCount = Array.isArray(config?.knowledge_base_item_ids) ? config.knowledge_base_item_ids.length : 0;
+      return config?.knowledge_source_mode === 'selected' ? `${selectedCount} conteúdo(s) escolhido(s)` : 'Toda a base por nicho e país';
+    }
     if (type === 'condition') return `${config?.condition_field || ''} ${config?.condition_operator || ''} ${config?.condition_value || ''}`;
     if (type === 'action') {
       const at = config?.action_type as string;
@@ -390,6 +393,17 @@ export default function FlowEditor() {
     if (invalidSmartReply) {
       toast.error('Conecte as saídas Respondeu, Sem resposta e Erro');
       setSelectedNode(invalidSmartReply);
+      return;
+    }
+    const smartReplyWithoutKnowledge = nodes.find((node) => {
+      if (node.data.nodeType !== 'smart_reply') return false;
+      const config = (node.data.config as Record<string, unknown>) || {};
+      return config.knowledge_source_mode === 'selected'
+        && (!Array.isArray(config.knowledge_base_item_ids) || config.knowledge_base_item_ids.length === 0);
+    });
+    if (smartReplyWithoutKnowledge) {
+      toast.error('Escolha ao menos um conteúdo da Base de Conhecimento');
+      setSelectedNode(smartReplyWithoutKnowledge);
       return;
     }
     const invalidFlowAction = nodes.find((node) => {
