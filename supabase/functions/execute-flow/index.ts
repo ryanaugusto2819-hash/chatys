@@ -884,7 +884,6 @@ Deno.serve(async (req) => {
           .eq("workspace_id", conversation.workspace_id)
           .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
           .order("created_at", { ascending: false }).limit(50);
-        sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
         const sourceMode = config.knowledge_source_mode === "selected" ? "selected" : "automatic";
         const selectedSourceIds = Array.isArray(config.knowledge_base_item_ids)
           ? config.knowledge_base_item_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -901,6 +900,8 @@ Deno.serve(async (req) => {
             break;
           }
           sourceQuery = sourceQuery.in("id", selectedSourceIds);
+        } else {
+          sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
         }
         const { data: rawSources, error: sourceError } = await sourceQuery;
         const sources = [...(rawSources || [])].sort((a, b) =>
