@@ -1348,7 +1348,7 @@ Deno.serve(async (req) => {
               message: extText,
               mediaUrl: extMedia,
               type: extType,
-              senderLabel: requestedLabel || "fluxo",
+              senderLabel: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo",
             }),
           });
 
@@ -1377,7 +1377,7 @@ Deno.serve(async (req) => {
           const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-send`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-            body: JSON.stringify({ conversationId, message: uazapiText, mediaUrl: uazapiMedia, type: uazapiType, senderLabel: requestedLabel || "fluxo" }),
+            body: JSON.stringify({ conversationId, message: uazapiText, mediaUrl: uazapiMedia, type: uazapiType, senderLabel: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo" }),
           });
           waResult = await response.json().catch(() => ({}));
           waResponse = new Response(JSON.stringify(waResult), { status: response.status });
@@ -1599,7 +1599,7 @@ Deno.serve(async (req) => {
           status: "failed",
           provider_status: String(waResponse.status),
           provider_error: providerErrorPayload,
-          sender_label: requestedLabel || "fluxo",
+          sender_label: node.node_type === "smart_reply" ? "ia-resposta-inteligente" : requestedLabel || "fluxo",
         });
 
         if (executionId) {
