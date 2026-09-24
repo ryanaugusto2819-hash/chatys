@@ -211,9 +211,12 @@ export default function FlowEditor() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) =>
-        addEdge({ ...params, animated: true, style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 } }, eds)
-      );
+      setEdges((eds) => {
+        const withoutExistingBranch = params.sourceHandle
+          ? eds.filter((edge) => !(edge.source === params.source && edge.sourceHandle === params.sourceHandle))
+          : eds;
+        return addEdge({ ...params, animated: true, style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 } }, withoutExistingBranch);
+      });
     },
     [setEdges]
   );
@@ -342,6 +345,19 @@ export default function FlowEditor() {
   };
 
   const saveFlow = async () => {
+    const invalidSmartCondition = nodes.find((node) => {
+      if (node.data.nodeType !== 'smart_condition') return false;
+      const config = (node.data.config as Record<string, unknown>) || {};
+      const hasInstructions = Boolean(String(config.option_x || '').trim() && String(config.option_y || '').trim());
+      const hasX = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'x');
+      const hasY = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'y');
+      return !hasInstructions || !hasX || !hasY;
+    });
+    if (invalidSmartCondition) {
+      toast.error('Preencha X e Y e conecte as duas saídas da Condição Inteligente');
+      setSelectedNode(invalidSmartCondition);
+      return;
+    }
     if (!id) return;
     setSaving(true);
 

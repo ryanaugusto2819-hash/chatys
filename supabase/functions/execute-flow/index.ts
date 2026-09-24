@@ -29,28 +29,40 @@ async function classifySmartCondition(params: {
     apiKey: params.lovableKey,
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
   });
-  const result = streamText({
-    model: provider.responses("openai/gpt-6-astra"),
-    output: Output.object({ schema: SmartConditionSchema }),
-    prompt: [
-      "Classifique a ÚLTIMA resposta do lead usando o contexto recente apenas para interpretar intenção e referências.",
-      "Escolha exatamente x, y ou none. Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara.",
-      `X significa: ${params.optionX}`,
-      `Y significa: ${params.optionY}`,
-      `CONVERSA RECENTE:\n${params.transcript}`,
-      "Retorne motivo curto e confiança entre 0 e 1.",
-    ].join("\n\n"),
-    providerOptions: {
-      openai: {
-        forceReasoning: true,
-        reasoningEffort: "low",
-        reasoningSummary: "auto",
-        store: false,
-        include: ["reasoning.encrypted_content"],
-      },
-    },
-  });
-  return await result.output;
+  const prompt = [
+    "Classifique a ÚLTIMA resposta do lead usando o contexto recente apenas para interpretar intenção e referências.",
+    "Escolha exatamente x, y ou none. Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara.",
+    `X significa: ${params.optionX}`,
+    `Y significa: ${params.optionY}`,
+    `CONVERSA RECENTE:\n${params.transcript}`,
+    "Retorne motivo curto e confiança entre 0 e 1.",
+  ].join("\n\n");
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = streamText({
+        model: provider.responses("openai/gpt-6-astra"),
+        output: Output.object({ schema: SmartConditionSchema }),
+        prompt,
+        maxRetries: 0,
+        providerOptions: {
+          openai: {
+            forceReasoning: true,
+            reasoningEffort: "low",
+            reasoningSummary: "auto",
+            store: false,
+            include: ["reasoning.encrypted_content"],
+          },
+        },
+      });
+      return await result.output;
+    } catch (error) {
+      const status = Number((error as { statusCode?: number })?.statusCode || 0);
+      if (attempt >= 2 || (status !== 429 && status < 500)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 750 * 2 ** attempt));
+    }
+  }
+  throw new Error("A análise inteligente não retornou uma decisão");
 }
 
 function createJsonResponse(body: Record<string, unknown>, status: number) {
@@ -473,11 +485,10 @@ Deno.serve(async (req) => {
 
     console.log(`[execute-flow] Starting flow ${flowId} for conversation ${conversationId}, phone: ${phone}, provider: ${useZapi ? "Z-API" : useEvolution ? "Evolution" : useUazapi ? "uazapiGO" : "WA Cloud"}`);
 
-    const { data: nodes } = await supabase
-      .from("automation_nodes")
-      .select("*")
-      .eq("flow_id", flowId)
-      .order("sort_order", { ascending: true });
+    const [{ data: nodes }, { data: edges }] = await Promise.all([
+      supabase.from("automation_nodes").select("*").eq("flow_id", flowId).order("sort_order", { ascending: true }),
+      supabase.from("automation_edges").select("source_node_id, target_node_id, source_handle").eq("flow_id", flowId),
+    ]);
 
     if (!nodes?.length) {
       return createJsonResponse({ error: "No nodes in flow" }, 400);
@@ -499,8 +510,39 @@ Deno.serve(async (req) => {
     const results: { nodeId: string; status: string }[] = [];
     let completedCount = 0;
     let failed = false;
+    let reviewRequired = false;
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const incomingIds = new Set((edges || []).map((edge) => edge.target_node_id));
+    const outgoingByNode = new Map<string, typeof edges>();
+    for (const edge of edges || []) {
+      const outgoing = outgoingByNode.get(edge.source_node_id) || [];
+      outgoing.push(edge);
+      outgoingByNode.set(edge.source_node_id, outgoing);
+    }
+    const usesGraph = Boolean(edges?.length);
+    const firstNode = nodes.find((node) => node.node_type === "trigger" && !incomingIds.has(node.id))
+      || nodes.find((node) => !incomingIds.has(node.id))
+      || nodes[0];
+    let currentNode = firstNode;
+    const visited = new Set<string>();
+    const nextNode = (nodeId: string, handle?: string) => {
+      if (!usesGraph) {
+        const index = nodes.findIndex((item) => item.id === nodeId);
+        return index >= 0 ? nodes[index + 1] : undefined;
+      }
+      const outgoing = outgoingByNode.get(nodeId) || [];
+      const edge = handle ? outgoing.find((item) => item.source_handle === handle) : outgoing.find((item) => !item.source_handle) || outgoing[0];
+      return edge ? nodeById.get(edge.target_node_id) : undefined;
+    };
 
-    for (const node of nodes) {
+    while (currentNode) {
+      const node = currentNode;
+      if (visited.has(node.id)) {
+        failed = true;
+        results.push({ nodeId: node.id, status: "cycle_blocked" });
+        break;
+      }
+      visited.add(node.id);
       const config = node.config as Record<string, unknown>;
 
       if (node.node_type === "trigger") {
@@ -516,6 +558,62 @@ Deno.serve(async (req) => {
         }
         completedCount++;
         results.push({ nodeId: node.id, status: "started" });
+        currentNode = nextNode(node.id);
+        continue;
+      }
+
+      if (node.node_type === "smart_condition") {
+        const optionX = typeof config.option_x === "string" ? config.option_x.trim() : "";
+        const optionY = typeof config.option_y === "string" ? config.option_y.trim() : "";
+        let decision: SmartConditionDecision = { branch: "none", confidence: 0, reason: "Condição inteligente incompleta" };
+        try {
+          if (!optionX || !optionY) throw new Error("Preencha as definições de X e Y antes de executar o fluxo");
+          const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+          if (!lovableKey) throw new Error("Lovable AI não está configurada");
+          const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
+          const { data: recentMessages, error: messagesError } = await supabase
+            .from("messages")
+            .select("sender_type, sender_label, content, message_type, created_at")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: false })
+            .limit(messageLimit);
+          if (messagesError) throw messagesError;
+          const transcript = [...(recentMessages || [])].reverse().map((message) =>
+            `${message.sender_type === "customer" ? "LEAD" : message.sender_label || "ATENDENTE"}: ${message.content || `[${message.message_type}]`}`
+          ).join("\n").slice(-24000);
+          decision = await classifySmartCondition({ lovableKey, optionX, optionY, transcript });
+          decision.confidence = Math.max(0, Math.min(1, Number(decision.confidence) || 0));
+          if (decision.confidence < 0.75) decision.branch = "none";
+        } catch (error) {
+          decision = {
+            branch: "none",
+            confidence: 0,
+            reason: error instanceof Error ? error.message : "Falha ao analisar a resposta do lead",
+          };
+        }
+
+        const chosenNext = decision.branch === "none" ? undefined : nextNode(node.id, decision.branch);
+        const decisionSummary = `saída=${decision.branch}; confiança=${Math.round(decision.confidence * 100)}%; motivo=${decision.reason}`;
+        if (executionId) {
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId,
+            node_id: node.id,
+            node_type: node.node_type,
+            node_label: node.label || "Condição Inteligente",
+            sort_order: node.sort_order,
+            status: decision.branch === "none" || !chosenNext ? "review_required" : "completed",
+            error_message: decisionSummary,
+          });
+        }
+        completedCount++;
+        if (decision.branch === "none" || !chosenNext) {
+          reviewRequired = true;
+          results.push({ nodeId: node.id, status: "review_required" });
+          currentNode = undefined;
+        } else {
+          results.push({ nodeId: node.id, status: `branch_${decision.branch}` });
+          currentNode = chosenNext;
+        }
         continue;
       }
 
@@ -540,6 +638,7 @@ Deno.serve(async (req) => {
         }
         completedCount++;
         results.push({ nodeId: node.id, status: `delayed ${seconds}s` });
+        currentNode = nextNode(node.id);
         continue;
       }
 
@@ -560,6 +659,7 @@ Deno.serve(async (req) => {
             });
           }
           results.push({ nodeId: node.id, status: "skipped_empty" });
+          currentNode = nextNode(node.id);
           continue;
         }
         waPayload = {
@@ -605,6 +705,7 @@ Deno.serve(async (req) => {
             });
           }
           results.push({ nodeId: node.id, status: "skipped_empty" });
+          currentNode = nextNode(node.id);
           continue;
         }
         if (buttons.length > 0 && buttons.length <= 3) {
@@ -652,6 +753,7 @@ Deno.serve(async (req) => {
             });
           }
           results.push({ nodeId: node.id, status: "skipped_empty" });
+          currentNode = nextNode(node.id);
           continue;
         }
 
@@ -844,6 +946,7 @@ Deno.serve(async (req) => {
         }
         completedCount++;
         results.push({ nodeId: node.id, status: `action_${actionType}` });
+        currentNode = nextNode(node.id);
         continue;
       } else {
         if (executionId) {
@@ -857,6 +960,7 @@ Deno.serve(async (req) => {
           });
         }
         results.push({ nodeId: node.id, status: "skipped" });
+        currentNode = nextNode(node.id);
         continue;
       }
 
@@ -1253,13 +1357,14 @@ Deno.serve(async (req) => {
       }
       completedCount++;
       results.push({ nodeId: node.id, status: "sent" });
+      currentNode = nextNode(node.id);
     }
 
     if (executionId && !failed) {
       await supabase
         .from("flow_executions")
         .update({
-          status: "completed",
+          status: reviewRequired ? "review_required" : "completed",
           completed_nodes: completedCount,
           completed_at: new Date().toISOString(),
         })
@@ -1284,7 +1389,7 @@ Deno.serve(async (req) => {
 
     console.log(`[execute-flow] Flow ${flowId} finished: ${failed ? "FAILED" : "SUCCESS"}, ${completedCount}/${nodes.length} nodes completed`);
 
-    return createJsonResponse({ success: !failed, executionId, results }, 200);
+    return createJsonResponse({ success: !failed && !reviewRequired, reviewRequired, executionId, results }, 200);
   } catch (error) {
     console.error("[execute-flow] Fatal error:", error);
     return createJsonResponse({ error: "Internal server error" }, 500);

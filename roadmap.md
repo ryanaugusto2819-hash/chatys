@@ -237,8 +237,8 @@
 
 # Condição Inteligente X/Y
 
-- [ ] Adicionar o bloco visual com duas saídas conectáveis
-- [ ] Salvar e recarregar as conexões X/Y
-- [ ] Classificar última resposta com contexto e executar somente um caminho
-- [ ] Parar e registrar revisão quando não houver correspondência clara
+- [x] Adicionar o bloco visual com duas saídas conectáveis
+- [x] Salvar e recarregar as conexões X/Y
+- [x] Classificar última resposta com contexto e executar somente um caminho
+- [x] Parar e registrar revisão quando não houver correspondência clara
 - [ ] Publicar e validar fluxos novos e antigos
