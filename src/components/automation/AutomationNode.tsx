@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import {
   MessageSquare, Clock, Image, Music, Video, Play, Zap, FileText,
@@ -90,6 +90,18 @@ const triggerLabels: Record<string, string> = {
   keyword: '🔑 Palavra-chave',
   new_conversation: '🆕 Nova Conversa',
   scheduled: '⏰ Agendado',
+};
+
+const smartConditionLabels = ['X', 'Y', 'Z', 'W', 'V'] as const;
+
+const getSmartConditionOptionCount = (config: Record<string, unknown>) => {
+  const configuredCount = Number(config?.smart_condition_option_count);
+  if (Number.isInteger(configuredCount)) return Math.max(2, Math.min(5, configuredCount));
+  const lastConfiguredIndex = smartConditionLabels.reduce(
+    (last, label, index) => String(config?.[`option_${label.toLowerCase()}`] || '').trim() ? index : last,
+    1,
+  );
+  return lastConfiguredIndex + 1;
 };
 
 function AutomationNode({ data, selected, id }: NodeProps) {
@@ -195,8 +207,11 @@ function AutomationNode({ data, selected, id }: NodeProps) {
 
         {nodeType === 'smart_condition' && (
           <div className="mt-2 space-y-1 text-[10px] font-medium">
-            <p className="truncate"><span className="font-extrabold">X</span> · {(config?.option_x as string) || 'Defina o significado de X'}</p>
-            <p className="truncate"><span className="font-extrabold">Y</span> · {(config?.option_y as string) || 'Defina o significado de Y'}</p>
+            {smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((optionLabel) => (
+              <p key={optionLabel} className="truncate">
+                <span className="font-extrabold">{optionLabel}</span> · {(config?.[`option_${optionLabel.toLowerCase()}`] as string) || `Defina o significado de ${optionLabel}`}
+              </p>
+            ))}
           </div>
         )}
         {nodeType === 'wait_for_response' && (
@@ -241,10 +256,15 @@ function AutomationNode({ data, selected, id }: NodeProps) {
 
       {nodeType === 'smart_condition' ? (
         <>
-          <span className="absolute bottom-1 left-[28%] -translate-x-1/2 text-[9px] font-extrabold">X</span>
-          <Handle id="x" type="source" position={Position.Bottom} style={{ left: '28%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
-          <span className="absolute bottom-1 left-[72%] -translate-x-1/2 text-[9px] font-extrabold">Y</span>
-          <Handle id="y" type="source" position={Position.Bottom} style={{ left: '72%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+          {smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((optionLabel, index, options) => {
+            const left = `${((index + 1) / (options.length + 1)) * 100}%`;
+            return (
+              <Fragment key={optionLabel}>
+                <span className="absolute bottom-1 -translate-x-1/2 text-[9px] font-extrabold" style={{ left }}>{optionLabel}</span>
+                <Handle id={optionLabel.toLowerCase()} type="source" position={Position.Bottom} style={{ left }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+              </Fragment>
+            );
+          })}
         </>
       ) : nodeType === 'wait_for_response' ? (
         <>

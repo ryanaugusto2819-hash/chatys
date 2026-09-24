@@ -37,6 +37,18 @@ const triggerOptions = [
   { value: 'scheduled', label: 'Agendado' },
 ];
 
+const smartConditionLabels = ['X', 'Y', 'Z', 'W', 'V'] as const;
+
+const getSmartConditionOptionCount = (config: Record<string, unknown>) => {
+  const configuredCount = Number(config.smart_condition_option_count);
+  if (Number.isInteger(configuredCount)) return Math.max(2, Math.min(5, configuredCount));
+  const lastConfiguredIndex = smartConditionLabels.reduce(
+    (last, label, index) => String(config[`option_${label.toLowerCase()}`] || '').trim() ? index : last,
+    1,
+  );
+  return lastConfiguredIndex + 1;
+};
+
 interface ToolCategory {
   label: string;
   items: { type: string; label: string; icon: React.ElementType; desc: string }[];
@@ -77,7 +89,7 @@ const toolCategories: ToolCategory[] = [
       { type: 'delay', label: 'Espera', icon: Clock, desc: 'Aguardar antes de continuar' },
       { type: 'wait_for_response', label: 'Aguardando Resposta', icon: MessageSquare, desc: 'Esperar o cliente ou seguir por prazo' },
       { type: 'condition', label: 'Condição', icon: GitFork, desc: 'Caminho condicional' },
-      { type: 'smart_condition', label: 'Condição Inteligente', icon: Bot, desc: 'IA escolhe entre os caminhos X e Y' },
+      { type: 'smart_condition', label: 'Condição Inteligente', icon: Bot, desc: 'IA escolhe entre até cinco caminhos' },
     ],
   },
   {
@@ -269,6 +281,7 @@ export default function FlowEditor() {
     if (type === 'smart_condition') {
       defaultConfig.option_x = '';
       defaultConfig.option_y = '';
+      defaultConfig.smart_condition_option_count = 2;
       defaultConfig.context_message_limit = 20;
     }
     if (type === 'smart_reply') { defaultConfig.context_message_limit = 20; defaultConfig.minimum_confidence = 0.75; }
@@ -346,6 +359,11 @@ export default function FlowEditor() {
           : n
       )
     );
+    const savedNode = nodes.find((node) => node.id === nodeId);
+    if (savedNode?.data.nodeType === 'smart_condition') {
+      const activeHandles = new Set(smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((item) => item.toLowerCase()));
+      setEdges((currentEdges) => currentEdges.filter((edge) => edge.source !== nodeId || !edge.sourceHandle || activeHandles.has(edge.sourceHandle)));
+    }
   };
 
 
@@ -361,13 +379,15 @@ export default function FlowEditor() {
     const invalidSmartCondition = nodes.find((node) => {
       if (node.data.nodeType !== 'smart_condition') return false;
       const config = (node.data.config as Record<string, unknown>) || {};
-      const hasInstructions = Boolean(String(config.option_x || '').trim() && String(config.option_y || '').trim());
-      const hasX = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'x');
-      const hasY = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'y');
-      return !hasInstructions || !hasX || !hasY;
+      const optionLabels = smartConditionLabels.slice(0, getSmartConditionOptionCount(config));
+      return optionLabels.some((optionLabel) => {
+        const handle = optionLabel.toLowerCase();
+        return !String(config[`option_${handle}`] || '').trim()
+          || !edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle);
+      });
     });
     if (invalidSmartCondition) {
-      toast.error('Preencha X e Y e conecte as duas saídas da Condição Inteligente');
+      toast.error('Preencha e conecte todas as saídas da Condição Inteligente');
       setSelectedNode(invalidSmartCondition);
       return;
     }

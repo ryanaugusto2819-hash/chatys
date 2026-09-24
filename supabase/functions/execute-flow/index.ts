@@ -11,7 +11,7 @@ const corsHeaders = {
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 const SmartConditionSchema = z.object({
-  branch: z.enum(["x", "y", "none"]),
+  branch: z.enum(["x", "y", "z", "w", "v", "none"]),
   confidence: z.number(),
   reason: z.string(),
 });
@@ -105,8 +105,7 @@ async function generateSmartReply(params: {
 
 async function classifySmartCondition(params: {
   lovableKey: string;
-  optionX: string;
-  optionY: string;
+  options: Array<{ branch: "x" | "y" | "z" | "w" | "v"; description: string }>;
   transcript: string;
 }): Promise<SmartConditionDecision> {
   const provider = createOpenAI({
@@ -116,9 +115,9 @@ async function classifySmartCondition(params: {
   });
   const prompt = [
     "Classifique a ÚLTIMA resposta do lead usando o contexto recente apenas para interpretar intenção e referências.",
-    "Escolha exatamente x, y ou none. Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara.",
-    `X significa: ${params.optionX}`,
-    `Y significa: ${params.optionY}`,
+    `Escolha exatamente uma destas saídas: ${params.options.map((option) => option.branch).join(", ")} ou none.`,
+    "Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara. Nunca escolha mais de uma saída.",
+    ...params.options.map((option) => `${option.branch.toUpperCase()} significa: ${option.description}`),
     `CONVERSA RECENTE:\n${params.transcript}`,
     "Retorne motivo curto e confiança entre 0 e 1.",
   ].join("\n\n");
@@ -692,11 +691,20 @@ Deno.serve(async (req) => {
       }
 
       if (node.node_type === "smart_condition") {
-        const optionX = typeof config.option_x === "string" ? config.option_x.trim() : "";
-        const optionY = typeof config.option_y === "string" ? config.option_y.trim() : "";
+        const smartConditionBranches = ["x", "y", "z", "w", "v"] as const;
+        const configuredCount = Number(config.smart_condition_option_count);
+        const inferredCount = smartConditionBranches.reduce(
+          (last, branch, index) => typeof config[`option_${branch}`] === "string" && String(config[`option_${branch}`]).trim() ? index + 1 : last,
+          2,
+        );
+        const optionCount = Number.isInteger(configuredCount) ? Math.max(2, Math.min(5, configuredCount)) : inferredCount;
+        const options = smartConditionBranches.slice(0, optionCount).map((branch) => ({
+          branch,
+          description: typeof config[`option_${branch}`] === "string" ? String(config[`option_${branch}`]).trim() : "",
+        }));
         let decision: SmartConditionDecision = { branch: "none", confidence: 0, reason: "Condição inteligente incompleta" };
         try {
-          if (!optionX || !optionY) throw new Error("Preencha as definições de X e Y antes de executar o fluxo");
+          if (options.some((option) => !option.description)) throw new Error("Preencha todas as opções da Condição Inteligente antes de executar o fluxo");
           const lovableKey = Deno.env.get("LOVABLE_API_KEY");
           if (!lovableKey) throw new Error("Lovable AI não está configurada");
           const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
@@ -710,9 +718,11 @@ Deno.serve(async (req) => {
           const transcript = [...(recentMessages || [])].reverse().map((message) =>
             `${message.sender_type === "customer" ? "LEAD" : message.sender_label || "ATENDENTE"}: ${message.content || `[${message.message_type}]`}`
           ).join("\n").slice(-24000);
-          decision = await classifySmartCondition({ lovableKey, optionX, optionY, transcript });
+          decision = await classifySmartCondition({ lovableKey, options, transcript });
           decision.confidence = Math.max(0, Math.min(1, Number(decision.confidence) || 0));
-          if (decision.confidence < 0.75) decision.branch = "none";
+          if (decision.confidence < 0.75 || (decision.branch !== "none" && !options.some((option) => option.branch === decision.branch))) {
+            decision.branch = "none";
+          }
         } catch (error) {
           decision = {
             branch: "none",

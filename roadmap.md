@@ -235,13 +235,16 @@
 - [x] Preservar contagem, paginação e filtros da caixa de entrada
 - [x] Validar a regra com os dados atuais e confirmar a compilação
 
-# Condição Inteligente X/Y
+# Condição Inteligente com até cinco caminhos
 
 - [x] Adicionar o bloco visual com duas saídas conectáveis
 - [x] Salvar e recarregar as conexões X/Y
 - [x] Classificar última resposta com contexto e executar somente um caminho
 - [x] Parar e registrar revisão quando não houver correspondência clara
 - [x] Publicar e validar fluxos novos e antigos
+- [x] Permitir adicionar os caminhos Z, W e V conforme necessário
+- [x] Exigir descrição e conexão para cada caminho configurado
+- [x] Manter respostas ambíguas paradas para revisão
 
 # Bloco Aguardando Resposta
 

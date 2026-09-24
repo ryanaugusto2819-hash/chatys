@@ -6,6 +6,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 
 interface NodeConfig {
   [key: string]: unknown;
@@ -44,6 +45,18 @@ const conditionFields = [
   { value: 'status', label: 'Status da conversa' },
   { value: 'tag', label: 'Tag' },
 ];
+
+const smartConditionLabels = ['X', 'Y', 'Z', 'W', 'V'] as const;
+
+const getSmartConditionOptionCount = (config: NodeConfig) => {
+  const configuredCount = Number(config.smart_condition_option_count);
+  if (Number.isInteger(configuredCount)) return Math.max(2, Math.min(5, configuredCount));
+  const lastConfiguredIndex = smartConditionLabels.reduce(
+    (last, label, index) => String(config[`option_${label.toLowerCase()}`] || '').trim() ? index : last,
+    1,
+  );
+  return lastConfiguredIndex + 1;
+};
 
 export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, currentFlowId, onSave, onDelete, onClose }: NodeEditorProps) {
   const { currentWorkspace } = useWorkspace();
@@ -596,29 +609,61 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
 
         {nodeType === 'smart_condition' && (
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className={labelClass}>Se o lead respondeu X</label>
-              <textarea
-                value={(editConfig.option_x as string) || ''}
-                onChange={(e) => setEditConfig((p) => ({ ...p, option_x: e.target.value }))}
-                rows={4}
-                placeholder="Ex: O lead disse que quer a amostra"
-                className={`${inputClass} resize-none`}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelClass}>Se o lead respondeu Y</label>
-              <textarea
-                value={(editConfig.option_y as string) || ''}
-                onChange={(e) => setEditConfig((p) => ({ ...p, option_y: e.target.value }))}
-                rows={4}
-                placeholder="Ex: O lead respondeu à pergunta com uma dúvida"
-                className={`${inputClass} resize-none`}
-              />
-            </div>
+            {smartConditionLabels.slice(0, getSmartConditionOptionCount(editConfig)).map((optionLabel, index, activeOptions) => {
+              const optionKey = `option_${optionLabel.toLowerCase()}`;
+              const canRemove = activeOptions.length > 2 && index === activeOptions.length - 1;
+              return (
+                <div key={optionLabel} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className={labelClass}>Se o lead respondeu {optionLabel}</label>
+                    {canRemove && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        title={`Remover caminho ${optionLabel}`}
+                        onClick={() => setEditConfig((previous) => {
+                          const next = { ...previous };
+                          delete next[optionKey];
+                          next.smart_condition_option_count = activeOptions.length - 1;
+                          return next;
+                        })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <textarea
+                    value={(editConfig[optionKey] as string) || ''}
+                    onChange={(event) => setEditConfig((previous) => ({ ...previous, [optionKey]: event.target.value }))}
+                    rows={3}
+                    placeholder={optionLabel === 'X'
+                      ? 'Ex: O lead disse que quer a amostra'
+                      : optionLabel === 'Y'
+                        ? 'Ex: O lead respondeu à pergunta com uma dúvida'
+                        : `Descreva quando seguir pelo caminho ${optionLabel}`}
+                    className={`${inputClass} resize-none`}
+                  />
+                </div>
+              );
+            })}
+            {getSmartConditionOptionCount(editConfig) < 5 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setEditConfig((previous) => ({
+                  ...previous,
+                  smart_condition_option_count: getSmartConditionOptionCount(previous) + 1,
+                }))}
+              >
+                Adicionar caminho {smartConditionLabels[getSmartConditionOptionCount(editConfig)]}
+              </Button>
+            )}
             <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-800 dark:bg-cyan-900/10">
               <p className="text-[11px] text-cyan-700 dark:text-cyan-300">
-                A IA analisa a última resposta com o contexto recente e segue somente por X ou Y. Se houver dúvida, o fluxo para para revisão.
+                A IA analisa a última resposta com o contexto recente e segue somente por um caminho. Se houver dúvida, o fluxo para para revisão.
               </p>
             </div>
           </div>
