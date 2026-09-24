@@ -265,7 +265,7 @@ const getFlowIssues = (nodes: Node[], edges: Edge[], flowName: string): FlowIssu
 };
 
 const safelyFixFlow = (nodes: Node[], edges: Edge[]) => {
-  const fixedNodes = nodes.map((node) => {
+  const fixedNodes: Node[] = nodes.map((node) => {
     const config = { ...((node.data.config as Record<string, unknown>) || {}) };
     if (node.data.nodeType === 'wait_for_response' && !(Number(config.timeout_value) > 0)) {
       config.timeout_value = 24;
