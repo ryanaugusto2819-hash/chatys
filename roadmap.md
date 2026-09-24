@@ -265,4 +265,4 @@
 - [x] Adicionar página própria no menu administrativo
 - [x] Organizar os conteúdos por nicho e país
 - [x] Permitir cadastrar textos e instruções oficiais
-- [ ] Validar cadastro e troca de nicho na tela autenticada
+- [x] Validar seleção de nicho, país e formulário na tela autenticada

@@ -575,7 +575,9 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-center">
           <p className="text-xs text-muted-foreground">
-            Nenhum conhecimento adicionado. Adicione textos, perguntas ou arquivos para treinar a IA.
+            {textOnly
+              ? 'Nenhuma informação adicionada para este nicho e país.'
+              : 'Nenhum conhecimento adicionado. Adicione textos, perguntas ou arquivos para treinar a IA.'}
           </p>
         </div>
       ) : (
