@@ -311,5 +311,5 @@
 - [x] Agrupar falhas com mensagem real e orientação de correção
 - [x] Exibir histórico filtrável com detalhes de cada bloco executado
 - [x] Agrupar dúvidas sem resposta da IA e vincular à Base de Conhecimento
-- [ ] Validar visualmente em desktop e celular
+- [x] Validar visualmente em desktop e celular
 
