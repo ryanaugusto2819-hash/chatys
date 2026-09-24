@@ -250,3 +250,12 @@
 - [x] Retomar pela próxima mensagem nos quatro canais de WhatsApp
 - [x] Processar o prazo esgotado em lotes de até 50 esperas
 - [x] Publicar funções e validar pausa, resposta e prazo
+
+# Bloco Resposta Inteligente
+
+- [x] Adicionar o bloco visual com três saídas conectáveis
+- [x] Separar a base oficial por workspace, nicho e país
+- [ ] Gerar resposta somente a partir da base e enviar no canal da conversa
+- [ ] Transferir para atendente quando não houver resposta segura
+- [ ] Registrar fontes, confiança, resultado, erro e consumo da IA
+- [ ] Publicar e validar os três caminhos do bloco

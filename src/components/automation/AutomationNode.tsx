@@ -67,6 +67,11 @@ const nodeConfig: Record<string, { icon: React.ElementType; typeLabel: string; c
     typeLabel: 'RESPOSTA IA',
     colors: 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:border-fuchsia-500/40 dark:text-fuchsia-300',
   },
+  smart_reply: {
+    icon: Bot,
+    typeLabel: 'RESPOSTA INTELIGENTE',
+    colors: 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:border-fuchsia-500/40 dark:text-fuchsia-300',
+  },
   action: {
     icon: Cog,
     typeLabel: 'AÇÃO',
@@ -199,6 +204,9 @@ function AutomationNode({ data, selected, id }: NodeProps) {
             Até {Number(config?.timeout_value) || 24} {(config?.timeout_unit as string) === 'minutes' ? 'min' : (config?.timeout_unit as string) === 'days' ? 'dias' : 'h'}
           </p>
         )}
+        {nodeType === 'smart_reply' && (
+          <p className="text-[11px] mt-1 opacity-70">Base por nicho e país · confiança mínima 75%</p>
+        )}
 
         {nodeType === 'quick_reply' && config?.buttons && (
           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -244,6 +252,15 @@ function AutomationNode({ data, selected, id }: NodeProps) {
           <Handle id="response" type="source" position={Position.Bottom} style={{ left: '28%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
           <span className="absolute bottom-1 left-[72%] -translate-x-1/2 text-[9px] font-extrabold">TEMPO</span>
           <Handle id="timeout" type="source" position={Position.Bottom} style={{ left: '72%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+        </>
+      ) : nodeType === 'smart_reply' ? (
+        <>
+          <span className="absolute bottom-1 left-[18%] -translate-x-1/2 text-[8px] font-extrabold">RESPONDEU</span>
+          <Handle id="answered" type="source" position={Position.Bottom} style={{ left: '18%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+          <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-extrabold">SEM RESPOSTA</span>
+          <Handle id="no_answer" type="source" position={Position.Bottom} style={{ left: '50%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+          <span className="absolute bottom-1 left-[82%] -translate-x-1/2 text-[8px] font-extrabold">ERRO</span>
+          <Handle id="error" type="source" position={Position.Bottom} style={{ left: '82%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
         </>
       ) : (
         <Handle
