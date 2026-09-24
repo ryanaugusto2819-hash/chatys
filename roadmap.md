@@ -285,3 +285,12 @@
 - [x] Adicionar a opção de transferir para a fila de atendimento humano
 - [x] Executar a transferência para a fila geral ou para um atendente escolhido
 - [x] Validar o atendente no workspace e encerrar a automação após a transferência
+
+# Bloco IA — Reconhecer Comprovante
+
+- [ ] Adicionar o bloco visual com confiança mínima e três saídas obrigatórias
+- [ ] Analisar a imagem mais recente quando o fluxo chegar ao bloco
+- [ ] Criar uma pendência administrativa sem confirmar pagamento nem registrar venda
+- [ ] Registrar resultado, valor, moeda, confiança, motivo, erros e consumo da IA
+- [ ] Garantir idempotência por mensagem e publicar a função
+- [ ] Validar o bloco e os três caminhos na tela autenticada
