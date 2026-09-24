@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface KBItem {
   id: string;
@@ -14,6 +15,13 @@ interface KBItem {
   niche_id: string | null;
   country_code: string;
   created_at: string;
+  tag_ids: string[];
+}
+
+interface TagOption {
+  id: string;
+  name: string;
+  color: string;
 }
 
 interface FlowWithNodes {
@@ -37,6 +45,8 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('text');
   const [uploading, setUploading] = useState(false);
+  const [tags, setTags] = useState<TagOption[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const [textTitle, setTextTitle] = useState('');
   const [textContent, setTextContent] = useState('');
@@ -49,6 +59,20 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   useEffect(() => {
     fetchItems();
   }, [nicheId, currentWorkspace?.id]);
+
+  useEffect(() => {
+    if (!currentWorkspace?.id) {
+      setTags([]);
+      setSelectedTagIds([]);
+      return;
+    }
+    supabase
+      .from('tags')
+      .select('id, name, color')
+      .eq('workspace_id', currentWorkspace.id)
+      .order('name')
+      .then(({ data }) => setTags((data || []) as TagOption[]));
+  }, [currentWorkspace?.id]);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -68,8 +92,58 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     }
 
     const { data } = await query;
-    setItems((data || []) as unknown as KBItem[]);
+    const baseItems = data || [];
+    const itemIds = baseItems.map((item) => item.id);
+    const { data: links } = itemIds.length > 0
+      ? await supabase
+          .from('knowledge_base_item_tags')
+          .select('knowledge_base_item_id, tag_id')
+          .in('knowledge_base_item_id', itemIds)
+      : { data: [] };
+    const tagIdsByItem = new Map<string, string[]>();
+    for (const link of links || []) {
+      const current = tagIdsByItem.get(link.knowledge_base_item_id) || [];
+      current.push(link.tag_id);
+      tagIdsByItem.set(link.knowledge_base_item_id, current);
+    }
+    setItems(baseItems.map((item) => ({ ...item, tag_ids: tagIdsByItem.get(item.id) || [] })) as KBItem[]);
     setLoading(false);
+  };
+
+  const saveItemTags = async (itemId: string, tagIds: string[]) => {
+    if (!currentWorkspace?.id || tagIds.length === 0) return null;
+    const { error } = await supabase.from('knowledge_base_item_tags').insert(
+      tagIds.map((tagId) => ({
+        knowledge_base_item_id: itemId,
+        tag_id: tagId,
+        workspace_id: currentWorkspace.id,
+      })),
+    );
+    return error;
+  };
+
+  const toggleSelectedTag = (tagId: string) => {
+    setSelectedTagIds((current) => current.includes(tagId)
+      ? current.filter((id) => id !== tagId)
+      : [...current, tagId]);
+  };
+
+  const toggleItemTag = async (item: KBItem, tagId: string) => {
+    if (!currentWorkspace?.id) return;
+    const isSelected = item.tag_ids.includes(tagId);
+    setItems((current) => current.map((entry) => entry.id === item.id
+      ? { ...entry, tag_ids: isSelected ? entry.tag_ids.filter((id) => id !== tagId) : [...entry.tag_ids, tagId] }
+      : entry));
+    const { error } = isSelected
+      ? await supabase.from('knowledge_base_item_tags').delete()
+          .eq('knowledge_base_item_id', item.id).eq('tag_id', tagId).eq('workspace_id', currentWorkspace.id)
+      : await supabase.from('knowledge_base_item_tags').insert({
+          knowledge_base_item_id: item.id, tag_id: tagId, workspace_id: currentWorkspace.id,
+        });
+    if (error) {
+      toast.error('Não foi possível atualizar as etiquetas');
+      fetchItems();
+    }
   };
 
   const addTextItem = async () => {
@@ -81,17 +155,23 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       toast.error('Preencha título e conteúdo');
       return;
     }
-    const { error } = await supabase.from('knowledge_base_items').insert({
+    const { data: created, error } = await supabase.from('knowledge_base_items').insert({
       type: 'text',
       title: textTitle.trim(),
       content: textContent.trim(),
       niche_id: nicheId || null,
       workspace_id: currentWorkspace?.id,
       country_code: countryCode,
-    });
+    }).select('id').single();
     if (error) {
       toast.error('Erro ao adicionar');
-    } else {
+    } else if (created) {
+      const tagError = await saveItemTags(created.id, selectedTagIds);
+      if (tagError) {
+        toast.error('Conteúdo criado, mas não foi possível vincular as etiquetas');
+        fetchItems();
+        return;
+      }
       toast.success('Conhecimento adicionado');
       setTextTitle('');
       setTextContent('');
@@ -108,17 +188,23 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       toast.error('Preencha pergunta e resposta');
       return;
     }
-    const { error } = await supabase.from('knowledge_base_items').insert({
+    const { data: created, error } = await supabase.from('knowledge_base_items').insert({
       type: 'qa',
       title: qaQuestion.trim(),
       content: qaAnswer.trim(),
       niche_id: nicheId || null,
       workspace_id: currentWorkspace?.id,
       country_code: countryCode,
-    });
+    }).select('id').single();
     if (error) {
       toast.error('Erro ao adicionar');
-    } else {
+    } else if (created) {
+      const tagError = await saveItemTags(created.id, selectedTagIds);
+      if (tagError) {
+        toast.error('Conteúdo criado, mas não foi possível vincular as etiquetas');
+        fetchItems();
+        return;
+      }
       toast.success('Pergunta e resposta adicionadas');
       setQaQuestion('');
       setQaAnswer('');
@@ -165,7 +251,7 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       content = `[Arquivo: ${file.name}]`;
     }
 
-    const { error } = await supabase.from('knowledge_base_items').insert({
+    const { data: created, error } = await supabase.from('knowledge_base_items').insert({
       type: 'file',
       title: file.name,
       content: content.substring(0, 50000),
@@ -173,12 +259,17 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       niche_id: nicheId || null,
       workspace_id: currentWorkspace?.id,
       country_code: countryCode,
-    });
+    }).select('id').single();
 
     if (error) {
       toast.error('Erro ao salvar referência do arquivo');
-    } else {
-      toast.success('Arquivo enviado com sucesso');
+    } else if (created) {
+      const tagError = await saveItemTags(created.id, selectedTagIds);
+      if (tagError) {
+        toast.error('Arquivo salvo, mas não foi possível vincular as etiquetas');
+      } else {
+        toast.success('Arquivo enviado com sucesso');
+      }
       fetchItems();
     }
     setUploading(false);
@@ -284,17 +375,24 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     if (!currentWorkspace?.id) return;
     setImportingFlowId(flow.id);
     const content = formatFlowAsKnowledge(flow);
-    const { error } = await supabase.from('knowledge_base_items').insert({
+    const { data: created, error } = await supabase.from('knowledge_base_items').insert({
       type: 'text',
       title: `Fluxo: ${flow.name}`,
       content: content.substring(0, 50000),
       niche_id: nicheId || null,
       workspace_id: currentWorkspace?.id,
       country_code: countryCode,
-    });
+    }).select('id').single();
     if (error) {
       toast.error('Erro ao importar fluxo');
-    } else {
+    } else if (created) {
+      const tagError = await saveItemTags(created.id, selectedTagIds);
+      if (tagError) {
+        toast.error('Fluxo importado, mas não foi possível vincular as etiquetas');
+        fetchItems();
+        setImportingFlowId(null);
+        return;
+      }
       toast.success(`Fluxo "${flow.name}" adicionado à base de conhecimento`);
       fetchItems();
     }
@@ -307,15 +405,18 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     let success = 0;
     for (const flow of flows) {
       const content = formatFlowAsKnowledge(flow);
-      const { error } = await supabase.from('knowledge_base_items').insert({
+      const { data: created, error } = await supabase.from('knowledge_base_items').insert({
         type: 'text',
         title: `Fluxo: ${flow.name}`,
         content: content.substring(0, 50000),
         niche_id: nicheId || null,
         workspace_id: currentWorkspace?.id,
         country_code: countryCode,
-      });
-      if (!error) success++;
+      }).select('id').single();
+      if (!error && created) {
+        const tagError = await saveItemTags(created.id, selectedTagIds);
+        if (!tagError) success++;
+      }
     }
     toast.success(`${success} fluxo(s) importado(s) com sucesso`);
     fetchItems();
@@ -399,6 +500,32 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
           </select>
         </div>
       )}
+      <div className="mb-6 space-y-2">
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Etiquetas desta base</label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Selecione uma ou várias. Sem seleção, o conteúdo será geral para qualquer cliente.
+          </p>
+        </div>
+        {tags.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+            Nenhuma etiqueta cadastrada neste espaço de trabalho.
+          </p>
+        ) : (
+          <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto rounded-lg border border-border bg-background p-3">
+            {tags.map((tag) => {
+              const checked = selectedTagIds.includes(tag.id);
+              return (
+                <label key={tag.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-muted">
+                  <Checkbox checked={checked} onCheckedChange={() => toggleSelectedTag(tag.id)} />
+                  <Tag className="h-3 w-3 text-primary" />
+                  {tag.name}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {activeTab === 'text' && (
         <div className="space-y-3 mb-6">
           <input
@@ -610,6 +737,22 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
                 {item.type === 'qa' ? `R: ${item.content}` : item.content.substring(0, 150)}
                 {item.content.length > 150 && '...'}
               </p>
+              <div className="mt-3 ml-5.5">
+                <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {item.tag_ids.length > 0 ? 'Usar para clientes com' : 'Conteúdo geral — selecione etiquetas para restringir'}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {tags.map((tag) => {
+                    const checked = item.tag_ids.includes(tag.id);
+                    return (
+                      <label key={`${item.id}-${tag.id}`} className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] transition-colors ${checked ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                        <Checkbox checked={checked} onCheckedChange={() => toggleItemTag(item, tag.id)} />
+                        {tag.name}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ))}
         </div>

@@ -265,6 +265,8 @@
 
 - [x] Adicionar página própria no menu administrativo
 - [x] Organizar os conteúdos por nicho e país
+- [x] Permitir vincular cada conteúdo a uma ou várias etiquetas
+- [x] Usar automaticamente conteúdos gerais ou compatíveis com as etiquetas do cliente
 - [x] Permitir cadastrar textos e instruções oficiais
 - [x] Validar seleção de nicho, país e formulário na tela autenticada
 

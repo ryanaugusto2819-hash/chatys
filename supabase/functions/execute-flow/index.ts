@@ -879,15 +879,12 @@ Deno.serve(async (req) => {
           `${message.sender_type === "customer" ? "CLIENTE" : message.sender_label || "ATENDIMENTO"}: ${message.content || `[${message.message_type}]`}`
         ).join("\n").slice(-24000);
 
-        let sourceQuery = supabase.from("knowledge_base_items")
-          .select("id, type, title, content, country_code")
-          .eq("workspace_id", conversation.workspace_id)
-          .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
-          .order("created_at", { ascending: false }).limit(50);
         const sourceMode = config.knowledge_source_mode === "selected" ? "selected" : "automatic";
         const selectedSourceIds = Array.isArray(config.knowledge_base_item_ids)
           ? config.knowledge_base_item_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
           : [];
+        let rawSources: Array<{ id: string; type: string; title: string; content: string; country_code: string }> = [];
+        let sourceError: { message: string } | null = null;
         if (sourceMode === "selected") {
           if (selectedSourceIds.length === 0) {
             failed = true;
@@ -899,11 +896,48 @@ Deno.serve(async (req) => {
             });
             break;
           }
-          sourceQuery = sourceQuery.in("id", selectedSourceIds);
+          const selectedResult = await supabase.from("knowledge_base_items")
+            .select("id, type, title, content, country_code")
+            .eq("workspace_id", conversation.workspace_id)
+            .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
+            .in("id", selectedSourceIds)
+            .order("created_at", { ascending: false }).limit(50);
+          rawSources = selectedResult.data || [];
+          sourceError = selectedResult.error;
         } else {
-          sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
+          const { data: contactTagRows, error: contactTagError } = await supabase
+            .from("contact_tags")
+            .select("tag_id")
+            .eq("workspace_id", conversation.workspace_id)
+            .eq("contact_phone", conversation.contact_phone)
+            .limit(50);
+          const contactTagIds = (contactTagRows || []).map((row) => row.tag_id);
+          const commonQuery = () => {
+            let query = supabase.from("knowledge_base_items")
+              .select("id, type, title, content, country_code, created_at")
+              .eq("workspace_id", conversation.workspace_id)
+              .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"]);
+            query = conversation.niche_id ? query.eq("niche_id", conversation.niche_id) : query.is("niche_id", null);
+            return query;
+          };
+
+          const { data: linkedRows, error: linkError } = await supabase
+            .from("knowledge_base_item_tags")
+            .select("knowledge_base_item_id, tag_id")
+            .eq("workspace_id", conversation.workspace_id)
+            .limit(50);
+          const linkedItemIds = new Set((linkedRows || []).map((row) => row.knowledge_base_item_id));
+          const matchingItemIds = new Set(
+            (linkedRows || [])
+              .filter((row) => contactTagIds.includes(row.tag_id))
+              .map((row) => row.knowledge_base_item_id),
+          );
+          const automaticResult = await commonQuery().order("created_at", { ascending: false }).limit(50);
+          rawSources = (automaticResult.data || []).filter((source) =>
+            !linkedItemIds.has(source.id) || matchingItemIds.has(source.id)
+          );
+          sourceError = contactTagError || linkError || automaticResult.error;
         }
-        const { data: rawSources, error: sourceError } = await sourceQuery;
         const sources = [...(rawSources || [])].sort((a, b) =>
           Number(b.country_code === countryCode) - Number(a.country_code === countryCode)
         );
