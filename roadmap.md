@@ -293,4 +293,4 @@
 - [x] Criar uma pendência administrativa sem confirmar pagamento nem registrar venda
 - [x] Registrar resultado, valor, moeda, confiança, motivo, erros e consumo da IA
 - [x] Garantir idempotência por mensagem e publicar a função
-- [ ] Validar o bloco e os três caminhos na tela autenticada
+- [x] Validar o bloco e os três caminhos na tela autenticada
