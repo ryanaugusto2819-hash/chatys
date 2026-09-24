@@ -1870,6 +1870,52 @@ export type Database = {
           },
         ]
       }
+      knowledge_base_item_tags: {
+        Row: {
+          created_at: string
+          id: string
+          knowledge_base_item_id: string
+          tag_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          knowledge_base_item_id: string
+          tag_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          knowledge_base_item_id?: string
+          tag_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_item_tags_knowledge_base_item_id_fkey"
+            columns: ["knowledge_base_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_base_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_base_item_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_base_item_tags_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_base_items: {
         Row: {
           content: string
