@@ -294,3 +294,12 @@
 - [x] Registrar resultado, valor, moeda, confiança, motivo, erros e consumo da IA
 - [x] Garantir idempotência por mensagem e publicar a função
 - [x] Validar o bloco e os três caminhos na tela autenticada
+
+# Salvamento seguro das automações
+
+- [x] Mostrar todos os problemas do fluxo em uma única verificação
+- [x] Identificar o bloco, o problema e como corrigir cada item
+- [x] Corrigir automaticamente configurações padrão e conexões antigas seguras
+- [x] Remover conexões inválidas e duplicadas sem recarregar a página
+- [x] Salvar fluxo, blocos e conexões em uma única operação protegida
+- [x] Validar visualmente fluxos com erros e um salvamento completo
