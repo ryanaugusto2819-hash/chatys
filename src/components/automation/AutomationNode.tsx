@@ -117,6 +117,7 @@ function AutomationNode({ data, selected, id }: NodeProps) {
   const preview = data.preview as string;
   const config = data.config as Record<string, unknown>;
   const onDelete = data.onDelete as ((nodeId: string) => void) | undefined;
+  const leadTraceState = data.leadTraceState as 'visited' | 'current' | undefined;
 
   // For trigger nodes, show trigger types (supports multiple)
   const triggerType = config?.trigger_type as string;
@@ -131,6 +132,8 @@ function AutomationNode({ data, selected, id }: NodeProps) {
     <div
       className={`group rounded-2xl border-2 min-w-[220px] max-w-[280px] shadow-sm hover:shadow-md transition-all duration-200 ${cfg.colors} ${
         selected ? 'ring-2 ring-ring ring-offset-2 ring-offset-background shadow-lg scale-[1.02]' : ''
+      } ${leadTraceState === 'visited' ? 'ring-2 ring-primary/50 shadow-lg' : ''} ${
+        leadTraceState === 'current' ? 'ring-4 ring-primary ring-offset-4 ring-offset-background shadow-xl scale-[1.04]' : ''
       }`}
     >
       {nodeType !== 'trigger' && (
@@ -161,6 +164,12 @@ function AutomationNode({ data, selected, id }: NodeProps) {
           </button>
         )}
       </div>
+
+      {leadTraceState && (
+        <div className="mx-4 mt-1 rounded-md bg-primary px-2 py-1 text-center text-[9px] font-extrabold uppercase text-primary-foreground">
+          {leadTraceState === 'current' ? 'Lead está aqui' : 'Lead passou aqui'}
+        </div>
+      )}
 
       {/* Body */}
       <div className="px-4 pb-3">

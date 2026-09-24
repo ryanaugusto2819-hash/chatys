@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
@@ -21,12 +21,14 @@ import NodeEditor from '@/components/automation/NodeEditor';
 import {
   ArrowLeft, Save, MessageSquare, Clock, Image, Music, Video,
   Loader2, FileText, GitFork, Bot, ListOrdered, Play, Pause,
-  Zap, Cog, Upload, Tag, CircleAlert, Wrench, ChevronRight, BarChart3
+  Zap, Cog, Upload, Tag, CircleAlert, Wrench, ChevronRight, BarChart3,
+  Search, X, Phone, Route
 } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseDcFile } from '@/lib/dcParser';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -113,6 +115,35 @@ interface FlowIssue {
   solution: string;
   autoFixable: boolean;
 }
+
+interface LeadExecution {
+  execution_id: string;
+  conversation_id: string;
+  contact_name: string | null;
+  contact_phone: string;
+  status: string;
+  failed_at_node_id: string | null;
+  waiting_node_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+  waiting_since: string | null;
+  wait_timeout_at: string | null;
+  completed_nodes: number;
+  total_nodes: number;
+}
+
+interface LeadStep {
+  node_id: string;
+  sort_order: number;
+  status: string;
+  error_message: string | null;
+  executed_at: string;
+}
+
+const executionStatusLabels: Record<string, string> = {
+  running: 'Em andamento', completed: 'Concluído', failed: 'Com problema',
+  waiting_for_response: 'Aguardando resposta', superseded: 'Substituído', skipped: 'Ignorado',
+};
 
 const nodeTypeLabels: Record<string, string> = {
   trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', wait_for_response: 'Aguardando Resposta',
@@ -373,6 +404,53 @@ export default function FlowEditor() {
   const [saveIssues, setSaveIssues] = useState<FlowIssue[]>([]);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [savedWithIssues, setSavedWithIssues] = useState(false);
+  const [leadPhone, setLeadPhone] = useState('');
+  const [leadSearching, setLeadSearching] = useState(false);
+  const [leadExecutions, setLeadExecutions] = useState<LeadExecution[]>([]);
+  const [selectedExecutionId, setSelectedExecutionId] = useState('');
+  const [leadSteps, setLeadSteps] = useState<LeadStep[]>([]);
+
+  const selectedExecution = leadExecutions.find((execution) => execution.execution_id === selectedExecutionId) || null;
+  const leadTrace = useMemo(() => {
+    if (!selectedExecution) return null;
+    const orderedSteps = [...leadSteps].sort((a, b) => a.sort_order - b.sort_order || a.executed_at.localeCompare(b.executed_at));
+    const nodeIds = new Set(orderedSteps.map((step) => step.node_id));
+    const edgeIds = new Set<string>();
+    orderedSteps.slice(0, -1).forEach((step, index) => {
+      const next = orderedSteps[index + 1];
+      edges.filter((edge) => edge.source === step.node_id && edge.target === next.node_id).forEach((edge) => edgeIds.add(edge.id));
+    });
+    const lastStep = orderedSteps.at(-1);
+    const currentNodeId = selectedExecution.status === 'waiting_for_response'
+      ? selectedExecution.waiting_node_id
+      : selectedExecution.status === 'failed'
+        ? selectedExecution.failed_at_node_id || lastStep?.node_id || null
+        : selectedExecution.status === 'running'
+          ? lastStep?.node_id || null
+          : null;
+    if (currentNodeId) nodeIds.add(currentNodeId);
+    return { nodeIds, edgeIds, currentNodeId };
+  }, [edges, leadSteps, selectedExecution]);
+
+  const displayedNodes = useMemo(() => nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      leadTraceState: leadTrace?.currentNodeId === node.id
+        ? 'current'
+        : leadTrace?.nodeIds.has(node.id) ? 'visited' : undefined,
+    },
+  })), [leadTrace, nodes]);
+
+  const displayedEdges = useMemo(() => edges.map((edge) => leadTrace?.edgeIds.has(edge.id) ? {
+    ...edge,
+    animated: true,
+    style: { stroke: 'hsl(var(--primary))', strokeWidth: 4 },
+  } : leadTrace ? {
+    ...edge,
+    animated: false,
+    style: { stroke: 'hsl(var(--muted-foreground) / 0.25)', strokeWidth: 1.5 },
+  } : edge), [edges, leadTrace]);
 
   const handleNodeDelete = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -621,6 +699,61 @@ export default function FlowEditor() {
       const activeHandles = new Set(smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((item) => item.toLowerCase()));
       setEdges((currentEdges) => currentEdges.filter((edge) => edge.source !== nodeId || !edge.sourceHandle || activeHandles.has(edge.sourceHandle)));
     }
+  };
+
+  const loadLeadSteps = async (executionId: string) => {
+    setSelectedExecutionId(executionId);
+    const { data, error } = await supabase.from('flow_step_logs')
+      .select('node_id, sort_order, status, error_message, executed_at')
+      .eq('execution_id', executionId)
+      .order('sort_order', { ascending: true })
+      .order('executed_at', { ascending: true });
+    if (error) {
+      console.error('Error loading lead steps:', error);
+      setLeadSteps([]);
+      toast.error(`Não foi possível carregar o caminho: ${error.message}`);
+      return;
+    }
+    setLeadSteps((data || []) as LeadStep[]);
+  };
+
+  const searchLead = async () => {
+    const normalizedPhone = leadPhone.replace(/\D/g, '');
+    if (normalizedPhone.length < 7 || !id) {
+      toast.error('Digite um número completo, incluindo o código do país.');
+      return;
+    }
+    setLeadSearching(true);
+    try {
+      const { data, error } = await supabase.rpc('find_flow_lead_executions_by_phone', {
+        p_flow_id: id,
+        p_phone: normalizedPhone,
+        p_limit: 10,
+      });
+      if (error) throw error;
+      const executions = (data || []) as LeadExecution[];
+      setLeadExecutions(executions);
+      if (executions.length === 0) {
+        setSelectedExecutionId('');
+        setLeadSteps([]);
+        toast.info('Nenhuma passagem deste telefone foi encontrada neste fluxo.');
+        return;
+      }
+      await loadLeadSteps(executions[0].execution_id);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Falha ao procurar o telefone.';
+      console.error('Error searching lead trace:', error);
+      toast.error(`Não foi possível acompanhar o lead: ${detail}`);
+    } finally {
+      setLeadSearching(false);
+    }
+  };
+
+  const clearLeadTrace = () => {
+    setLeadPhone('');
+    setLeadExecutions([]);
+    setSelectedExecutionId('');
+    setLeadSteps([]);
   };
 
 
@@ -892,8 +1025,8 @@ export default function FlowEditor() {
         {/* Canvas */}
         <div className="flex-1">
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayedNodes}
+            edges={displayedEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -914,6 +1047,74 @@ export default function FlowEditor() {
               maskColor="hsl(var(--background) / 0.7)"
               nodeColor="hsl(var(--primary))"
             />
+
+            <Panel position="top-left" className="!m-3">
+              <div className="w-[340px] rounded-md border border-border bg-card p-3 shadow-lg">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Route className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-bold text-foreground">Acompanhar lead</span>
+                  </div>
+                  {selectedExecution && (
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearLeadTrace} title="Limpar acompanhamento">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Phone className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={leadPhone}
+                      onChange={(event) => setLeadPhone(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === 'Enter') void searchLead(); }}
+                      placeholder="Telefone com código do país"
+                      className="h-8 pl-8 text-xs"
+                    />
+                  </div>
+                  <Button type="button" size="sm" className="h-8" onClick={() => void searchLead()} disabled={leadSearching}>
+                    {leadSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    Buscar
+                  </Button>
+                </div>
+                {selectedExecution && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-foreground">{selectedExecution.contact_name || 'Sem nome'}</p>
+                        <p className="text-[10px] text-muted-foreground">{selectedExecution.contact_phone}</p>
+                      </div>
+                      <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
+                        {executionStatusLabels[selectedExecution.status] || selectedExecution.status}
+                      </span>
+                    </div>
+                    {leadExecutions.length > 1 && (
+                      <select
+                        value={selectedExecutionId}
+                        onChange={(event) => void loadLeadSteps(event.target.value)}
+                        className="mt-2 h-8 w-full rounded-md border border-border bg-secondary px-2 text-[11px] text-foreground focus:outline-none"
+                      >
+                        {leadExecutions.map((execution, index) => (
+                          <option key={execution.execution_id} value={execution.execution_id}>
+                            {index === 0 ? 'Mais recente' : `Execução ${index + 1}`} · {new Date(execution.started_at).toLocaleString('pt-BR')} · {executionStatusLabels[execution.status] || execution.status}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary/50" />Passou</span>
+                      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary ring-2 ring-primary/30" />Está aqui</span>
+                      <span>{leadSteps.length} etapa(s) registrada(s)</span>
+                    </div>
+                    {selectedExecution.status === 'failed' && leadSteps.find((step) => step.status === 'failed')?.error_message && (
+                      <p className="mt-2 rounded-md bg-destructive/10 px-2 py-1.5 text-[10px] text-destructive">
+                        {leadSteps.find((step) => step.status === 'failed')?.error_message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Panel>
 
             {/* Node count panel */}
             <Panel position="top-right" className="!m-3">
