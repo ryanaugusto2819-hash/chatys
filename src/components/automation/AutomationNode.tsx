@@ -22,6 +22,11 @@ const nodeConfig: Record<string, { icon: React.ElementType; typeLabel: string; c
     typeLabel: 'ESPERA',
     colors: 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/20 dark:border-amber-500/40 dark:text-amber-300',
   },
+  wait_for_response: {
+    icon: MessageCircle,
+    typeLabel: 'AGUARDANDO RESPOSTA',
+    colors: 'bg-primary/10 border-primary/50 text-primary',
+  },
   image: {
     icon: Image,
     typeLabel: 'IMAGEM',
@@ -189,6 +194,11 @@ function AutomationNode({ data, selected, id }: NodeProps) {
             <p className="truncate"><span className="font-extrabold">Y</span> · {(config?.option_y as string) || 'Defina o significado de Y'}</p>
           </div>
         )}
+        {nodeType === 'wait_for_response' && (
+          <p className="text-[11px] mt-1 opacity-70">
+            Até {Number(config?.timeout_value) || 24} {(config?.timeout_unit as string) === 'minutes' ? 'min' : (config?.timeout_unit as string) === 'days' ? 'dias' : 'h'}
+          </p>
+        )}
 
         {nodeType === 'quick_reply' && config?.buttons && (
           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -227,6 +237,13 @@ function AutomationNode({ data, selected, id }: NodeProps) {
           <Handle id="x" type="source" position={Position.Bottom} style={{ left: '28%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
           <span className="absolute bottom-1 left-[72%] -translate-x-1/2 text-[9px] font-extrabold">Y</span>
           <Handle id="y" type="source" position={Position.Bottom} style={{ left: '72%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+        </>
+      ) : nodeType === 'wait_for_response' ? (
+        <>
+          <span className="absolute bottom-1 left-[28%] -translate-x-1/2 text-[9px] font-extrabold">RESPONDEU</span>
+          <Handle id="response" type="source" position={Position.Bottom} style={{ left: '28%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+          <span className="absolute bottom-1 left-[72%] -translate-x-1/2 text-[9px] font-extrabold">TEMPO</span>
+          <Handle id="timeout" type="source" position={Position.Bottom} style={{ left: '72%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
         </>
       ) : (
         <Handle

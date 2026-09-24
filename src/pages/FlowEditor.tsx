@@ -75,6 +75,7 @@ const toolCategories: ToolCategory[] = [
     label: 'Lógica',
     items: [
       { type: 'delay', label: 'Espera', icon: Clock, desc: 'Aguardar antes de continuar' },
+      { type: 'wait_for_response', label: 'Aguardando Resposta', icon: MessageSquare, desc: 'Esperar o cliente ou seguir por prazo' },
       { type: 'condition', label: 'Condição', icon: GitFork, desc: 'Caminho condicional' },
       { type: 'smart_condition', label: 'Condição Inteligente', icon: Bot, desc: 'IA escolhe entre os caminhos X e Y' },
     ],
@@ -192,6 +193,11 @@ export default function FlowEditor() {
       const unit = (config?.delay_unit as string) || 'seconds';
       return `${val} ${unit === 'minutes' ? 'min' : unit === 'hours' ? 'h' : 's'}`;
     }
+    if (type === 'wait_for_response') {
+      const val = Number(config?.timeout_value) || 24;
+      const unit = (config?.timeout_unit as string) || 'hours';
+      return `Até ${val} ${unit === 'minutes' ? 'min' : unit === 'days' ? 'dias' : 'h'}`;
+    }
     if (type === 'image' || type === 'video' || type === 'document') return (config?.caption as string) || '';
     if (type === 'audio') return config?.media_url ? 'Áudio anexado' : '';
     if (type === 'quick_reply') return (config?.content as string)?.slice(0, 40) || '';
@@ -253,6 +259,7 @@ export default function FlowEditor() {
 
     const item = allItems.find((b) => b.type === type);
     if (type === 'delay') { defaultConfig.delay_value = 5; defaultConfig.delay_unit = 'seconds'; }
+    if (type === 'wait_for_response') { defaultConfig.timeout_value = 24; defaultConfig.timeout_unit = 'hours'; }
     if (type === 'condition') { defaultConfig.condition_field = 'last_message'; defaultConfig.condition_operator = 'equals'; }
     if (type === 'smart_condition') {
       defaultConfig.option_x = '';
@@ -356,6 +363,19 @@ export default function FlowEditor() {
     if (invalidSmartCondition) {
       toast.error('Preencha X e Y e conecte as duas saídas da Condição Inteligente');
       setSelectedNode(invalidSmartCondition);
+      return;
+    }
+    const invalidWait = nodes.find((node) => {
+      if (node.data.nodeType !== 'wait_for_response') return false;
+      const config = (node.data.config as Record<string, unknown>) || {};
+      const validTimeout = Number(config.timeout_value) > 0;
+      const hasResponse = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'response');
+      const hasTimeout = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'timeout');
+      return !validTimeout || !hasResponse || !hasTimeout;
+    });
+    if (invalidWait) {
+      toast.error('Defina o prazo e conecte as saídas Respondeu e Tempo esgotado');
+      setSelectedNode(invalidWait);
       return;
     }
     if (!id) return;
