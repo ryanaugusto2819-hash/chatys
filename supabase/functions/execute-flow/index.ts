@@ -1287,8 +1287,56 @@ Deno.serve(async (req) => {
               }
             }
           }
+        } else if (actionType === "transfer_human" || actionType === "transfer_agent") {
+          const targetAgentId = actionType === "transfer_agent" && typeof config.agent_id === "string"
+            ? config.agent_id
+            : null;
+
+          if (actionType === "transfer_agent" && !targetAgentId) {
+            actionError = "Atendente não configurado no bloco de ação";
+          } else if (targetAgentId) {
+            const { data: targetAgent, error: targetAgentError } = await supabase
+              .from("profiles")
+              .select("id, user_id, full_name")
+              .eq("id", targetAgentId)
+              .maybeSingle();
+
+            if (targetAgentError || !targetAgent) {
+              actionError = targetAgentError?.message || "Atendente não encontrado";
+            } else {
+              const { data: membership, error: membershipError } = await supabase
+                .from("workspace_members")
+                .select("user_id")
+                .eq("workspace_id", conversation.workspace_id)
+                .eq("user_id", targetAgent.user_id)
+                .eq("is_active", true)
+                .maybeSingle();
+
+              if (membershipError || !membership) {
+                actionError = membershipError?.message || "Atendente não pertence a este workspace";
+              }
+            }
+          }
+
+          if (!actionError) {
+            const { error: transferError } = await supabase
+              .from("conversations")
+              .update({
+                assigned_agent_id: targetAgentId,
+                status: "active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", conversationId)
+              .eq("workspace_id", conversation.workspace_id);
+
+            if (transferError) {
+              actionError = transferError.message;
+            } else {
+              console.log(`[execute-flow] Conversation ${conversationId} transferred to ${targetAgentId ? `agent ${targetAgentId}` : "human queue"}`);
+            }
+          }
         }
-        // Other action types (transfer_agent, webhook) can be handled here too
+        // Other action types (webhook) can be handled here too
 
         if (actionError) {
           console.error(`[execute-flow] Action ${actionType} failed on node ${node.id}: ${actionError}`);
@@ -1329,7 +1377,9 @@ Deno.serve(async (req) => {
         }
         completedCount++;
         results.push({ nodeId: node.id, status: `action_${actionType}` });
-        currentNode = nextNode(node.id);
+        currentNode = actionType === "transfer_human" || actionType === "transfer_agent"
+          ? undefined
+          : nextNode(node.id);
         continue;
       } else {
         if (executionId) {

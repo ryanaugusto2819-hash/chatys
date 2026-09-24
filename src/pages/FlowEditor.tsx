@@ -209,6 +209,7 @@ export default function FlowEditor() {
       if (at === 'remove_tag') return `- ${(config?.tag_name as string) || 'etiqueta'}`;
       if (at === 'set_funnel_stage') return `🎯 ${(config?.funnel_stage_label as string) || (config?.funnel_stage as string) || 'etapa'}`;
       if (at === 'send_flow') return `→ ${(config?.flow_name as string) || 'outro fluxo'}`;
+       if (at === 'transfer_human') return '→ Atendimento humano';
       if (at === 'transfer_agent') return `→ ${(config?.agent_name as string) || 'agente'}`;
       if (at === 'webhook') return (config?.webhook_url as string)?.slice(0, 30) || 'webhook';
       return 'Ação';
@@ -399,6 +400,16 @@ export default function FlowEditor() {
     if (invalidFlowAction) {
       toast.error('Selecione o fluxo que será enviado no bloco Ação');
       setSelectedNode(invalidFlowAction);
+      return;
+    }
+    const invalidAgentTransfer = nodes.find((node) => {
+      if (node.data.nodeType !== 'action') return false;
+      const config = (node.data.config as Record<string, unknown>) || {};
+      return config.action_type === 'transfer_agent' && !config.agent_id;
+    });
+    if (invalidAgentTransfer) {
+      toast.error('Selecione o atendente que receberá a conversa');
+      setSelectedNode(invalidAgentTransfer);
       return;
     }
     if (!id) return;
