@@ -616,13 +616,6 @@ export type Database = {
             referencedRelation: "niches"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "ai_smart_reply_logs_node_id_fkey"
-            columns: ["node_id"]
-            isOneToOne: false
-            referencedRelation: "automation_nodes"
-            referencedColumns: ["id"]
-          },
         ]
       }
       ai_trained_message_rules: {
@@ -1737,13 +1730,6 @@ export type Database = {
             columns: ["execution_id"]
             isOneToOne: false
             referencedRelation: "flow_executions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flow_step_logs_node_id_fkey"
-            columns: ["node_id"]
-            isOneToOne: false
-            referencedRelation: "automation_nodes"
             referencedColumns: ["id"]
           },
         ]

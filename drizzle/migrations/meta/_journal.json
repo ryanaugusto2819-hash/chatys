@@ -211,6 +211,13 @@
       "when": 1790292284199,
       "tag": "0029_preserve_flow_execution_history_on_save",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790292359614,
+      "tag": "0030_retain_flow_step_history_after_node_removal",
+      "breakpoints": true
     }
   ]
 }
