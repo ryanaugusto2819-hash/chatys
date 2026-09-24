@@ -249,4 +249,4 @@
 - [x] Persistir a pausa sem manter uma função aberta
 - [x] Retomar pela próxima mensagem nos quatro canais de WhatsApp
 - [x] Processar o prazo esgotado em lotes de até 50 esperas
-- [ ] Publicar funções e validar pausa, resposta e prazo
+- [x] Publicar funções e validar pausa, resposta e prazo

@@ -499,7 +499,7 @@ Deno.serve(async (req) => {
     if (executionId) {
       const { data: existingExecution } = await supabase
         .from("flow_executions")
-        .select("id, flow_id, conversation_id, completed_nodes, status")
+        .select("id, flow_id, conversation_id, completed_nodes, status, waiting_node_id")
         .eq("id", executionId)
         .eq("flow_id", flowId)
         .eq("conversation_id", conversationId)
@@ -508,6 +508,18 @@ Deno.serve(async (req) => {
         return createJsonResponse({ error: "A retomada solicitada não está mais disponível" }, 409);
       }
       completedCount = existingExecution.completed_nodes || 0;
+      if (existingExecution.waiting_node_id) {
+        const waitingNode = nodes.find((node) => node.id === existingExecution.waiting_node_id);
+        await supabase.from("flow_step_logs").insert({
+          execution_id: executionId,
+          node_id: existingExecution.waiting_node_id,
+          node_type: "wait_for_response",
+          node_label: waitingNode?.label || "Aguardando Resposta",
+          sort_order: waitingNode?.sort_order || 0,
+          status: "completed",
+          error_message: resumeReason === "timeout" ? "Prazo esgotado" : "Resposta do cliente recebida",
+        });
+      }
     } else {
       const { data: execution } = await supabase
         .from("flow_executions")
