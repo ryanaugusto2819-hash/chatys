@@ -302,4 +302,4 @@
 - [x] Corrigir automaticamente configurações padrão e conexões antigas seguras
 - [x] Remover conexões inválidas e duplicadas sem recarregar a página
 - [x] Salvar fluxo, blocos e conexões em uma única operação protegida
-- [ ] Validar visualmente fluxos com vários erros e um salvamento completo
+- [x] Validar visualmente fluxos com erros e um salvamento completo
