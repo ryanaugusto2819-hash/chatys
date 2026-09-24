@@ -142,14 +142,14 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
 
   const iconMap: Record<string, React.ElementType> = {
     trigger: Zap, message: MessageSquare, delay: Clock, image: Image,
-    audio: Music, video: Video, document: FileText, condition: GitFork,
+    audio: Music, video: Video, document: FileText, condition: GitFork, smart_condition: Bot,
     quick_reply: ListOrdered, ai_reply: Bot, action: Cog, call_button: Zap,
   };
   const Icon = iconMap[nodeType] || MessageSquare;
 
   const typeLabels: Record<string, string> = {
     trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', image: 'Imagem',
-    audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição',
+    audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição', smart_condition: 'Condição Inteligente',
     quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', action: 'Ação',
     call_button: 'Botão de Ligação',
   };
@@ -521,6 +521,36 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
             <div className="rounded-lg bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-200 dark:border-cyan-800 p-3">
               <p className="text-[11px] text-cyan-700 dark:text-cyan-300">
                 🔀 Conecte as saídas "Verdadeiro" e "Falso" aos próximos nós
+              </p>
+            </div>
+          </div>
+        )}
+
+        {nodeType === 'smart_condition' && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className={labelClass}>Se o lead respondeu X</label>
+              <textarea
+                value={(editConfig.option_x as string) || ''}
+                onChange={(e) => setEditConfig((p) => ({ ...p, option_x: e.target.value }))}
+                rows={4}
+                placeholder="Ex: O lead disse que quer a amostra"
+                className={`${inputClass} resize-none`}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Se o lead respondeu Y</label>
+              <textarea
+                value={(editConfig.option_y as string) || ''}
+                onChange={(e) => setEditConfig((p) => ({ ...p, option_y: e.target.value }))}
+                rows={4}
+                placeholder="Ex: O lead respondeu à pergunta com uma dúvida"
+                className={`${inputClass} resize-none`}
+              />
+            </div>
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-800 dark:bg-cyan-900/10">
+              <p className="text-[11px] text-cyan-700 dark:text-cyan-300">
+                A IA analisa a última resposta com o contexto recente e segue somente por X ou Y. Se houver dúvida, o fluxo para para revisão.
               </p>
             </div>
           </div>

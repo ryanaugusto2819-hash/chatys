@@ -47,6 +47,11 @@ const nodeConfig: Record<string, { icon: React.ElementType; typeLabel: string; c
     typeLabel: 'CONDIÇÃO',
     colors: 'bg-cyan-50 border-cyan-300 text-cyan-700 dark:bg-cyan-900/20 dark:border-cyan-500/40 dark:text-cyan-300',
   },
+  smart_condition: {
+    icon: Bot,
+    typeLabel: 'CONDIÇÃO INTELIGENTE',
+    colors: 'bg-cyan-50 border-cyan-300 text-cyan-700 dark:bg-cyan-900/20 dark:border-cyan-500/40 dark:text-cyan-300',
+  },
   quick_reply: {
     icon: ListOrdered,
     typeLabel: 'RESPOSTA RÁPIDA',
@@ -178,6 +183,13 @@ function AutomationNode({ data, selected, id }: NodeProps) {
           </p>
         )}
 
+        {nodeType === 'smart_condition' && (
+          <div className="mt-2 space-y-1 text-[10px] font-medium">
+            <p className="truncate"><span className="font-extrabold">X</span> · {(config?.option_x as string) || 'Defina o significado de X'}</p>
+            <p className="truncate"><span className="font-extrabold">Y</span> · {(config?.option_y as string) || 'Defina o significado de Y'}</p>
+          </div>
+        )}
+
         {nodeType === 'quick_reply' && config?.buttons && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {(config.buttons as string[])?.slice(0, 3).map((b, i) => (
@@ -209,11 +221,20 @@ function AutomationNode({ data, selected, id }: NodeProps) {
         )}
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-foreground/60 !w-3 !h-3 !border-2 !border-background !-bottom-1.5"
-      />
+      {nodeType === 'smart_condition' ? (
+        <>
+          <span className="absolute bottom-1 left-[28%] -translate-x-1/2 text-[9px] font-extrabold">X</span>
+          <Handle id="x" type="source" position={Position.Bottom} style={{ left: '28%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+          <span className="absolute bottom-1 left-[72%] -translate-x-1/2 text-[9px] font-extrabold">Y</span>
+          <Handle id="y" type="source" position={Position.Bottom} style={{ left: '72%' }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
+        </>
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!bg-foreground/60 !w-3 !h-3 !border-2 !border-background !-bottom-1.5"
+        />
+      )}
     </div>
   );
 }

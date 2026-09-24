@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createOpenAI } from "npm:@ai-sdk/openai";
+import { Output, streamText } from "npm:ai";
+import { z } from "npm:zod";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +10,48 @@ const corsHeaders = {
 };
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+const SmartConditionSchema = z.object({
+  branch: z.enum(["x", "y", "none"]),
+  confidence: z.number(),
+  reason: z.string(),
+});
+
+type SmartConditionDecision = z.infer<typeof SmartConditionSchema>;
+
+async function classifySmartCondition(params: {
+  lovableKey: string;
+  optionX: string;
+  optionY: string;
+  transcript: string;
+}): Promise<SmartConditionDecision> {
+  const provider = createOpenAI({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey: params.lovableKey,
+    headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+  });
+  const result = streamText({
+    model: provider.responses("openai/gpt-6-astra"),
+    output: Output.object({ schema: SmartConditionSchema }),
+    prompt: [
+      "Classifique a ÚLTIMA resposta do lead usando o contexto recente apenas para interpretar intenção e referências.",
+      "Escolha exatamente x, y ou none. Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara.",
+      `X significa: ${params.optionX}`,
+      `Y significa: ${params.optionY}`,
+      `CONVERSA RECENTE:\n${params.transcript}`,
+      "Retorne motivo curto e confiança entre 0 e 1.",
+    ].join("\n\n"),
+    providerOptions: {
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: "low",
+        reasoningSummary: "auto",
+        store: false,
+        include: ["reasoning.encrypted_content"],
+      },
+    },
+  });
+  return await result.output;
+}
 
 function createJsonResponse(body: Record<string, unknown>, status: number) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });

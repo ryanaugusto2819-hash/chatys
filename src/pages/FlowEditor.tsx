@@ -76,6 +76,7 @@ const toolCategories: ToolCategory[] = [
     items: [
       { type: 'delay', label: 'Espera', icon: Clock, desc: 'Aguardar antes de continuar' },
       { type: 'condition', label: 'Condição', icon: GitFork, desc: 'Caminho condicional' },
+      { type: 'smart_condition', label: 'Condição Inteligente', icon: Bot, desc: 'IA escolhe entre os caminhos X e Y' },
     ],
   },
   {
@@ -172,8 +173,9 @@ export default function FlowEditor() {
       setEdges(
         edgesRes.data.map((e: any) => ({
           id: e.id,
-          source: e.source_node_id,
+           source: e.source_node_id,
           target: e.target_node_id,
+           sourceHandle: e.source_handle || undefined,
           animated: true,
           style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
         }))
@@ -249,6 +251,11 @@ export default function FlowEditor() {
     const item = allItems.find((b) => b.type === type);
     if (type === 'delay') { defaultConfig.delay_value = 5; defaultConfig.delay_unit = 'seconds'; }
     if (type === 'condition') { defaultConfig.condition_field = 'last_message'; defaultConfig.condition_operator = 'equals'; }
+    if (type === 'smart_condition') {
+      defaultConfig.option_x = '';
+      defaultConfig.option_y = '';
+      defaultConfig.context_message_limit = 20;
+    }
     if (type === 'action') { defaultConfig.action_type = 'add_tag'; }
 
     const lastNode = nodes[nodes.length - 1];
@@ -374,8 +381,9 @@ export default function FlowEditor() {
       const edgeInserts = edges.map((e) => ({
         id: crypto.randomUUID(),
         flow_id: id,
-        source_node_id: e.source,
+         source_node_id: e.source,
         target_node_id: e.target,
+         source_handle: e.sourceHandle || null,
       }));
 
       const { error: edgesError } = await supabase.from('automation_edges').insert(edgeInserts);
