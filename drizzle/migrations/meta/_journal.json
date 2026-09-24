@@ -169,6 +169,13 @@
       "when": 1790269613030,
       "tag": "0023_add_waiting_response_flow_state",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790271085513,
+      "tag": "0024_add_smart_reply_knowledge_scope_and_logs",
+      "breakpoints": true
     }
   ]
 }

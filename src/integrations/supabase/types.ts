@@ -520,6 +520,111 @@ export type Database = {
           },
         ]
       }
+      ai_smart_reply_logs: {
+        Row: {
+          completed_at: string | null
+          confidence: number | null
+          consulted_source_ids: string[]
+          context_snapshot: string
+          conversation_id: string
+          country_code: string
+          created_at: string
+          customer_message: string
+          execution_id: string
+          flow_id: string
+          generated_response: string | null
+          id: string
+          niche_id: string | null
+          node_id: string
+          outcome: string
+          provider_message_id: string | null
+          reason: string | null
+          safe_error: string | null
+          used_source_ids: string[]
+          workspace_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          confidence?: number | null
+          consulted_source_ids?: string[]
+          context_snapshot?: string
+          conversation_id: string
+          country_code?: string
+          created_at?: string
+          customer_message?: string
+          execution_id: string
+          flow_id: string
+          generated_response?: string | null
+          id?: string
+          niche_id?: string | null
+          node_id: string
+          outcome?: string
+          provider_message_id?: string | null
+          reason?: string | null
+          safe_error?: string | null
+          used_source_ids?: string[]
+          workspace_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          confidence?: number | null
+          consulted_source_ids?: string[]
+          context_snapshot?: string
+          conversation_id?: string
+          country_code?: string
+          created_at?: string
+          customer_message?: string
+          execution_id?: string
+          flow_id?: string
+          generated_response?: string | null
+          id?: string
+          niche_id?: string | null
+          node_id?: string
+          outcome?: string
+          provider_message_id?: string | null
+          reason?: string | null
+          safe_error?: string | null
+          used_source_ids?: string[]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_smart_reply_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_smart_reply_logs_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "flow_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_smart_reply_logs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_smart_reply_logs_niche_id_fkey"
+            columns: ["niche_id"]
+            isOneToOne: false
+            referencedRelation: "niches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_smart_reply_logs_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_trained_message_rules: {
         Row: {
           action_observation: string
@@ -1768,6 +1873,7 @@ export type Database = {
       knowledge_base_items: {
         Row: {
           content: string
+          country_code: string
           created_at: string
           file_url: string | null
           id: string
@@ -1775,9 +1881,11 @@ export type Database = {
           title: string
           type: string
           updated_at: string
+          workspace_id: string
         }
         Insert: {
           content?: string
+          country_code?: string
           created_at?: string
           file_url?: string | null
           id?: string
@@ -1785,9 +1893,11 @@ export type Database = {
           title?: string
           type?: string
           updated_at?: string
+          workspace_id: string
         }
         Update: {
           content?: string
+          country_code?: string
           created_at?: string
           file_url?: string | null
           id?: string
@@ -1795,6 +1905,7 @@ export type Database = {
           title?: string
           type?: string
           updated_at?: string
+          workspace_id?: string
         }
         Relationships: [
           {
