@@ -374,7 +374,9 @@ export default function FlowEditor() {
     const invalidWait = nodes.find((node) => {
       if (node.data.nodeType !== 'wait_for_response') return false;
       const config = (node.data.config as Record<string, unknown>) || {};
-      const validTimeout = Number(config.timeout_value) > 0;
+      // The editor and node preview both display 24 hours when an older/imported
+      // node has no explicit timeout yet, so validation must honor that default.
+      const validTimeout = Number(config.timeout_value ?? 24) > 0;
       const hasResponse = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'response');
       const hasTimeout = edges.some((edge) => edge.source === node.id && edge.sourceHandle === 'timeout');
       return !validTimeout || !hasResponse || !hasTimeout;
