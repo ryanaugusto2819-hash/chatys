@@ -259,3 +259,10 @@
 - [x] Transferir para atendente quando não houver resposta segura
 - [x] Registrar fontes, confiança, resultado, erro e consumo da IA
 - [x] Publicar e validar os três caminhos do bloco
+
+# Página Base de Conhecimento
+
+- [x] Adicionar página própria no menu administrativo
+- [x] Organizar os conteúdos por nicho e país
+- [x] Permitir cadastrar textos e instruções oficiais
+- [x] Validar seleção de nicho, país e formulário na tela autenticada

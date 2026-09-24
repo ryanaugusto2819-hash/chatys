@@ -28,9 +28,10 @@ type TabType = 'text' | 'qa' | 'file' | 'flows';
 
 interface Props {
   nicheId?: string;
+  textOnly?: boolean;
 }
 
-export default function KnowledgeBase({ nicheId }: Props) {
+export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   const { currentWorkspace } = useWorkspace();
   const [items, setItems] = useState<KBItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
 
   useEffect(() => {
     fetchItems();
-  }, [nicheId]);
+  }, [nicheId, currentWorkspace?.id]);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -55,6 +56,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
       .from('knowledge_base_items')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (currentWorkspace?.id) {
+      query = query.eq('workspace_id', currentWorkspace.id);
+    }
 
     if (nicheId) {
       query = query.eq('niche_id', nicheId);
@@ -358,23 +363,24 @@ export default function KnowledgeBase({ nicheId }: Props) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 mb-6">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 flex-1 justify-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {!textOnly && (
+        <div className="flex gap-1 rounded-lg bg-muted p-1 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 flex-1 justify-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Add Forms */}
       {activeTab !== 'flows' && (
@@ -569,7 +575,9 @@ export default function KnowledgeBase({ nicheId }: Props) {
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-center">
           <p className="text-xs text-muted-foreground">
-            Nenhum conhecimento adicionado. Adicione textos, perguntas ou arquivos para treinar a IA.
+            {textOnly
+              ? 'Nenhuma informação adicionada para este nicho e país.'
+              : 'Nenhum conhecimento adicionado. Adicione textos, perguntas ou arquivos para treinar a IA.'}
           </p>
         </div>
       ) : (
