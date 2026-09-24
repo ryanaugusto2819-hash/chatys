@@ -109,6 +109,13 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
     setEditConfig(config);
   }, [nodeId, label, config]);
 
+  // Keep the canvas node in sync while the editor is open. This prevents the
+  // main flow save button from validating an older draft when the fields on
+  // screen are already filled in.
+  useEffect(() => {
+    onSave(nodeId, editLabel, editConfig);
+  }, [nodeId, editLabel, editConfig]);
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
