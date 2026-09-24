@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import {
   MessageSquare, Clock, Image, Music, Video, Play, Zap, FileText,
@@ -259,10 +259,10 @@ function AutomationNode({ data, selected, id }: NodeProps) {
           {smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).map((optionLabel, index, options) => {
             const left = `${((index + 1) / (options.length + 1)) * 100}%`;
             return (
-              <span key={optionLabel}>
+              <Fragment key={optionLabel}>
                 <span className="absolute bottom-1 -translate-x-1/2 text-[9px] font-extrabold" style={{ left }}>{optionLabel}</span>
                 <Handle id={optionLabel.toLowerCase()} type="source" position={Position.Bottom} style={{ left }} className="!bg-primary !w-3 !h-3 !border-2 !border-background !-bottom-1.5" />
-              </span>
+              </Fragment>
             );
           })}
         </>
