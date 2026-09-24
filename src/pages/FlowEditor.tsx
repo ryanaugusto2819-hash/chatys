@@ -21,11 +21,20 @@ import NodeEditor from '@/components/automation/NodeEditor';
 import {
   ArrowLeft, Save, MessageSquare, Clock, Image, Music, Video,
   Loader2, FileText, GitFork, Bot, ListOrdered, Play, Pause,
-  Zap, Cog, Upload, Tag
+  Zap, Cog, Upload, Tag, CircleAlert, Wrench, ChevronRight
 } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseDcFile } from '@/lib/dcParser';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const nodeTypes = { automation: AutomationNode };
 
@@ -94,6 +103,168 @@ const normalizeLegacyBranchEdges = (nodes: Node[], edges: Edge[]) => {
   });
 
   return normalized;
+};
+
+interface FlowIssue {
+  id: string;
+  nodeId?: string;
+  block: string;
+  problem: string;
+  solution: string;
+  autoFixable: boolean;
+}
+
+const nodeTypeLabels: Record<string, string> = {
+  trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', wait_for_response: 'Aguardando Resposta',
+  image: 'Imagem', audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição',
+  smart_condition: 'Condição Inteligente', quick_reply: 'Resposta Rápida', call_button: 'Botão de Ligação',
+  smart_reply: 'Resposta Inteligente', receipt_detector: 'Reconhecer Comprovante', action: 'Ação',
+};
+
+const getNodeName = (node: Node) => {
+  const label = String(node.data.label || '').trim();
+  return label || nodeTypeLabels[String(node.data.nodeType)] || 'Bloco sem nome';
+};
+
+const getFlowIssues = (nodes: Node[], edges: Edge[], flowName: string): FlowIssue[] => {
+  const issues: FlowIssue[] = [];
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const addNodeIssue = (node: Node, key: string, problem: string, solution: string, autoFixable = false) => {
+    issues.push({ id: `${node.id}-${key}`, nodeId: node.id, block: getNodeName(node), problem, solution, autoFixable });
+  };
+
+  if (!flowName.trim()) {
+    issues.push({ id: 'flow-name', block: 'Dados do fluxo', problem: 'O fluxo está sem nome.', solution: 'Digite um nome no campo superior.', autoFixable: false });
+  }
+
+  const duplicatedNodeIds = nodes.filter((node, index) => nodes.findIndex((item) => item.id === node.id) !== index);
+  duplicatedNodeIds.forEach((node) => addNodeIssue(node, 'duplicate-id', 'Este bloco possui uma identificação duplicada.', 'Remova o bloco duplicado e crie-o novamente.'));
+
+  edges.forEach((edge) => {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+      issues.push({
+        id: `edge-dangling-${edge.id}`,
+        block: 'Conexão inválida',
+        problem: 'Uma linha aponta para um bloco que já foi removido.',
+        solution: 'A linha inválida pode ser removida automaticamente.',
+        autoFixable: true,
+      });
+    }
+  });
+
+  const seenEdges = new Set<string>();
+  edges.forEach((edge) => {
+    const key = `${edge.source}:${edge.sourceHandle || ''}:${edge.target}`;
+    if (seenEdges.has(key)) {
+      issues.push({
+        id: `edge-duplicate-${edge.id}`,
+        block: 'Conexão duplicada',
+        problem: 'A mesma linha foi criada mais de uma vez.',
+        solution: 'A cópia duplicada pode ser removida automaticamente.',
+        autoFixable: true,
+      });
+    }
+    seenEdges.add(key);
+  });
+
+  nodes.forEach((node) => {
+    const type = String(node.data.nodeType || '');
+    const config = (node.data.config as Record<string, unknown>) || {};
+    const outgoing = edges.filter((edge) => edge.source === node.id);
+    const requiredHandles = getRequiredSourceHandles(node);
+
+    if (!type) addNodeIssue(node, 'type', 'O tipo deste bloco não foi identificado.', 'Remova este bloco e adicione-o novamente.');
+    if (!String(node.data.label || '').trim()) addNodeIssue(node, 'label', 'O bloco está sem nome.', 'Abra o bloco e informe um nome.');
+
+    requiredHandles.forEach((handle) => {
+      if (!outgoing.some((edge) => edge.sourceHandle === handle)) {
+        const handleLabel: Record<string, string> = {
+          response: 'Respondeu', timeout: 'Tempo esgotado', answered: 'Respondeu', no_answer: 'Sem resposta',
+          error: 'Erro', receipt: 'Comprovante', not_receipt: 'Não é comprovante',
+        };
+        addNodeIssue(node, `handle-${handle}`, `A saída “${handleLabel[handle] || handle.toUpperCase()}” não está conectada.`, 'Arraste essa saída até o próximo bloco.');
+      }
+    });
+
+    if (type === 'smart_condition') {
+      smartConditionLabels.slice(0, getSmartConditionOptionCount(config)).forEach((label) => {
+        const handle = label.toLowerCase();
+        if (!String(config[`option_${handle}`] || '').trim()) {
+          addNodeIssue(node, `option-${handle}`, `O significado do caminho ${label} está vazio.`, `Abra o bloco e descreva quando a IA deve seguir pelo caminho ${label}.`);
+        }
+      });
+    }
+    if (type === 'wait_for_response' && !(Number(config.timeout_value ?? 24) > 0)) {
+      addNodeIssue(node, 'timeout', 'O prazo de espera é inválido.', 'Definir automaticamente o prazo padrão de 24 horas.', true);
+    }
+    if (type === 'smart_reply' && config.knowledge_source_mode === 'selected'
+      && (!Array.isArray(config.knowledge_base_item_ids) || config.knowledge_base_item_ids.length === 0)) {
+      addNodeIssue(node, 'knowledge', 'Nenhum conteúdo específico foi escolhido.', 'Escolha um conteúdo ou altere para seleção automática.');
+    }
+    if (type === 'message' && !String(config.content || '').trim()) {
+      addNodeIssue(node, 'content', 'A mensagem está vazia.', 'Abra o bloco e escreva a mensagem que será enviada.');
+    }
+    if (['image', 'audio', 'video', 'document'].includes(type) && !String(config.media_url || '').trim()) {
+      addNodeIssue(node, 'media', 'Nenhum arquivo foi enviado neste bloco.', 'Abra o bloco e envie o arquivo.');
+    }
+    if (type === 'condition' && !String(config.condition_value || '').trim()) {
+      addNodeIssue(node, 'condition-value', 'O valor da condição está vazio.', 'Abra o bloco e informe o valor que será comparado.');
+    }
+    if (type === 'quick_reply') {
+      if (!String(config.content || '').trim()) addNodeIssue(node, 'quick-content', 'O texto da resposta rápida está vazio.', 'Escreva o texto que acompanhará os botões.');
+      if (!Array.isArray(config.buttons) || config.buttons.length === 0) addNodeIssue(node, 'quick-buttons', 'A resposta rápida não possui botões.', 'Adicione ao menos um botão.');
+    }
+    if (type === 'call_button' && !String(config.call_phone || '').trim()) {
+      addNodeIssue(node, 'phone', 'O telefone do botão de ligação está vazio.', 'Informe o número com código do país.');
+    }
+    if (type === 'action') {
+      const actionType = String(config.action_type || 'add_tag');
+      if (['add_tag', 'remove_tag'].includes(actionType) && !config.tag_id && !String(config.tag_name || '').trim()) {
+        addNodeIssue(node, 'tag', 'Nenhuma etiqueta foi escolhida.', 'Abra o bloco e escolha ou crie uma etiqueta.');
+      }
+      if (actionType === 'set_funnel_stage' && !config.funnel_stage) addNodeIssue(node, 'funnel', 'Nenhuma etapa do funil foi escolhida.', 'Escolha uma etapa do funil.');
+      if (actionType === 'set_billing_stage' && !String(config.billing_stage || '').trim()) addNodeIssue(node, 'billing', 'A etapa da cobrança está vazia.', 'Informe a etapa da cobrança.');
+      if (actionType === 'send_flow' && !config.flow_id) addNodeIssue(node, 'flow', 'Nenhum outro fluxo foi escolhido.', 'Escolha o fluxo que deve ser iniciado.');
+      if (actionType === 'transfer_agent' && !config.agent_id) addNodeIssue(node, 'agent', 'Nenhum atendente foi escolhido.', 'Escolha quem receberá a conversa.');
+      if (actionType === 'webhook') {
+        const webhookUrl = String(config.webhook_url || '').trim();
+        if (!webhookUrl) addNodeIssue(node, 'webhook', 'O endereço do webhook está vazio.', 'Informe um endereço iniciado por https://.');
+        else {
+          try { new URL(webhookUrl); } catch { addNodeIssue(node, 'webhook-format', 'O endereço do webhook é inválido.', 'Use um endereço completo, como https://exemplo.com/webhook.'); }
+        }
+        ['webhook_headers', 'webhook_body'].forEach((field) => {
+          const value = String(config[field] || '').trim();
+          if (!value) return;
+          try { JSON.parse(value); } catch { addNodeIssue(node, field, `O JSON de ${field === 'webhook_headers' ? 'cabeçalhos' : 'conteúdo'} é inválido.`, 'Corrija aspas, vírgulas e chaves do JSON.'); }
+        });
+      }
+    }
+  });
+
+  return issues;
+};
+
+const safelyFixFlow = (nodes: Node[], edges: Edge[]) => {
+  const fixedNodes = nodes.map((node) => {
+    const config = { ...((node.data.config as Record<string, unknown>) || {}) };
+    if (node.data.nodeType === 'wait_for_response' && !(Number(config.timeout_value) > 0)) {
+      config.timeout_value = 24;
+      config.timeout_unit = 'hours';
+    }
+    if (node.data.nodeType === 'smart_reply' && !config.knowledge_source_mode) config.knowledge_source_mode = 'automatic';
+    if (node.data.nodeType === 'receipt_detector' && !(Number(config.minimum_confidence) > 0)) config.minimum_confidence = 0.75;
+    return { ...node, data: { ...node.data, config } };
+  });
+  const nodeIds = new Set(fixedNodes.map((node) => node.id));
+  const normalized = normalizeLegacyBranchEdges(fixedNodes, edges).filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const seen = new Set<string>();
+  const fixedEdges = normalized.filter((edge) => {
+    const key = `${edge.source}:${edge.sourceHandle || ''}:${edge.target}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { nodes: fixedNodes, edges: fixedEdges };
 };
 
 interface ToolCategory {
