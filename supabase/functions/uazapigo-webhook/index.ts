@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
+import { resumeWaitingFlow } from "../_shared/resume-waiting-flow.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -211,7 +212,8 @@ async function persistIncomingMedia(
   return supabase.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
 }
 
-async function triggerAutomations(conversationId: string) {
+async function triggerAutomations(supabase: any, conversationId: string) {
+  if (await resumeWaitingFlow(supabase, conversationId)) return;
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   await Promise.allSettled(["ai-flow-selector", "ai-auto-reply"].map((fn) => fetch(`${url}/functions/v1/${fn}`, {
@@ -350,7 +352,7 @@ Deno.serve(async (req) => {
         if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((analysisError) =>
           console.error("[uazapigo-webhook] trained message analysis error:", analysisError)
         );
-        await triggerAutomations(conversation.id);
+        await triggerAutomations(supabase, conversation.id);
       }
     }
     return json({ success: true });

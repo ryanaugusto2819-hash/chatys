@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
+import { resumeWaitingFlow } from "../_shared/resume-waiting-flow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -630,6 +631,15 @@ async function processMessageEvent(supabase: any, payload: any) {
     }
   }
 
+
+  if (fromMe) return;
+
+  // Resume a waiting flow before starting any new automation.
+  const resumed = await resumeWaitingFlow(supabase, conversationId).catch((error) => {
+    console.error("[evolution-webhook] waiting flow resume error:", error);
+    return false;
+  });
+  if (resumed) return;
 
   // Trigger AI flows (best-effort)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
