@@ -4,9 +4,19 @@ export async function resumeWaitingFlow(supabase: any, conversationId: string): 
     p_reason: "response",
     p_execution_id: null,
   });
-  if (error) throw error;
+  if (error) {
+    console.error("[resume-waiting-flow] claim failed", {
+      conversationId,
+      code: error.code || null,
+      message: error.message || String(error),
+    });
+    throw error;
+  }
   const claimed = data?.[0];
-  if (!claimed?.execution_id || !claimed?.resume_node_id) return false;
+  if (!claimed?.execution_id || !claimed?.resume_node_id) {
+    console.info("[resume-waiting-flow] no waiting execution", { conversationId });
+    return false;
+  }
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -22,6 +32,23 @@ export async function resumeWaitingFlow(supabase: any, conversationId: string): 
       senderLabel: "resposta-cliente",
     }),
   });
-  if (!response.ok) throw new Error(`Falha ao retomar fluxo: HTTP ${response.status}`);
+  if (!response.ok) {
+    const responseBody = (await response.text()).slice(0, 1000);
+    console.error("[resume-waiting-flow] execution resume failed", {
+      conversationId,
+      executionId: claimed.execution_id,
+      flowId: claimed.flow_id,
+      resumeNodeId: claimed.resume_node_id,
+      status: response.status,
+      responseBody,
+    });
+    throw new Error(`Falha ao retomar fluxo: HTTP ${response.status}`);
+  }
+  console.info("[resume-waiting-flow] execution resumed", {
+    conversationId,
+    executionId: claimed.execution_id,
+    flowId: claimed.flow_id,
+    resumeNodeId: claimed.resume_node_id,
+  });
   return true;
 }
