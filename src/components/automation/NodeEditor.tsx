@@ -57,6 +57,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
   const [agents, setAgents] = useState<any[]>([]);
   const [funnelStages, setFunnelStages] = useState<any[]>([]);
   const [availableFlows, setAvailableFlows] = useState<any[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
 
   // Load connections, tags, agents as needed
   useEffect(() => {
@@ -92,6 +93,15 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
         supabase.from('niche_funnel_stages').select('*').eq('niche_id', nicheId).order('sort_order')
           .then(({ data }) => { if (data) setFunnelStages(data); });
       }
+    }
+    if (nodeType === 'smart_reply' && currentWorkspace?.id) {
+      let knowledgeQuery = supabase
+        .from('knowledge_base_items')
+        .select('id, title, type, country_code')
+        .eq('workspace_id', currentWorkspace.id)
+        .order('title');
+      knowledgeQuery = nicheId ? knowledgeQuery.eq('niche_id', nicheId) : knowledgeQuery.is('niche_id', null);
+      knowledgeQuery.then(({ data }) => setKnowledgeItems(data || []));
     }
   }, [nodeType, nicheId, currentFlowId, currentWorkspace?.id]);
   // Reset state when nodeId changes
@@ -720,6 +730,65 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, c
                 A IA usa a última mensagem e o histórico recente, buscando somente conteúdos do nicho e país desta conversa.
               </p>
             </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Base de conhecimento</label>
+              <select
+                value={(editConfig.knowledge_source_mode as string) || 'automatic'}
+                onChange={(e) => setEditConfig((p) => ({
+                  ...p,
+                  knowledge_source_mode: e.target.value,
+                  knowledge_base_item_ids: e.target.value === 'automatic' ? [] : p.knowledge_base_item_ids,
+                }))}
+                className={selectClass}
+              >
+                <option value="automatic">Toda a base compatível</option>
+                <option value="selected">Escolher conteúdos específicos</option>
+              </select>
+            </div>
+            {(editConfig.knowledge_source_mode as string) === 'selected' && (
+              <div className="space-y-2">
+                <label className={labelClass}>Conteúdos permitidos</label>
+                {knowledgeItems.length > 0 ? (
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                    {knowledgeItems.map((item) => {
+                      const selectedIds = (editConfig.knowledge_base_item_ids as string[]) || [];
+                      const checked = selectedIds.includes(item.id);
+                      return (
+                        <label key={item.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 transition-colors ${checked ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/40'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setEditConfig((p) => {
+                              const current = (p.knowledge_base_item_ids as string[]) || [];
+                              return {
+                                ...p,
+                                knowledge_base_item_ids: checked
+                                  ? current.filter((id) => id !== item.id)
+                                  : [...current, item.id],
+                              };
+                            })}
+                            className="mt-0.5 h-4 w-4 accent-primary"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-medium text-card-foreground">{item.title}</span>
+                            <span className="block text-[10px] text-muted-foreground">
+                              {item.country_code === 'any' ? 'Qualquer país' : item.country_code} · {item.type === 'qa' ? 'Pergunta e resposta' : 'Texto'}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-border p-3 text-[10px] text-muted-foreground">
+                    Nenhum conteúdo cadastrado para o nicho deste fluxo.
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  A IA consultará somente os conteúdos marcados que também forem compatíveis com o país da conversa.
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className={labelClass}>Mensagens de contexto</label>
               <input
