@@ -34,6 +34,11 @@ export async function resumeWaitingFlow(supabase: any, conversationId: string): 
   });
   if (!response.ok) {
     const responseBody = (await response.text()).slice(0, 1000);
+    const { error: restoreError } = await supabase
+      .from("flow_executions")
+      .update({ status: "waiting_for_response", resumed_at: null, resume_reason: null })
+      .eq("id", claimed.execution_id)
+      .eq("status", "running");
     console.error("[resume-waiting-flow] execution resume failed", {
       conversationId,
       executionId: claimed.execution_id,
@@ -41,6 +46,7 @@ export async function resumeWaitingFlow(supabase: any, conversationId: string): 
       resumeNodeId: claimed.resume_node_id,
       status: response.status,
       responseBody,
+      restoreError: restoreError?.message || null,
     });
     throw new Error(`Falha ao retomar fluxo: HTTP ${response.status}`);
   }

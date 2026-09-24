@@ -327,6 +327,9 @@ Deno.serve(async (req) => {
           } else if (message.mediaUrl) {
             await supabase.from("messages").update({ media_url: message.mediaUrl }).eq("id", duplicate.id);
           }
+          if (!message.fromMe) {
+            await triggerAutomations(supabase, conversation.id);
+          }
           continue; 
         }
       }
