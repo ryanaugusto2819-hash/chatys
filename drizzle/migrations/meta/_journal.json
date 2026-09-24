@@ -155,6 +155,13 @@
       "when": 1790126143308,
       "tag": "0021_route_pos_venda_tag_in_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790268661211,
+      "tag": "0022_add_smart_condition_edge_handles",
+      "breakpoints": true
     }
   ]
 }
