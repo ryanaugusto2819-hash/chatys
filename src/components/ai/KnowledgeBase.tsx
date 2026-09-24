@@ -68,6 +68,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const addTextItem = async () => {
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
     if (!textTitle.trim() || !textContent.trim()) {
       toast.error('Preencha título e conteúdo');
       return;
@@ -91,6 +95,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const addQAItem = async () => {
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
     if (!qaQuestion.trim() || !qaAnswer.trim()) {
       toast.error('Preencha pergunta e resposta');
       return;
@@ -116,6 +124,10 @@ export default function KnowledgeBase({ nicheId }: Props) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um workspace');
+      return;
+    }
 
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
@@ -264,6 +276,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const importFlow = async (flow: FlowWithNodes) => {
+    if (!currentWorkspace?.id) return;
     setImportingFlowId(flow.id);
     const content = formatFlowAsKnowledge(flow);
     const { error } = await supabase.from('knowledge_base_items').insert({
@@ -284,7 +297,7 @@ export default function KnowledgeBase({ nicheId }: Props) {
   };
 
   const importAllFlows = async () => {
-    if (flows.length === 0) return;
+    if (flows.length === 0 || !currentWorkspace?.id) return;
     setImportingFlowId('all');
     let success = 0;
     for (const flow of flows) {

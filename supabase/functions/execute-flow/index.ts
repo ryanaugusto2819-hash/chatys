@@ -850,6 +850,12 @@ Deno.serve(async (req) => {
           currentNode = answeredNext;
           continue;
         }
+        if (existingReply) {
+          completedCount++;
+          results.push({ nodeId: node.id, status: existingReply.outcome === "no_answer" ? "no_answer" : "ai_error" });
+          currentNode = existingReply.outcome === "no_answer" ? noAnswerNext : errorNext;
+          continue;
+        }
 
         const countryCode = detectCountryCode(conversation.contact_phone);
         const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
@@ -868,10 +874,13 @@ Deno.serve(async (req) => {
           .in("country_code", countryCode === "any" ? ["any"] : [countryCode, "any"])
           .order("created_at", { ascending: false }).limit(50);
         sourceQuery = conversation.niche_id ? sourceQuery.eq("niche_id", conversation.niche_id) : sourceQuery.is("niche_id", null);
-        const { data: sources, error: sourceError } = await sourceQuery;
-        const consultedSourceIds = (sources || []).map((source) => source.id);
+        const { data: rawSources, error: sourceError } = await sourceQuery;
+        const sources = [...(rawSources || [])].sort((a, b) =>
+          Number(b.country_code === countryCode) - Number(a.country_code === countryCode)
+        );
+        const consultedSourceIds = sources.map((source) => source.id);
 
-        const { data: logRow, error: logError } = await supabase.from("ai_smart_reply_logs").upsert({
+        const { data: logRow, error: logError } = await supabase.from("ai_smart_reply_logs").insert({
           workspace_id: conversation.workspace_id,
           execution_id: executionId,
           conversation_id: conversationId,
@@ -883,8 +892,16 @@ Deno.serve(async (req) => {
           context_snapshot: transcript,
           consulted_source_ids: consultedSourceIds,
           outcome: "processing",
-        }, { onConflict: "execution_id,node_id", ignoreDuplicates: false }).select("id").single();
-        if (logError) throw logError;
+        }).select("id").single();
+        if (logError) {
+          if (logError.code === "23505") {
+            completedCount++;
+            results.push({ nodeId: node.id, status: "duplicate_blocked" });
+            currentNode = errorNext;
+            continue;
+          }
+          throw logError;
+        }
         smartReplyLogId = logRow.id;
 
         if (conversation.sale_registered_at || recentError || sourceError || !sources?.length || !latestCustomerMessage.trim()) {
