@@ -1,3 +1,10 @@
+# Acompanhamento visual do lead no fluxo
+
+- [x] Buscar o lead por telefone dentro de um fluxo específico
+- [x] Mostrar as execuções recentes e permitir alternar entre elas
+- [x] Destacar os blocos percorridos, as conexões usadas e o bloco atual
+- [x] Exibir estado, horário e erro real sem alterar a execução do lead
+
 # Implementação uazapiGO
 
 - [x] Criar envio dedicado de texto e mídia
