@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { flowId, conversationId, senderLabel: requestedLabel, metadata } = await req.json();
+    const { flowId, conversationId, senderLabel: requestedLabel, metadata, executionId: requestedExecutionId, resumeFromNodeId, resumeReason } = await req.json();
 
     // Helper: replace {{variable}} placeholders with metadata values
     const replaceVariables = (text: string): string => {
@@ -494,23 +494,51 @@ Deno.serve(async (req) => {
       return createJsonResponse({ error: "No nodes in flow" }, 400);
     }
 
-    const { data: execution } = await supabase
-      .from("flow_executions")
-      .insert({
-        flow_id: flowId,
-        conversation_id: conversationId,
-        status: "running",
-        total_nodes: nodes.length,
-        completed_nodes: 0,
-      })
-      .select("id")
-      .single();
-
-    const executionId = execution?.id;
-    const results: { nodeId: string; status: string }[] = [];
+    let executionId = typeof requestedExecutionId === "string" ? requestedExecutionId : undefined;
     let completedCount = 0;
+    if (executionId) {
+      const { data: existingExecution } = await supabase
+        .from("flow_executions")
+        .select("id, flow_id, conversation_id, completed_nodes, status, waiting_node_id")
+        .eq("id", executionId)
+        .eq("flow_id", flowId)
+        .eq("conversation_id", conversationId)
+        .maybeSingle();
+      if (!existingExecution || existingExecution.status !== "running" || !resumeFromNodeId) {
+        return createJsonResponse({ error: "A retomada solicitada não está mais disponível" }, 409);
+      }
+      completedCount = existingExecution.completed_nodes || 0;
+      if (existingExecution.waiting_node_id) {
+        const waitingNode = nodes.find((node) => node.id === existingExecution.waiting_node_id);
+        await supabase.from("flow_step_logs").insert({
+          execution_id: executionId,
+          node_id: existingExecution.waiting_node_id,
+          node_type: "wait_for_response",
+          node_label: waitingNode?.label || "Aguardando Resposta",
+          sort_order: waitingNode?.sort_order || 0,
+          status: "completed",
+          error_message: resumeReason === "timeout" ? "Prazo esgotado" : "Resposta do cliente recebida",
+        });
+      }
+    } else {
+      const { data: execution } = await supabase
+        .from("flow_executions")
+        .insert({
+          flow_id: flowId,
+          conversation_id: conversationId,
+          status: "running",
+          total_nodes: nodes.length,
+          completed_nodes: 0,
+        })
+        .select("id")
+        .single();
+      executionId = execution?.id;
+    }
+
+    const results: { nodeId: string; status: string }[] = [];
     let failed = false;
     let reviewRequired = false;
+    let waitingForResponse = false;
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const incomingIds = new Set((edges || []).map((edge) => edge.target_node_id));
     const outgoingByNode = new Map<string, typeof edges>();
@@ -523,7 +551,10 @@ Deno.serve(async (req) => {
     const firstNode = nodes.find((node) => node.node_type === "trigger" && !incomingIds.has(node.id))
       || nodes.find((node) => !incomingIds.has(node.id))
       || nodes[0];
-    let currentNode = firstNode;
+    let currentNode = resumeFromNodeId ? nodeById.get(resumeFromNodeId) : firstNode;
+    if (resumeFromNodeId && !currentNode) {
+      return createJsonResponse({ error: "Nó de retomada não pertence ao fluxo" }, 400);
+    }
     const visited = new Set<string>();
     const nextNode = (nodeId: string, handle?: string) => {
       if (!usesGraph) {
@@ -639,6 +670,72 @@ Deno.serve(async (req) => {
         completedCount++;
         results.push({ nodeId: node.id, status: `delayed ${seconds}s` });
         currentNode = nextNode(node.id);
+        continue;
+      }
+
+      if (node.node_type === "wait_for_response") {
+        const timeoutValue = Math.max(1, Number(config.timeout_value) || 24);
+        const timeoutUnit = typeof config.timeout_unit === "string" ? config.timeout_unit : "hours";
+        const timeoutSeconds = timeoutUnit === "minutes" ? timeoutValue * 60
+          : timeoutUnit === "days" ? timeoutValue * 86400
+          : timeoutValue * 3600;
+        const responseNext = nextNode(node.id, "response");
+        const timeoutNext = nextNode(node.id, "timeout");
+
+        if (!responseNext || !timeoutNext || !executionId) {
+          failed = true;
+          if (executionId) {
+            await supabase.from("flow_step_logs").insert({
+              execution_id: executionId,
+              node_id: node.id,
+              node_type: node.node_type,
+              node_label: node.label || "Aguardando Resposta",
+              sort_order: node.sort_order,
+              status: "failed",
+              error_message: "Conecte as saídas Respondeu e Tempo esgotado",
+            });
+            await supabase.from("flow_executions").update({
+              status: "failed",
+              failed_at_node_id: node.id,
+              completed_nodes: completedCount,
+              completed_at: new Date().toISOString(),
+            }).eq("id", executionId);
+          }
+          results.push({ nodeId: node.id, status: "invalid_wait_configuration" });
+          break;
+        }
+
+        const waitingSince = new Date();
+        const { error: waitingError } = await supabase
+          .from("flow_executions")
+          .update({
+            status: "waiting_for_response",
+            completed_nodes: completedCount + 1,
+            waiting_node_id: node.id,
+            response_resume_node_id: responseNext.id,
+            timeout_resume_node_id: timeoutNext.id,
+            waiting_since: waitingSince.toISOString(),
+            wait_timeout_at: new Date(waitingSince.getTime() + timeoutSeconds * 1000).toISOString(),
+            completed_at: null,
+            resumed_at: null,
+            resume_reason: null,
+          })
+          .eq("id", executionId);
+        if (waitingError) throw waitingError;
+
+        await supabase.from("flow_step_logs").insert({
+          execution_id: executionId,
+          node_id: node.id,
+          node_type: node.node_type,
+          node_label: node.label || "Aguardando Resposta",
+          sort_order: node.sort_order,
+          status: "waiting",
+          error_message: `prazo=${timeoutValue} ${timeoutUnit}`,
+        });
+        completedCount++;
+        waitingForResponse = true;
+        results.push({ nodeId: node.id, status: "waiting_for_response" });
+        currentNode = undefined;
         continue;
       }
 
@@ -1360,13 +1457,18 @@ Deno.serve(async (req) => {
       currentNode = nextNode(node.id);
     }
 
-    if (executionId && !failed) {
+    if (executionId && !failed && !waitingForResponse) {
       await supabase
         .from("flow_executions")
         .update({
           status: reviewRequired ? "review_required" : "completed",
           completed_nodes: completedCount,
           completed_at: new Date().toISOString(),
+          waiting_node_id: null,
+          response_resume_node_id: null,
+          timeout_resume_node_id: null,
+          waiting_since: null,
+          wait_timeout_at: null,
         })
         .eq("id", executionId);
     }
@@ -1387,9 +1489,9 @@ Deno.serve(async (req) => {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId);
 
-    console.log(`[execute-flow] Flow ${flowId} finished: ${failed ? "FAILED" : "SUCCESS"}, ${completedCount}/${nodes.length} nodes completed`);
+    console.log(`[execute-flow] Flow ${flowId} finished: ${failed ? "FAILED" : waitingForResponse ? "WAITING" : "SUCCESS"}, ${completedCount}/${nodes.length} nodes completed${resumeReason ? `, resumed by ${resumeReason}` : ""}`);
 
-    return createJsonResponse({ success: !failed && !reviewRequired, reviewRequired, executionId, results }, 200);
+    return createJsonResponse({ success: !failed && !reviewRequired, reviewRequired, waitingForResponse, executionId, results }, 200);
   } catch (error) {
     console.error("[execute-flow] Fatal error:", error);
     return createJsonResponse({ error: "Internal server error" }, 500);

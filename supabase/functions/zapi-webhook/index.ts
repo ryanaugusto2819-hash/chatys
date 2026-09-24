@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { triggerTrainedMessageAnalysis } from "../_shared/trained-message.ts";
+import { resumeWaitingFlow } from "../_shared/resume-waiting-flow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -277,12 +278,11 @@ async function processZapiWebhook(body: any) {
     if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((err) =>
       console.error("Trained message analysis error:", err)
     );
-    triggerAiFlowSelector(conversationId).catch((err) =>
-      console.error("Flow selector trigger error:", err)
-    );
-    triggerAutoReply(conversationId).catch((err) =>
-      console.error("Auto-reply trigger error:", err)
-    );
+    resumeWaitingFlow(supabase, conversationId).then((resumed) => {
+      if (resumed) return;
+      triggerAiFlowSelector(conversationId).catch((err) => console.error("Flow selector trigger error:", err));
+      triggerAutoReply(conversationId).catch((err) => console.error("Auto-reply trigger error:", err));
+    }).catch((err) => console.error("Waiting flow resume error:", err));
   }
 }
 

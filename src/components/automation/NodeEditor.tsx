@@ -141,14 +141,14 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
   };
 
   const iconMap: Record<string, React.ElementType> = {
-    trigger: Zap, message: MessageSquare, delay: Clock, image: Image,
+    trigger: Zap, message: MessageSquare, delay: Clock, wait_for_response: MessageSquare, image: Image,
     audio: Music, video: Video, document: FileText, condition: GitFork, smart_condition: Bot,
     quick_reply: ListOrdered, ai_reply: Bot, action: Cog, call_button: Zap,
   };
   const Icon = iconMap[nodeType] || MessageSquare;
 
   const typeLabels: Record<string, string> = {
-    trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', image: 'Imagem',
+    trigger: 'Gatilho', message: 'Mensagem', delay: 'Espera', wait_for_response: 'Aguardando Resposta', image: 'Imagem',
     audio: 'Áudio', video: 'Vídeo', document: 'Documento', condition: 'Condição', smart_condition: 'Condição Inteligente',
     quick_reply: 'Resposta Rápida', ai_reply: 'Resposta IA', action: 'Ação',
     call_button: 'Botão de Ligação',
@@ -426,6 +426,37 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
               <p className="text-[11px] text-amber-700 dark:text-amber-300">
                 ⏱ O fluxo aguardará {(editConfig.delay_value as number) || (editConfig.delay_seconds as number) || 5}{' '}
                 {(editConfig.delay_unit as string) === 'minutes' ? 'minutos' : (editConfig.delay_unit as string) === 'hours' ? 'horas' : 'segundos'} antes de continuar
+              </p>
+            </div>
+          </div>
+        )}
+
+        {nodeType === 'wait_for_response' && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className={labelClass}>Prazo máximo</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={(editConfig.timeout_value as number) || 24}
+                  onChange={(e) => setEditConfig((p) => ({ ...p, timeout_value: parseInt(e.target.value) || 1 }))}
+                  className={inputClass}
+                />
+                <select
+                  value={(editConfig.timeout_unit as string) || 'hours'}
+                  onChange={(e) => setEditConfig((p) => ({ ...p, timeout_unit: e.target.value }))}
+                  className={selectClass}
+                >
+                  <option value="minutes">Minutos</option>
+                  <option value="hours">Horas</option>
+                  <option value="days">Dias</option>
+                </select>
+              </div>
+            </div>
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <p className="text-[11px] text-primary">
+                O fluxo pausa até a próxima mensagem do cliente. Conecte as saídas Respondeu e Tempo esgotado.
               </p>
             </div>
           </div>

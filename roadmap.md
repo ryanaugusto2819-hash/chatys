@@ -242,3 +242,11 @@
 - [x] Classificar última resposta com contexto e executar somente um caminho
 - [x] Parar e registrar revisão quando não houver correspondência clara
 - [x] Publicar e validar fluxos novos e antigos
+
+# Bloco Aguardando Resposta
+
+- [x] Adicionar o bloco visual com prazo e duas saídas conectáveis
+- [x] Persistir a pausa sem manter uma função aberta
+- [x] Retomar pela próxima mensagem nos quatro canais de WhatsApp
+- [x] Processar o prazo esgotado em lotes de até 50 esperas
+- [x] Publicar funções e validar pausa, resposta e prazo

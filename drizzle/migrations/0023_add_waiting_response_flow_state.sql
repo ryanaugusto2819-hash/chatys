@@ -1,0 +1,61 @@
+ALTER TABLE public.flow_executions
+  ADD COLUMN IF NOT EXISTS waiting_node_id uuid REFERENCES public.automation_nodes(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS response_resume_node_id uuid REFERENCES public.automation_nodes(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS timeout_resume_node_id uuid REFERENCES public.automation_nodes(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS waiting_since timestamptz,
+  ADD COLUMN IF NOT EXISTS wait_timeout_at timestamptz,
+  ADD COLUMN IF NOT EXISTS resumed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS resume_reason text;
+
+CREATE INDEX IF NOT EXISTS idx_flow_executions_waiting_response
+  ON public.flow_executions (conversation_id, wait_timeout_at DESC)
+  WHERE status = 'waiting_for_response';
+
+CREATE OR REPLACE FUNCTION public.claim_waiting_flow(
+  p_conversation_id uuid,
+  p_reason text,
+  p_execution_id uuid DEFAULT NULL
+)
+RETURNS TABLE(execution_id uuid, flow_id uuid, conversation_id uuid, resume_node_id uuid)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  claimed public.flow_executions%ROWTYPE;
+BEGIN
+  IF p_reason NOT IN ('response', 'timeout') THEN
+    RAISE EXCEPTION 'Invalid resume reason';
+  END IF;
+
+  SELECT fe.* INTO claimed
+  FROM public.flow_executions fe
+  WHERE fe.conversation_id = p_conversation_id
+    AND fe.status = 'waiting_for_response'
+    AND (p_execution_id IS NULL OR fe.id = p_execution_id)
+    AND (p_reason = 'response' OR fe.wait_timeout_at <= now())
+  ORDER BY fe.waiting_since DESC NULLS LAST
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED;
+
+  IF claimed.id IS NULL THEN
+    RETURN;
+  END IF;
+
+  UPDATE public.flow_executions
+  SET status = 'superseded', completed_at = now(), resume_reason = 'superseded'
+  WHERE conversation_id = p_conversation_id
+    AND status = 'waiting_for_response'
+    AND id <> claimed.id;
+
+  UPDATE public.flow_executions
+  SET status = 'running', resumed_at = now(), resume_reason = p_reason
+  WHERE id = claimed.id;
+
+  RETURN QUERY SELECT claimed.id, claimed.flow_id, claimed.conversation_id,
+    CASE WHEN p_reason = 'response' THEN claimed.response_resume_node_id ELSE claimed.timeout_resume_node_id END;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_waiting_flow(uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_waiting_flow(uuid, text, uuid) TO service_role;
