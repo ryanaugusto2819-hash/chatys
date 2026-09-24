@@ -320,3 +320,10 @@
 - [x] Agrupar dúvidas sem resposta da IA e vincular à Base de Conhecimento
 - [x] Validar visualmente em desktop e celular
 
+# Retomada confiável do bloco Aguardando Resposta
+
+- [x] Corrigir a reserva atômica que impedia a retomada pela mensagem do lead
+- [x] Recuperar periodicamente respostas persistidas cujo webhook foi interrompido
+- [x] Preservar a espera quando a continuação do fluxo falhar
+- [x] Retomar execuções já presas e validar a chegada à Condição Inteligente
+
