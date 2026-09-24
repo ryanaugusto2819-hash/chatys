@@ -208,6 +208,7 @@ export default function FlowEditor() {
       if (at === 'add_tag') return `+ ${(config?.tag_name as string) || 'etiqueta'}`;
       if (at === 'remove_tag') return `- ${(config?.tag_name as string) || 'etiqueta'}`;
       if (at === 'set_funnel_stage') return `🎯 ${(config?.funnel_stage_label as string) || (config?.funnel_stage as string) || 'etapa'}`;
+      if (at === 'send_flow') return `→ ${(config?.flow_name as string) || 'outro fluxo'}`;
       if (at === 'transfer_agent') return `→ ${(config?.agent_name as string) || 'agente'}`;
       if (at === 'webhook') return (config?.webhook_url as string)?.slice(0, 30) || 'webhook';
       return 'Ação';
@@ -388,6 +389,16 @@ export default function FlowEditor() {
     if (invalidSmartReply) {
       toast.error('Conecte as saídas Respondeu, Sem resposta e Erro');
       setSelectedNode(invalidSmartReply);
+      return;
+    }
+    const invalidFlowAction = nodes.find((node) => {
+      if (node.data.nodeType !== 'action') return false;
+      const config = (node.data.config as Record<string, unknown>) || {};
+      return config.action_type === 'send_flow' && !config.flow_id;
+    });
+    if (invalidFlowAction) {
+      toast.error('Selecione o fluxo que será enviado no bloco Ação');
+      setSelectedNode(invalidFlowAction);
       return;
     }
     if (!id) return;
@@ -617,6 +628,7 @@ export default function FlowEditor() {
             label={selectedNode.data.label as string}
             config={(selectedNode.data.config as Record<string, unknown>) || {}}
             nicheId={flowNicheId}
+            currentFlowId={id}
             onSave={handleNodeSave}
             onDelete={handleNodeDelete}
             onClose={() => setSelectedNode(null)}

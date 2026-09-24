@@ -396,6 +396,9 @@ Deno.serve(async (req) => {
 
   try {
     const { flowId, conversationId, senderLabel: requestedLabel, metadata, executionId: requestedExecutionId, resumeFromNodeId, resumeReason } = await req.json();
+    const incomingFlowChain = Array.isArray(metadata?.__flowChain)
+      ? metadata.__flowChain.filter((item: unknown): item is string => typeof item === "string")
+      : [];
 
     // Helper: replace {{variable}} placeholders with metadata values
     const replaceVariables = (text: string): string => {
@@ -409,6 +412,14 @@ Deno.serve(async (req) => {
     if (!flowId || !conversationId) {
       return createJsonResponse({ error: "flowId and conversationId are required" }, 400);
     }
+    if (incomingFlowChain.includes(flowId) || incomingFlowChain.length >= 10) {
+      return createJsonResponse({
+        success: false,
+        error: "Encadeamento circular ou limite de fluxos atingido",
+        diagnostics: { flowId, chainLength: incomingFlowChain.length },
+      }, 409);
+    }
+    const flowChain = [...incomingFlowChain, flowId];
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -1233,6 +1244,48 @@ Deno.serve(async (req) => {
             }
 
             console.log(`[execute-flow] Set billing stage to "${billingStage}" for conversation ${conversationId}`);
+          }
+        } else if (actionType === "send_flow") {
+          const targetFlowId = typeof config.flow_id === "string" ? config.flow_id : "";
+          if (!targetFlowId) {
+            actionError = "Fluxo não configurado no bloco de ação";
+          } else if (flowChain.includes(targetFlowId)) {
+            actionError = "O fluxo selecionado criaria um encadeamento circular";
+          } else {
+            const { data: targetFlow, error: targetFlowError } = await supabase
+              .from("automation_flows")
+              .select("id, name")
+              .eq("id", targetFlowId)
+              .eq("workspace_id", conversation.workspace_id)
+              .maybeSingle();
+            if (targetFlowError || !targetFlow) {
+              actionError = targetFlowError?.message || "Fluxo não encontrado neste workspace";
+            } else {
+              try {
+                const functionUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/execute-flow`;
+                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+                const childResponse = await fetch(functionUrl, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    flowId: targetFlowId,
+                    conversationId,
+                    senderLabel: requestedLabel || "fluxo-encadeado",
+                    metadata: { ...(metadata && typeof metadata === "object" ? metadata : {}), __flowChain: flowChain },
+                  }),
+                });
+                const childResult = await childResponse.json().catch(() => ({}));
+                if (!childResponse.ok || childResult?.success === false) {
+                  actionError = typeof childResult?.error === "string"
+                    ? childResult.error
+                    : `Falha ao iniciar o fluxo selecionado (HTTP ${childResponse.status})`;
+                } else {
+                  console.log(`[execute-flow] Started chained flow "${targetFlow.name}" (${targetFlowId})`);
+                }
+              } catch (childError) {
+                actionError = childError instanceof Error ? childError.message : "Falha ao iniciar o fluxo selecionado";
+              }
+            }
           }
         }
         // Other action types (transfer_agent, webhook) can be handled here too

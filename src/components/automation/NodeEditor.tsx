@@ -17,6 +17,7 @@ interface NodeEditorProps {
   label: string;
   config: NodeConfig;
   nicheId?: string | null;
+  currentFlowId?: string;
   onSave: (nodeId: string, label: string, config: NodeConfig) => void;
   onDelete: (nodeId: string) => void;
   onClose: () => void;
@@ -44,7 +45,7 @@ const conditionFields = [
   { value: 'tag', label: 'Tag' },
 ];
 
-export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, onSave, onDelete, onClose }: NodeEditorProps) {
+export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, currentFlowId, onSave, onDelete, onClose }: NodeEditorProps) {
   const { currentWorkspace } = useWorkspace();
   const [editLabel, setEditLabel] = useState(label);
   const [editConfig, setEditConfig] = useState<NodeConfig>(config);
@@ -55,6 +56,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
   const [availableTags, setAvailableTags] = useState<any[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
   const [funnelStages, setFunnelStages] = useState<any[]>([]);
+  const [availableFlows, setAvailableFlows] = useState<any[]>([]);
 
   // Load connections, tags, agents as needed
   useEffect(() => {
@@ -63,16 +65,23 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
         .then(({ data }) => { if (data) setConnections(data); });
     }
     if (nodeType === 'action') {
-      supabase.from('tags').select('*').order('name')
+      const workspaceId = currentWorkspace?.id;
+      let tagsQuery = supabase.from('tags').select('*').order('name');
+      if (workspaceId) tagsQuery = tagsQuery.eq('workspace_id', workspaceId);
+      tagsQuery
         .then(({ data }) => { if (data) setAvailableTags(data); });
       supabase.from('profiles').select('id, full_name')
         .then(({ data }) => { if (data) setAgents(data); });
+      if (workspaceId) {
+        supabase.from('automation_flows').select('id, name, is_active').eq('workspace_id', workspaceId).order('name')
+          .then(({ data }) => { if (data) setAvailableFlows(data.filter((flow) => flow.id !== currentFlowId)); });
+      }
       if (nicheId) {
         supabase.from('niche_funnel_stages').select('*').eq('niche_id', nicheId).order('sort_order')
           .then(({ data }) => { if (data) setFunnelStages(data); });
       }
     }
-  }, [nodeType]);
+  }, [nodeType, nicheId, currentFlowId, currentWorkspace?.id]);
   // Reset state when nodeId changes
   useEffect(() => {
     setEditLabel(label);
@@ -732,6 +741,7 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
                 <option value="remove_tag">Remover Etiqueta</option>
                 <option value="set_funnel_stage">Definir Etapa do Funil</option>
                 <option value="set_billing_stage">Definir Etapa da Cobrança</option>
+                <option value="send_flow">Enviar Outro Fluxo</option>
                 <option value="transfer_agent">Transferir para Agente</option>
                 <option value="webhook">Enviar Webhook</option>
               </select>
@@ -881,6 +891,31 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
                 </p>
               </div>
             )}
+            {(editConfig.action_type as string) === 'send_flow' && (
+              <div className="space-y-2">
+                <label className={labelClass}>Fluxo para enviar</label>
+                {availableFlows.length > 0 ? (
+                  <select
+                    value={(editConfig.flow_id as string) || ''}
+                    onChange={(e) => {
+                      const flow = availableFlows.find((item) => item.id === e.target.value);
+                      setEditConfig((p) => ({ ...p, flow_id: e.target.value, flow_name: flow?.name || '' }));
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="">Selecione um fluxo...</option>
+                    {availableFlows.map((flow) => (
+                      <option key={flow.id} value={flow.id}>
+                        {flow.name}{flow.is_active ? '' : ' (inativo)'}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">Nenhum outro fluxo disponível.</p>
+                )}
+                <p className="text-[10px] text-muted-foreground">O fluxo escolhido será iniciado para o mesmo lead.</p>
+              </div>
+            )}
             {(editConfig.action_type as string) === 'webhook' && (
               <div className="space-y-2">
                 <div className="space-y-1.5">
@@ -938,6 +973,8 @@ export default function NodeEditor({ nodeId, nodeType, label, config, nicheId, o
                     ? 'Define em qual etapa do funil o lead se encontra — isso determina qual IA de follow-up será acionada'
                     : (editConfig.action_type as string) === 'set_billing_stage'
                     ? 'Define a etapa da cobrança do lead — sincroniza com a plataforma de atendimento via webhook'
+                    : (editConfig.action_type as string) === 'send_flow'
+                    ? 'Inicia o fluxo selecionado para o mesmo lead e registra o resultado no histórico'
                     : (editConfig.action_type as string) === 'transfer_agent'
                     ? 'Transfere a conversa para o agente selecionado'
                     : 'Envia uma requisição HTTP para o endpoint configurado'}
