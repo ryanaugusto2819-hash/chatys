@@ -304,3 +304,12 @@
 - [x] Salvar fluxo, blocos e conexões em uma única operação protegida
 - [x] Validar visualmente fluxos com erros e um salvamento completo
 - [x] Permitir salvar mesmo com pendências, mantendo os avisos e orientações
+
+# Auditoria e histórico das automações
+
+- [x] Criar visão geral de saúde e desempenho por bloco
+- [x] Agrupar falhas com mensagem real e orientação de correção
+- [x] Exibir histórico filtrável com detalhes de cada bloco executado
+- [x] Agrupar dúvidas sem resposta da IA e vincular à Base de Conhecimento
+- [x] Validar visualmente em desktop e celular
+

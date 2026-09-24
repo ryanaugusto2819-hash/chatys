@@ -364,7 +364,7 @@ export default function Automation() {
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/automation/${flow.id}/metrics`); }}
                             className="text-muted-foreground hover:text-primary transition-colors"
-                            title="Métricas do Funil"
+                            title="Analisar fluxo"
                           >
                             <BarChart3 className="h-4 w-4" />
                           </button>

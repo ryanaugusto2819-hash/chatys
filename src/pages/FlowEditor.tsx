@@ -21,7 +21,7 @@ import NodeEditor from '@/components/automation/NodeEditor';
 import {
   ArrowLeft, Save, MessageSquare, Clock, Image, Music, Video,
   Loader2, FileText, GitFork, Bot, ListOrdered, Play, Pause,
-  Zap, Cog, Upload, Tag, CircleAlert, Wrench, ChevronRight
+  Zap, Cog, Upload, Tag, CircleAlert, Wrench, ChevronRight, BarChart3
 } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseDcFile } from '@/lib/dcParser';
@@ -822,6 +822,15 @@ export default function FlowEditor() {
             {flowActive ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
             {flowActive ? 'Ativo' : 'Inativo'}
           </button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/automation/${id}/metrics`)}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analisar
+          </Button>
           <button
             onClick={saveFlow}
             disabled={saving}
