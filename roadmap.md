@@ -255,7 +255,7 @@
 
 - [x] Adicionar o bloco visual com três saídas conectáveis
 - [x] Separar a base oficial por workspace, nicho e país
-- [ ] Gerar resposta somente a partir da base e enviar no canal da conversa
-- [ ] Transferir para atendente quando não houver resposta segura
-- [ ] Registrar fontes, confiança, resultado, erro e consumo da IA
-- [ ] Publicar e validar os três caminhos do bloco
+- [x] Gerar resposta somente a partir da base e enviar no canal da conversa
+- [x] Transferir para atendente quando não houver resposta segura
+- [x] Registrar fontes, confiança, resultado, erro e consumo da IA
+- [x] Publicar e validar os três caminhos do bloco
