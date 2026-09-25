@@ -254,6 +254,7 @@
 - [x] Permitir adicionar os caminhos Z, W e V conforme necessário
 - [x] Exigir descrição e conexão para cada caminho configurado
 - [x] Manter respostas ambíguas paradas para revisão
+- [x] Priorizar a intenção principal e marcadores como “provar primeiro” em vez de palavras apenas mencionadas
 
 # Bloco Aguardando Resposta
 
