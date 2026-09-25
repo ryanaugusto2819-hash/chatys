@@ -3,6 +3,7 @@ import { createOpenAI } from "npm:@ai-sdk/openai";
 import { Output, streamText } from "npm:ai";
 import { z } from "npm:zod";
 import { analyzePaymentReceipt } from "../_shared/receipt-analysis.ts";
+import { createLovableAiGatewayRunIdFetch } from "../_shared/lovable-ai-run-id.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,20 @@ const SmartReplySchema = z.object({
 
 type SmartConditionDecision = z.infer<typeof SmartConditionSchema>;
 type SmartReplyDecision = z.infer<typeof SmartReplySchema>;
+
+function recoverStructuredOutput<T>(error: unknown, schema: z.ZodType<T>): T | null {
+  const rawText = typeof (error as { text?: unknown })?.text === "string"
+    ? (error as { text: string }).text.trim()
+    : "";
+  if (!rawText) return null;
+  const jsonText = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim() || rawText;
+  try {
+    const parsed = schema.safeParse(JSON.parse(jsonText));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 function detectCountryCode(phone: string): "MX" | "UY" | "AR" | "BR" | "any" {
   const digits = phone.replace(/\D/g, "");
@@ -70,10 +85,12 @@ async function generateSmartReply(params: {
   latestCustomerMessage: string;
   sources: Array<{ id: string; type: string; title: string; content: string; country_code: string; image_descriptions?: string[] }>;
 }): Promise<{ decision: SmartReplyDecision; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
+  const runIdFetch = createLovableAiGatewayRunIdFetch();
   const provider = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
     apiKey: params.lovableKey,
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    fetch: runIdFetch.fetch,
   });
   const sourceCatalog = params.sources.map((source) =>
     `[FONTE ${source.id}] [${source.country_code}] ${source.title}\n${source.content}${source.image_descriptions?.length ? `\nIMAGENS DISPONÍVEIS PARA ENVIO:\n${source.image_descriptions.map((description, index) => `${index + 1}. ${description || "Imagem complementar desta fonte"}`).join("\n")}` : ""}`
@@ -115,7 +132,17 @@ async function generateSmartReply(params: {
         },
       };
     } catch (error) {
+      const recovered = recoverStructuredOutput(error, SmartReplySchema);
+      if (recovered) {
+        return { decision: recovered, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+      }
       const status = Number((error as { statusCode?: number })?.statusCode || 0);
+      console.error("[execute-flow] smart reply AI failure", {
+        status: status || null,
+        runId: runIdFetch.getRunId() || null,
+        message: safeAiError(error),
+        attempt: attempt + 1,
+      });
       if (attempt >= 2 || (status !== 429 && status < 500)) throw error;
       await sleep(750 * 2 ** attempt);
     }
@@ -128,10 +155,12 @@ async function classifySmartCondition(params: {
   options: Array<{ branch: "x" | "y" | "z" | "w" | "v"; description: string }>;
   transcript: string;
 }): Promise<SmartConditionDecision> {
+  const runIdFetch = createLovableAiGatewayRunIdFetch();
   const provider = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
     apiKey: params.lovableKey,
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    fetch: runIdFetch.fetch,
   });
   const prompt = [
     "Classifique a intenção principal da ÚLTIMA resposta do lead, usando a conversa recente para interpretar referências, idioma e o que foi perguntado.",
@@ -164,7 +193,15 @@ async function classifySmartCondition(params: {
       });
       return await result.output;
     } catch (error) {
+      const recovered = recoverStructuredOutput(error, SmartConditionSchema);
+      if (recovered) return recovered;
       const status = Number((error as { statusCode?: number })?.statusCode || 0);
+      console.error("[execute-flow] smart condition AI failure", {
+        status: status || null,
+        runId: runIdFetch.getRunId() || null,
+        message: safeAiError(error),
+        attempt: attempt + 1,
+      });
       if (attempt >= 2 || (status !== 429 && status < 500)) throw error;
       await new Promise((resolve) => setTimeout(resolve, 750 * 2 ** attempt));
     }
