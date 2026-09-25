@@ -540,6 +540,7 @@ export type Database = {
           provider_message_id: string | null
           reason: string | null
           safe_error: string | null
+          sent_image_ids: string[]
           used_source_ids: string[]
           workspace_id: string
         }
@@ -562,6 +563,7 @@ export type Database = {
           provider_message_id?: string | null
           reason?: string | null
           safe_error?: string | null
+          sent_image_ids?: string[]
           used_source_ids?: string[]
           workspace_id: string
         }
@@ -584,6 +586,7 @@ export type Database = {
           provider_message_id?: string | null
           reason?: string | null
           safe_error?: string | null
+          sent_image_ids?: string[]
           used_source_ids?: string[]
           workspace_id?: string
         }
@@ -1852,6 +1855,57 @@ export type Database = {
             columns: ["niche_id"]
             isOneToOne: false
             referencedRelation: "niches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_base_item_images: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          image_url: string
+          knowledge_base_item_id: string
+          mime_type: string
+          sort_order: number
+          storage_path: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          image_url: string
+          knowledge_base_item_id: string
+          mime_type: string
+          sort_order?: number
+          storage_path: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string
+          knowledge_base_item_id?: string
+          mime_type?: string
+          sort_order?: number
+          storage_path?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_item_images_knowledge_base_item_id_fkey"
+            columns: ["knowledge_base_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_base_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_base_item_images_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
