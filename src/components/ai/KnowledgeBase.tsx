@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check, Tag, Pencil, Save } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Upload, FileText, MessageSquare, Loader2, Workflow, Check, Tag, Pencil, Save, ImagePlus, Image as ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -25,6 +25,23 @@ interface KBItem {
   country_code: string;
   created_at: string;
   tag_ids: string[];
+  images: KBImage[];
+}
+
+interface KBImage {
+  id: string;
+  image_url: string;
+  storage_path: string;
+  description: string;
+  mime_type: string;
+  sort_order: number;
+}
+
+interface PendingImage {
+  id: string;
+  file: File;
+  previewUrl: string;
+  description: string;
 }
 
 interface TagOption {
@@ -62,6 +79,10 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   const [editCountryCode, setEditCountryCode] = useState('any');
   const [editTagIds, setEditTagIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [editNewImages, setEditNewImages] = useState<PendingImage[]>([]);
+  const [editExistingImages, setEditExistingImages] = useState<KBImage[]>([]);
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
 
   const [textTitle, setTextTitle] = useState('');
   const [textContent, setTextContent] = useState('');
@@ -115,13 +136,30 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
           .select('knowledge_base_item_id, tag_id')
           .in('knowledge_base_item_id', itemIds)
       : { data: [] };
+    const { data: imageRows } = itemIds.length > 0
+      ? await supabase
+          .from('knowledge_base_item_images')
+          .select('id, knowledge_base_item_id, image_url, storage_path, description, mime_type, sort_order')
+          .in('knowledge_base_item_id', itemIds)
+          .order('sort_order')
+      : { data: [] };
     const tagIdsByItem = new Map<string, string[]>();
     for (const link of links || []) {
       const current = tagIdsByItem.get(link.knowledge_base_item_id) || [];
       current.push(link.tag_id);
       tagIdsByItem.set(link.knowledge_base_item_id, current);
     }
-    setItems(baseItems.map((item) => ({ ...item, tag_ids: tagIdsByItem.get(item.id) || [] })) as KBItem[]);
+    const imagesByItem = new Map<string, KBImage[]>();
+    for (const image of imageRows || []) {
+      const current = imagesByItem.get(image.knowledge_base_item_id) || [];
+      current.push(image as KBImage);
+      imagesByItem.set(image.knowledge_base_item_id, current);
+    }
+    setItems(baseItems.map((item) => ({
+      ...item,
+      tag_ids: tagIdsByItem.get(item.id) || [],
+      images: imagesByItem.get(item.id) || [],
+    })) as KBItem[]);
     setLoading(false);
   };
 
@@ -141,6 +179,64 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     setSelectedTagIds((current) => current.includes(tagId)
       ? current.filter((id) => id !== tagId)
       : [...current, tagId]);
+  };
+
+  const addPendingImages = (files: FileList | null, editing = false) => {
+    if (!files) return;
+    const currentCount = editing ? editExistingImages.length + editNewImages.length : pendingImages.length;
+    const available = Math.max(0, 5 - currentCount);
+    const accepted = Array.from(files).filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+    if (accepted.length !== files.length) toast.error('Use imagens JPG, PNG ou WEBP');
+    if (accepted.some((file) => file.size > 5 * 1024 * 1024)) {
+      toast.error('Cada imagem deve ter no máximo 5MB');
+    }
+    const additions = accepted
+      .filter((file) => file.size <= 5 * 1024 * 1024)
+      .slice(0, available)
+      .map((file) => ({ id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), description: '' }));
+    if (accepted.length > available) toast.error('Cada conteúdo pode ter no máximo 5 imagens');
+    if (editing) setEditNewImages((current) => [...current, ...additions]);
+    else setPendingImages((current) => [...current, ...additions]);
+  };
+
+  const updatePendingDescription = (id: string, description: string, editing = false) => {
+    const setter = editing ? setEditNewImages : setPendingImages;
+    setter((current) => current.map((image) => image.id === id ? { ...image, description } : image));
+  };
+
+  const removePendingImage = (id: string, editing = false) => {
+    const setter = editing ? setEditNewImages : setPendingImages;
+    setter((current) => {
+      const removed = current.find((image) => image.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((image) => image.id !== id);
+    });
+  };
+
+  const uploadItemImages = async (itemId: string, images: PendingImage[], startOrder = 0) => {
+    if (!currentWorkspace?.id || images.length === 0) return null;
+    const rows = [];
+    for (const [index, image] of images.entries()) {
+      const extension = image.file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${currentWorkspace.id}/${itemId}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from('knowledge-base').upload(storagePath, image.file, {
+        contentType: image.file.type,
+        upsert: false,
+      });
+      if (uploadError) return uploadError;
+      const { data: publicUrl } = supabase.storage.from('knowledge-base').getPublicUrl(storagePath);
+      rows.push({
+        knowledge_base_item_id: itemId,
+        workspace_id: currentWorkspace.id,
+        image_url: publicUrl.publicUrl,
+        storage_path: storagePath,
+        description: image.description.trim(),
+        mime_type: image.file.type,
+        sort_order: startOrder + index,
+      });
+    }
+    const { error } = await supabase.from('knowledge_base_item_images').insert(rows);
+    return error;
   };
 
   const toggleItemTag = async (item: KBItem, tagId: string) => {
@@ -181,15 +277,20 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     if (error) {
       toast.error('Erro ao adicionar');
     } else if (created) {
-      const tagError = await saveItemTags(created.id, selectedTagIds);
-      if (tagError) {
-        toast.error('Conteúdo criado, mas não foi possível vincular as etiquetas');
+      const [tagError, imageError] = await Promise.all([
+        saveItemTags(created.id, selectedTagIds),
+        uploadItemImages(created.id, pendingImages),
+      ]);
+      if (tagError || imageError) {
+        toast.error(`Conteúdo criado, mas alguns anexos falharam: ${tagError?.message || imageError?.message}`);
         fetchItems();
         return;
       }
       toast.success('Conhecimento adicionado');
       setTextTitle('');
       setTextContent('');
+      pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      setPendingImages([]);
       fetchItems();
     }
   };
@@ -214,15 +315,20 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     if (error) {
       toast.error('Erro ao adicionar');
     } else if (created) {
-      const tagError = await saveItemTags(created.id, selectedTagIds);
-      if (tagError) {
-        toast.error('Conteúdo criado, mas não foi possível vincular as etiquetas');
+      const [tagError, imageError] = await Promise.all([
+        saveItemTags(created.id, selectedTagIds),
+        uploadItemImages(created.id, pendingImages),
+      ]);
+      if (tagError || imageError) {
+        toast.error(`Conteúdo criado, mas alguns anexos falharam: ${tagError?.message || imageError?.message}`);
         fetchItems();
         return;
       }
       toast.success('Pergunta e resposta adicionadas');
       setQaQuestion('');
       setQaAnswer('');
+      pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      setPendingImages([]);
       fetchItems();
     }
   };
@@ -292,6 +398,9 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
   };
 
   const deleteItem = async (item: KBItem) => {
+    if (item.images.length > 0) {
+      await supabase.storage.from('knowledge-base').remove(item.images.map((image) => image.storage_path));
+    }
     if (item.file_url) {
       const fileName = item.file_url.split('/').pop();
       if (fileName) {
@@ -318,6 +427,9 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     setEditContent(item.content);
     setEditCountryCode(item.country_code || 'any');
     setEditTagIds(item.tag_ids);
+    setEditExistingImages(item.images);
+    setEditNewImages([]);
+    setRemovedImageIds([]);
   };
 
   const toggleEditTag = (tagId: string) => {
@@ -378,6 +490,31 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
       return;
     }
 
+    const imagesToDelete = editingItem.images.filter((image) => removedImageIds.includes(image.id));
+    if (imagesToDelete.length > 0) {
+      const { error: deleteRowsError } = await supabase.from('knowledge_base_item_images')
+        .delete().eq('knowledge_base_item_id', editingItem.id).in('id', removedImageIds);
+      if (deleteRowsError) {
+        toast.error(`O texto foi salvo, mas não foi possível remover imagens: ${deleteRowsError.message}`);
+        setSavingEdit(false);
+        return;
+      }
+      await supabase.storage.from('knowledge-base').remove(imagesToDelete.map((image) => image.storage_path));
+    }
+    const retainedImages = editExistingImages.filter((image) => !removedImageIds.includes(image.id));
+    const descriptionUpdates = retainedImages.map((image, index) => supabase.from('knowledge_base_item_images')
+      .update({ description: image.description.trim(), sort_order: index })
+      .eq('id', image.id).eq('workspace_id', currentWorkspace.id));
+    const descriptionResults = await Promise.all(descriptionUpdates);
+    const descriptionError = descriptionResults.find((result) => result.error)?.error;
+    const imageUploadError = await uploadItemImages(editingItem.id, editNewImages, retainedImages.length);
+    if (descriptionError || imageUploadError) {
+      toast.error(`O texto foi salvo, mas algumas imagens falharam: ${descriptionError?.message || imageUploadError?.message}`);
+      await fetchItems();
+      setSavingEdit(false);
+      return;
+    }
+
     setItems((current) => current.map((item) => item.id === editingItem.id
       ? {
           ...item,
@@ -388,6 +525,9 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
         }
       : item));
     setEditingItem(null);
+    editNewImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    setEditNewImages([]);
+    setRemovedImageIds([]);
     setSavingEdit(false);
     toast.success('Conhecimento atualizado');
   };
