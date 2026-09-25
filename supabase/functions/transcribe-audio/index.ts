@@ -1,149 +1,76 @@
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "npm:zod";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const headers = { ...corsHeaders, "Content-Type": "application/json" };
+const MODEL = "google/gemini-3.5-transcribe";
+const MAX_AUDIO_BYTES = 14 * 1024 * 1024;
+const BodySchema = z.object({
+  audioUrl: z.string().url(),
+  conversationId: z.string().uuid().optional(),
+});
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers });
+}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
 
   try {
-    const { audioUrl, conversationId } = await req.json();
+    const parsed = BodySchema.safeParse(await req.json());
+    if (!parsed.success) return json({ error: parsed.error.flatten().fieldErrors }, 400);
+    const { audioUrl, conversationId } = parsed.data;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableKey) return json({ error: "A transcrição de áudio não está configurada" }, 401);
 
-    if (!audioUrl) {
-      return new Response(
-        JSON.stringify({ error: "audioUrl is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "AI not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Download the audio file and convert to base64
-    console.log(`[transcribe-audio] Downloading audio from: ${audioUrl}`);
     const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) {
-      console.error("Failed to download audio:", audioResponse.status);
-      return new Response(
-        JSON.stringify({ error: "Failed to download audio file" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!audioResponse.ok) return json({ error: `Não foi possível baixar o áudio (${audioResponse.status})` }, 502);
+    const audio = await audioResponse.blob();
+    if (!audio.size) return json({ error: "O áudio recebido está vazio" }, 400);
+    if (audio.size > MAX_AUDIO_BYTES) return json({ error: "O áudio ultrapassa o limite de 14 MB" }, 400);
 
-    const audioBlob = await audioResponse.arrayBuffer();
-    const base64Audio = btoa(
-      new Uint8Array(audioBlob).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    const mimeType = audio.type.startsWith("audio/") ? audio.type.split(";")[0] : "audio/ogg";
+    const extension = mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : mimeType.includes("webm") ? "webm" : mimeType.includes("mp4") ? "m4a" : "ogg";
+    const form = new FormData();
+    form.append("model", MODEL);
+    form.append("file", new File([audio], `audio.${extension}`, { type: mimeType }));
+    form.append("response_format", "json");
 
-    // Detect mime type from URL or default to ogg
-    let mimeType = "audio/ogg";
-    if (audioUrl.includes(".mp3")) mimeType = "audio/mpeg";
-    else if (audioUrl.includes(".aac")) mimeType = "audio/aac";
-    else if (audioUrl.includes(".wav")) mimeType = "audio/wav";
-
-    console.log(`[transcribe-audio] Audio size: ${audioBlob.byteLength} bytes, mime: ${mimeType}`);
-
-    // Use Gemini multimodal to transcribe audio
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: "Você é um transcritor de áudio. Transcreva o áudio exatamente como foi dito, em português brasileiro. Retorne APENAS a transcrição, sem comentários adicionais. Se o áudio estiver inaudível ou vazio, retorne '[Áudio inaudível]'.",
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Transcreva este áudio:",
-              },
-              {
-                type: "input_audio",
-                input_audio: {
-                  data: base64Audio,
-                  format:
-                    mimeType === "audio/mpeg" ? "mp3"
-                    : mimeType === "audio/wav" ? "wav"
-                    : mimeType === "audio/aac" ? "aac"
-                    : "ogg",
-                },
-              },
-            ],
-          },
-        ],
-        stream: false,
-      }),
+      headers: { Authorization: `Bearer ${lovableKey}` },
+      body: form,
     });
-
     if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI transcription error:", aiResponse.status, errorText);
-
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "Transcription failed" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const raw = await aiResponse.text();
+      let safeMessage = raw;
+      try {
+        const error = JSON.parse(raw) as { message?: string; error?: string | { message?: string } };
+        safeMessage = error.message || (typeof error.error === "string" ? error.error : error.error?.message) || raw;
+      } catch { /* Preserve the gateway's safe response text. */ }
+      return json({ error: safeMessage || "Falha ao transcrever o áudio" }, aiResponse.status);
     }
 
-    const aiResult = await aiResponse.json();
-    const transcription = aiResult.choices?.[0]?.message?.content?.trim() || "[Áudio inaudível]";
+    const result = await aiResponse.json() as { text?: string; usage?: { seconds?: number } };
+    const transcription = result.text?.trim();
+    if (!transcription) return json({ error: "O áudio não contém fala reconhecível" }, 400);
 
-    console.log(`[transcribe-audio] Transcription: "${transcription.substring(0, 100)}..."`);
-
-    // Log token usage
-    const usage = aiResult.usage;
-    if (usage) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-
-      await supabase.from("ai_usage_logs").insert({
+    if (conversationId) {
+      const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      await service.from("ai_usage_logs").insert({
         function_name: "transcribe-audio",
-        model: "google/gemini-2.5-flash",
-        input_tokens: usage.prompt_tokens || 0,
-        output_tokens: usage.completion_tokens || 0,
-        total_tokens: usage.total_tokens || 0,
-        conversation_id: conversationId || null,
+        model: MODEL,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        conversation_id: conversationId,
       });
     }
-
-    return new Response(
-      JSON.stringify({ success: true, transcription }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ success: true, transcription });
   } catch (error) {
-    console.error("Transcribe audio error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("[transcribe-audio]", error);
+    return json({ error: error instanceof Error ? error.message : "Falha interna ao transcrever o áudio" }, 500);
   }
 });
