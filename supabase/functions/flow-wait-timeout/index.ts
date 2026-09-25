@@ -56,71 +56,13 @@ Deno.serve(async (req) => {
     const service = createClient(url, key);
     const results = [];
 
-    // Safety net for provider webhooks that were interrupted after persisting the
-    // customer's message but before resuming the waiting execution.
-    const { data: waiting, error: waitingError } = await service
-      .from("flow_executions")
-      .select("id, conversation_id, waiting_since")
-      .eq("status", "waiting_for_response")
-      .not("response_resume_node_id", "is", null)
-      .order("waiting_since", { ascending: false })
-      .limit(50);
-    if (waitingError) throw waitingError;
-
-    if (waiting?.length) {
-      const conversationIds = [...new Set(waiting.map((item: any) => item.conversation_id))];
-      const oldestWait = waiting.reduce(
-        (oldest: string, item: any) => item.waiting_since < oldest ? item.waiting_since : oldest,
-        waiting[0].waiting_since,
-      );
-      const { data: replies, error: repliesError } = await service
-        .from("messages")
-        .select("conversation_id, created_at")
-        .in("conversation_id", conversationIds)
-        .eq("sender_type", "customer")
-        .gt("created_at", oldestWait)
-        .order("created_at", { ascending: true });
-      if (repliesError) throw repliesError;
-
-      const latestReplyByConversation = new Map<string, string>();
-      for (const reply of replies || []) {
-        latestReplyByConversation.set(reply.conversation_id, reply.created_at);
-      }
-
-      for (const item of waiting) {
-        if (results.length >= 50) break;
-        const replyAt = latestReplyByConversation.get(item.conversation_id);
-        if (!replyAt || replyAt <= item.waiting_since) continue;
-
-        const { data: claimed, error: claimError } = await service.rpc("claim_waiting_flow", {
-          p_conversation_id: item.conversation_id,
-          p_reason: "response",
-          p_execution_id: item.id,
-        });
-        if (claimError) {
-          results.push({ executionId: item.id, reason: "response", status: "claim_failed", error: claimError.message });
-          continue;
-        }
-        const row = claimed?.[0];
-        if (!row?.resume_node_id) {
-          results.push({ executionId: item.id, reason: "response", status: "already_claimed" });
-          continue;
-        }
-        const response = await resumeClaimedExecution(service, url, key, row, "response");
-        results.push({ executionId: item.id, reason: "response", status: response.ok ? "resumed" : "resume_failed", httpStatus: response.status });
-      }
-    }
-
-    const remaining = 50 - results.length;
-    if (remaining <= 0) return json({ success: true, processed: results.length, results });
-
     const { data: expired, error: expiredError } = await service
       .from("flow_executions")
       .select("id, conversation_id")
       .eq("status", "waiting_for_response")
       .lte("wait_timeout_at", new Date().toISOString())
       .order("wait_timeout_at", { ascending: true })
-      .limit(remaining);
+      .limit(50);
     if (expiredError) throw expiredError;
 
     for (const item of expired || []) {
