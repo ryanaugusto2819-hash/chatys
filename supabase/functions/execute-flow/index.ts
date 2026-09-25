@@ -134,12 +134,15 @@ async function classifySmartCondition(params: {
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
   });
   const prompt = [
-    "Classifique a ÚLTIMA resposta do lead usando o contexto recente apenas para interpretar intenção e referências.",
+    "Classifique a intenção principal da ÚLTIMA resposta do lead, usando a conversa recente para interpretar referências, idioma e o que foi perguntado.",
     `Escolha exatamente uma destas saídas: ${params.options.map((option) => option.branch).join(", ")} ou none.`,
-    "Use none quando houver ambiguidade, informação insuficiente ou nenhuma correspondência clara. Nunca escolha mais de uma saída.",
+    "Priorize a ação que o lead deseja realizar. Não trate como escolha palavras que ele apenas citou, negou, comparou ou repetiu da pergunta anterior.",
+    "Marcadores como 'primeiro', 'antes', 'probar', 'testar' e equivalentes indicam preferência pela alternativa inicial ou de teste quando ela existir entre as opções.",
+    "Exemplo de interpretação: se uma opção é provar uma amostra e outra é comprar o tratamento completo, 'me gustaría probar primero si es verdad el tratamiento completo' escolhe a amostra, pois a intenção é provar primeiro; 'quiero el tratamiento completo' escolhe o tratamento completo.",
+    "Use none somente quando, mesmo considerando intenção, contexto e marcadores temporais, não houver preferência identificável. Nunca escolha mais de uma saída.",
     ...params.options.map((option) => `${option.branch.toUpperCase()} significa: ${option.description}`),
     `CONVERSA RECENTE:\n${params.transcript}`,
-    "Retorne motivo curto e confiança entre 0 e 1.",
+    "Retorne motivo curto, citando o trecho da última resposta que determinou a escolha, e confiança entre 0 e 1.",
   ].join("\n\n");
 
   for (let attempt = 0; attempt < 3; attempt++) {
