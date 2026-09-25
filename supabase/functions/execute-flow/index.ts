@@ -68,7 +68,7 @@ async function generateSmartReply(params: {
   lovableKey: string;
   transcript: string;
   latestCustomerMessage: string;
-  sources: Array<{ id: string; type: string; title: string; content: string; country_code: string }>;
+  sources: Array<{ id: string; type: string; title: string; content: string; country_code: string; image_descriptions?: string[] }>;
 }): Promise<{ decision: SmartReplyDecision; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
   const provider = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
@@ -76,7 +76,7 @@ async function generateSmartReply(params: {
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
   });
   const sourceCatalog = params.sources.map((source) =>
-    `[FONTE ${source.id}] [${source.country_code}] ${source.title}\n${source.content}`
+    `[FONTE ${source.id}] [${source.country_code}] ${source.title}\n${source.content}${source.image_descriptions?.length ? `\nIMAGENS DISPONÍVEIS PARA ENVIO:\n${source.image_descriptions.map((description, index) => `${index + 1}. ${description || "Imagem complementar desta fonte"}`).join("\n")}` : ""}`
   ).join("\n\n").slice(0, 60000);
   const prompt = [
     "Responda à dúvida do cliente usando SOMENTE fatos presentes nas FONTES OFICIAIS.",
@@ -695,6 +695,7 @@ Deno.serve(async (req) => {
       const config = node.config as Record<string, unknown>;
       let smartReplyLogId: string | null = null;
       let smartReplyContent = "";
+      let smartReplyImages: Array<{ id: string; image_url: string; description: string }> = [];
 
       if (node.node_type === "trigger") {
         if (executionId) {
@@ -1137,9 +1138,24 @@ Deno.serve(async (req) => {
           );
           sourceError = contactTagError || linkError || automaticResult.error;
         }
-        const sources = [...(rawSources || [])].sort((a, b) =>
+        const sortedSources = [...(rawSources || [])].sort((a, b) =>
           Number(b.country_code === countryCode) - Number(a.country_code === countryCode)
         );
+        const sourceIds = sortedSources.map((source) => source.id);
+        const { data: sourceImageRows, error: sourceImagesError } = sourceIds.length > 0
+          ? await supabase.from("knowledge_base_item_images")
+            .select("id, knowledge_base_item_id, image_url, description, sort_order")
+            .eq("workspace_id", conversation.workspace_id)
+            .in("knowledge_base_item_id", sourceIds)
+            .order("sort_order")
+          : { data: [], error: null };
+        if (sourceImagesError) sourceError = sourceImagesError;
+        const sources = sortedSources.map((source) => ({
+          ...source,
+          image_descriptions: (sourceImageRows || [])
+            .filter((image) => image.knowledge_base_item_id === source.id)
+            .map((image) => image.description),
+        }));
         const consultedSourceIds = sources.map((source) => source.id);
 
         const { data: logRow, error: logError } = await supabase.from("ai_smart_reply_logs").insert({
@@ -1190,6 +1206,10 @@ Deno.serve(async (req) => {
           const usedSourceIds = generated.decision.source_ids.filter((id) => validSourceIds.has(id));
           const confidence = Math.max(0, Math.min(1, Number(generated.decision.confidence) || 0));
           smartReplyContent = generated.decision.answer.trim();
+          smartReplyImages = (sourceImageRows || [])
+            .filter((image) => usedSourceIds.includes(image.knowledge_base_item_id))
+            .slice(0, 5)
+            .map((image) => ({ id: image.id, image_url: image.image_url, description: image.description || "" }));
           await supabase.from("ai_usage_logs").insert({
             function_name: "execute-flow-smart-reply", model: "openai/gpt-6-astra",
             input_tokens: generated.usage.inputTokens, output_tokens: generated.usage.outputTokens,
