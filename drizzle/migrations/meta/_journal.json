@@ -218,6 +218,13 @@
       "when": 1790292359614,
       "tag": "0030_retain_flow_step_history_after_node_removal",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790295310857,
+      "tag": "0031_add_knowledge_base_images",
+      "breakpoints": true
     }
   ]
 }
