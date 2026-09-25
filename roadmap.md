@@ -333,4 +333,5 @@
 - [x] Recuperar periodicamente respostas persistidas cujo webhook foi interrompido
 - [x] Preservar a espera quando a continuação do fluxo falhar
 - [x] Retomar execuções já presas e validar a chegada à Condição Inteligente
+- [x] Transcrever áudios recebidos antes de retomar e entregar o texto à Condição Inteligente em todos os canais
 
