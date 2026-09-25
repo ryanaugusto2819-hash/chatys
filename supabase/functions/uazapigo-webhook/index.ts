@@ -212,8 +212,8 @@ async function persistIncomingMedia(
   return supabase.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
 }
 
-async function triggerAutomations(supabase: any, conversationId: string) {
-  if (await resumeWaitingFlow(supabase, conversationId)) return;
+async function triggerAutomations(supabase: any, conversationId: string, messageId?: string) {
+  if (await resumeWaitingFlow(supabase, conversationId, messageId)) return;
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   await Promise.allSettled(["ai-flow-selector", "ai-auto-reply"].map((fn) => fetch(`${url}/functions/v1/${fn}`, {
@@ -327,9 +327,6 @@ Deno.serve(async (req) => {
           } else if (message.mediaUrl) {
             await supabase.from("messages").update({ media_url: message.mediaUrl }).eq("id", duplicate.id);
           }
-          if (!message.fromMe) {
-            await triggerAutomations(supabase, conversation.id);
-          }
           continue; 
         }
       }
@@ -355,7 +352,7 @@ Deno.serve(async (req) => {
         if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((analysisError) =>
           console.error("[uazapigo-webhook] trained message analysis error:", analysisError)
         );
-        await triggerAutomations(supabase, conversation.id);
+        await triggerAutomations(supabase, conversation.id, insertedMessage?.id);
       }
     }
     return json({ success: true });

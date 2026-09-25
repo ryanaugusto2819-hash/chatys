@@ -641,7 +641,7 @@ async function processMessageEvent(supabase: any, payload: any) {
   if (fromMe) return;
 
   // Resume a waiting flow before starting any new automation.
-  const resumed = await resumeWaitingFlow(supabase, conversationId).catch((error) => {
+  const resumed = await resumeWaitingFlow(supabase, conversationId, insertedMsg?.id).catch((error) => {
     console.error("[evolution-webhook] waiting flow resume error:", error);
     return false;
   });

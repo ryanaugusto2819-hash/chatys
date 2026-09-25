@@ -278,7 +278,7 @@ async function processZapiWebhook(body: any) {
     if (insertedMessage?.id) triggerTrainedMessageAnalysis(insertedMessage.id).catch((err) =>
       console.error("Trained message analysis error:", err)
     );
-    resumeWaitingFlow(supabase, conversationId).then((resumed) => {
+    resumeWaitingFlow(supabase, conversationId, insertedMessage?.id).then((resumed) => {
       if (resumed) return;
       triggerAiFlowSelector(conversationId).catch((err) => console.error("Flow selector trigger error:", err));
       triggerAutoReply(conversationId).catch((err) => console.error("Auto-reply trigger error:", err));

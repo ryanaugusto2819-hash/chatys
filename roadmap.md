@@ -334,4 +334,7 @@
 - [x] Preservar a espera quando a continuação do fluxo falhar
 - [x] Retomar execuções já presas e validar a chegada à Condição Inteligente
 - [x] Transcrever áudios recebidos antes de retomar e entregar o texto à Condição Inteligente em todos os canais
+- [x] Agrupar mensagens consecutivas por 5 segundos antes de retomar o fluxo
+- [x] Entregar texto e áudio agrupados como uma única resposta à Condição e à Resposta Inteligente
+- [x] Impedir retomadas duplicadas e automações paralelas durante o agrupamento
 

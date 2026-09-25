@@ -417,7 +417,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { flowId, conversationId, senderLabel: requestedLabel, metadata, executionId: requestedExecutionId, resumeFromNodeId, resumeReason } = await req.json();
+    const { flowId, conversationId, senderLabel: requestedLabel, metadata, executionId: requestedExecutionId, resumeFromNodeId, resumeReason, responseMessageIds: requestedResponseMessageIds, responseWindowStartedAt, responseWindowEndedAt } = await req.json();
+    const responseMessageIds = Array.isArray(requestedResponseMessageIds)
+      ? requestedResponseMessageIds.filter((item: unknown): item is string => typeof item === "string").slice(0, 30)
+      : [];
     const incomingFlowChain = Array.isArray(metadata?.__flowChain)
       ? metadata.__flowChain.filter((item: unknown): item is string => typeof item === "string")
       : [];
@@ -635,7 +638,11 @@ Deno.serve(async (req) => {
           node_label: waitingNode?.label || "Aguardando Resposta",
           sort_order: waitingNode?.sort_order || 0,
           status: "completed",
-          error_message: resumeReason === "timeout" ? "Prazo esgotado" : "Resposta do cliente recebida",
+           error_message: resumeReason === "timeout"
+             ? "Prazo esgotado"
+             : responseMessageIds.length > 1
+               ? `${responseMessageIds.length} mensagens do cliente agrupadas (${responseWindowStartedAt || "?"} — ${responseWindowEndedAt || "?"})`
+               : "Resposta do cliente recebida",
         });
       }
     } else {
@@ -734,14 +741,19 @@ Deno.serve(async (req) => {
           const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
           const { data: recentMessages, error: messagesError } = await supabase
             .from("messages")
-            .select("sender_type, sender_label, content, message_type, created_at")
+            .select("id, sender_type, sender_label, content, message_type, created_at")
             .eq("conversation_id", conversationId)
             .order("created_at", { ascending: false })
             .limit(messageLimit);
           if (messagesError) throw messagesError;
-          const transcript = [...(recentMessages || [])].reverse().map((message) =>
-            `${message.sender_type === "customer" ? "LEAD" : message.sender_label || "ATENDENTE"}: ${message.content || `[${message.message_type}]`}`
-          ).join("\n").slice(-24000);
+          const orderedMessages = [...(recentMessages || [])].reverse();
+          const groupedResponse = responseMessageIds.length
+            ? orderedMessages.filter((message) => responseMessageIds.includes(message.id)).map((message) => message.content || `[${message.message_type}]`).join("\n")
+            : "";
+          const transcript = [
+            ...orderedMessages.map((message) => `${message.sender_type === "customer" ? "LEAD" : message.sender_label || "ATENDENTE"}: ${message.content || `[${message.message_type}]`}`),
+            ...(groupedResponse ? [`RESPOSTA AGRUPADA DO LEAD (interprete como uma única resposta):\n${groupedResponse}`] : []),
+          ].join("\n").slice(-24000);
           decision = await classifySmartCondition({ lovableKey, options, transcript });
           decision.confidence = Math.max(0, Math.min(1, Number(decision.confidence) || 0));
           if (decision.confidence < 0.75 || (decision.branch !== "none" && !options.some((option) => option.branch === decision.branch))) {
@@ -1068,10 +1080,15 @@ Deno.serve(async (req) => {
         const countryCode = detectCountryCode(conversation.contact_phone);
         const messageLimit = Math.max(2, Math.min(30, Number(config.context_message_limit) || 20));
         const { data: recentMessages, error: recentError } = await supabase.from("messages")
-          .select("sender_type, sender_label, content, message_type, created_at")
+          .select("id, sender_type, sender_label, content, message_type, created_at")
           .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(messageLimit);
         const orderedMessages = [...(recentMessages || [])].reverse();
-        const latestCustomerMessage = [...orderedMessages].reverse().find((message) => message.sender_type === "customer")?.content || "";
+        const groupedCustomerMessages = responseMessageIds.length
+          ? orderedMessages.filter((message) => responseMessageIds.includes(message.id) && message.sender_type === "customer")
+          : [];
+        const latestCustomerMessage = groupedCustomerMessages.length
+          ? groupedCustomerMessages.map((message) => message.content || `[${message.message_type}]`).join("\n")
+          : [...orderedMessages].reverse().find((message) => message.sender_type === "customer")?.content || "";
         const transcript = orderedMessages.map((message) =>
           `${message.sender_type === "customer" ? "CLIENTE" : message.sender_label || "ATENDIMENTO"}: ${message.content || `[${message.message_type}]`}`
         ).join("\n").slice(-24000);
