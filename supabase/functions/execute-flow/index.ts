@@ -85,10 +85,12 @@ async function generateSmartReply(params: {
   latestCustomerMessage: string;
   sources: Array<{ id: string; type: string; title: string; content: string; country_code: string; image_descriptions?: string[] }>;
 }): Promise<{ decision: SmartReplyDecision; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
+  const runIdFetch = createLovableAiGatewayRunIdFetch();
   const provider = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
     apiKey: params.lovableKey,
     headers: { "Lovable-API-Key": params.lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    fetch: runIdFetch.fetch,
   });
   const sourceCatalog = params.sources.map((source) =>
     `[FONTE ${source.id}] [${source.country_code}] ${source.title}\n${source.content}${source.image_descriptions?.length ? `\nIMAGENS DISPONÍVEIS PARA ENVIO:\n${source.image_descriptions.map((description, index) => `${index + 1}. ${description || "Imagem complementar desta fonte"}`).join("\n")}` : ""}`
@@ -130,7 +132,17 @@ async function generateSmartReply(params: {
         },
       };
     } catch (error) {
+      const recovered = recoverStructuredOutput(error, SmartReplySchema);
+      if (recovered) {
+        return { decision: recovered, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+      }
       const status = Number((error as { statusCode?: number })?.statusCode || 0);
+      console.error("[execute-flow] smart reply AI failure", {
+        status: status || null,
+        runId: runIdFetch.getRunId() || null,
+        message: safeAiError(error),
+        attempt: attempt + 1,
+      });
       if (attempt >= 2 || (status !== 429 && status < 500)) throw error;
       await sleep(750 * 2 ** attempt);
     }
