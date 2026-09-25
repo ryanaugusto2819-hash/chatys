@@ -624,10 +624,16 @@ async function processMessageEvent(supabase: any, payload: any) {
     const decryptTask = decryptAndRehostEvolutionMedia({
       supabase, serverUrl, apiKey, instanceName, key, msg, messageId: insertedMsg.id, messageType: normalizedType,
     }).catch((e) => console.error("[evolution-webhook] media decrypt error:", e));
-    // @ts-ignore
-    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+    if (!fromMe && normalizedType === "audio") {
+      await decryptTask;
+    } else {
       // @ts-ignore
-      EdgeRuntime.waitUntil(decryptTask);
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(decryptTask);
+      } else {
+        await decryptTask;
+      }
     }
   }
 

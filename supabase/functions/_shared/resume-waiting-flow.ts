@@ -1,3 +1,84 @@
+const TRANSCRIPTION_MODEL = "google/gemini-3.5-transcribe";
+const MAX_AUDIO_BYTES = 14 * 1024 * 1024;
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function resolveAudioUrl(supabase: any, mediaUrl: string): Promise<string> {
+  try {
+    const parsed = new URL(mediaUrl);
+    const marker = "/chat-media/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return mediaUrl;
+    const path = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    const { data, error } = await supabase.storage.from("chat-media").createSignedUrl(path, 600);
+    if (error || !data?.signedUrl) throw new Error(error?.message || "Não foi possível liberar o áudio para transcrição");
+    return data.signedUrl;
+  } catch (error) {
+    if (error instanceof TypeError) return mediaUrl;
+    throw error;
+  }
+}
+
+async function transcribeLatestAudio(supabase: any, conversationId: string) {
+  const { data: message, error: messageError } = await supabase
+    .from("messages")
+    .select("id, content, media_url, message_type")
+    .eq("conversation_id", conversationId)
+    .eq("sender_type", "customer")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (messageError) throw messageError;
+  if (!message || message.message_type !== "audio") return;
+  if (typeof message.content === "string" && message.content.trim() && message.content !== "[Áudio]") return;
+  if (!message.media_url) throw new Error("O áudio recebido não possui arquivo disponível para transcrição");
+
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableKey) throw new Error("A transcrição de áudio não está configurada");
+  const audioResponse = await fetch(await resolveAudioUrl(supabase, message.media_url));
+  if (!audioResponse.ok) throw new Error(`Não foi possível baixar o áudio (${audioResponse.status})`);
+  const audio = await audioResponse.blob();
+  if (!audio.size) throw new Error("O áudio recebido está vazio");
+  if (audio.size > MAX_AUDIO_BYTES) throw new Error("O áudio ultrapassa o limite de 14 MB para transcrição");
+  const mimeType = audio.type.startsWith("audio/") ? audio.type.split(";")[0] : "audio/ogg";
+  const extension = mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : mimeType.includes("webm") ? "webm" : mimeType.includes("mp4") ? "m4a" : "ogg";
+
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const form = new FormData();
+    form.append("model", TRANSCRIPTION_MODEL);
+    form.append("file", new File([audio], `audio.${extension}`, { type: mimeType }));
+    form.append("response_format", "json");
+    response = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${lovableKey}` },
+      body: form,
+    });
+    if (response.ok || (response.status !== 429 && response.status < 500)) break;
+    if (attempt < 2) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await wait(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : (attempt + 1) * 700 + Math.floor(Math.random() * 250));
+    }
+  }
+  if (!response?.ok) {
+    const raw = response ? await response.text() : "";
+    let safeMessage = raw;
+    try {
+      const parsed = JSON.parse(raw) as { message?: string; error?: string | { message?: string } };
+      safeMessage = parsed.message || (typeof parsed.error === "string" ? parsed.error : parsed.error?.message) || raw;
+    } catch { /* Preserve the gateway's safe response text. */ }
+    throw new Error(safeMessage || `A transcrição falhou (${response?.status || 500})`);
+  }
+  const result = await response.json() as { text?: string };
+  const transcript = result.text?.trim();
+  if (!transcript) throw new Error("O áudio não contém fala reconhecível");
+  const { error: updateError } = await supabase.from("messages").update({ content: `[Áudio transcrito]: ${transcript}` }).eq("id", message.id);
+  if (updateError) throw updateError;
+  console.info("[resume-waiting-flow] audio transcribed", { conversationId, messageId: message.id });
+}
+
 export async function resumeWaitingFlow(supabase: any, conversationId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("claim_waiting_flow", {
     p_conversation_id: conversationId,
@@ -16,6 +97,23 @@ export async function resumeWaitingFlow(supabase: any, conversationId: string): 
   if (!claimed?.execution_id || !claimed?.resume_node_id) {
     console.info("[resume-waiting-flow] no waiting execution", { conversationId });
     return false;
+  }
+
+  try {
+    await transcribeLatestAudio(supabase, conversationId);
+  } catch (transcriptionError) {
+    const { error: restoreError } = await supabase
+      .from("flow_executions")
+      .update({ status: "waiting_for_response", resumed_at: null, resume_reason: null })
+      .eq("id", claimed.execution_id)
+      .eq("status", "running");
+    console.error("[resume-waiting-flow] audio transcription blocked resume", {
+      conversationId,
+      executionId: claimed.execution_id,
+      message: transcriptionError instanceof Error ? transcriptionError.message : String(transcriptionError),
+      restoreError: restoreError?.message || null,
+    });
+    return true;
   }
 
   const url = Deno.env.get("SUPABASE_URL")!;
