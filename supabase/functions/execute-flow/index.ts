@@ -46,7 +46,7 @@ function safeAiError(error: unknown): string {
 }
 
 async function resolvePrivateMediaUrl(
-  service: ReturnType<typeof createClient>,
+  service: any,
   mediaUrl: string,
 ): Promise<string> {
   try {
