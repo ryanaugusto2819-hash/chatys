@@ -680,6 +680,96 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
     return 'Texto';
   };
 
+  const imageEditor = (existing: KBImage[], pending: PendingImage[], editing = false) => (
+    <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Imagens para enviar ao lead</p>
+          <p className="mt-1 text-xs text-muted-foreground">Até 5 imagens JPG, PNG ou WEBP. Escreva quando cada imagem deve ser usada.</p>
+        </div>
+        <label className="shrink-0">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="hidden"
+            disabled={existing.length + pending.length >= 5}
+            onChange={(event) => {
+              addPendingImages(event.target.files, editing);
+              event.target.value = '';
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" asChild disabled={existing.length + pending.length >= 5}>
+            <span className="cursor-pointer"><ImagePlus className="h-4 w-4" /> Anexar imagens</span>
+          </Button>
+        </label>
+      </div>
+      {(existing.length > 0 || pending.length > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {existing.map((image) => (
+            <div key={image.id} className="overflow-hidden rounded-md border border-border bg-card">
+              <div className="relative aspect-video bg-muted">
+                <img src={image.image_url} alt={image.description || 'Imagem da base'} className="h-full w-full object-contain" />
+                {editing && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute right-2 top-2 h-7 w-7"
+                    onClick={() => {
+                      setEditExistingImages((current) => current.filter((entry) => entry.id !== image.id));
+                      setRemovedImageIds((current) => [...current, image.id]);
+                    }}
+                    aria-label="Remover imagem"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+              {editing ? (
+                <textarea
+                  value={image.description}
+                  onChange={(event) => setEditExistingImages((current) => current.map((entry) => entry.id === image.id ? { ...entry, description: event.target.value } : entry))}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Descrição desta imagem"
+                  className="w-full resize-none border-0 border-t border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              ) : image.description ? (
+                <p className="p-2 text-xs text-muted-foreground">{image.description}</p>
+              ) : null}
+            </div>
+          ))}
+          {pending.map((image) => (
+            <div key={image.id} className="overflow-hidden rounded-md border border-border bg-card">
+              <div className="relative aspect-video bg-muted">
+                <img src={image.previewUrl} alt="Nova imagem" className="h-full w-full object-contain" />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute right-2 top-2 h-7 w-7"
+                  onClick={() => removePendingImage(image.id, editing)}
+                  aria-label="Remover imagem"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <textarea
+                value={image.description}
+                onChange={(event) => updatePendingDescription(image.id, event.target.value, editing)}
+                maxLength={500}
+                rows={2}
+                placeholder="Descrição desta imagem"
+                className="w-full resize-none border-0 border-t border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -776,6 +866,7 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
             placeholder="Cole aqui informações sobre produtos, serviços, FAQs, políticas, etc."
             className="w-full resize-none rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {imageEditor([], pendingImages)}
           <button
             onClick={addTextItem}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -801,6 +892,7 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
             placeholder="Resposta (ex: Funcionamos de segunda a sexta, das 9h às 18h)"
             className="w-full resize-none rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {imageEditor([], pendingImages)}
           <button
             onClick={addQAItem}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -989,6 +1081,12 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
                 {item.type === 'qa' ? `R: ${item.content}` : item.content.substring(0, 150)}
                 {item.content.length > 150 && '...'}
               </p>
+              {item.images.length > 0 && (
+                <div className="mt-2 ml-5.5 flex items-center gap-1.5 text-xs text-primary">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {item.images.length} {item.images.length === 1 ? 'imagem anexada' : 'imagens anexadas'}
+                </div>
+              )}
               <div className="mt-3 ml-5.5">
                 <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   {item.tag_ids.length > 0 ? 'Usar para clientes com' : 'Conteúdo geral — selecione etiquetas para restringir'}
@@ -1084,6 +1182,8 @@ export default function KnowledgeBase({ nicheId, textOnly = false }: Props) {
                 </div>
               )}
             </div>
+
+            {imageEditor(editExistingImages, editNewImages, true)}
           </div>
 
           <DialogFooter>
