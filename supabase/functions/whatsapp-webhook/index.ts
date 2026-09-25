@@ -503,7 +503,7 @@ async function processWebhook(body: any) {
               console.error("Meta ad lookup error:", err)
             );
           }
-          resumeWaitingFlow(supabase, conversationId).then((resumed) => {
+          resumeWaitingFlow(supabase, conversationId, insertedMessage?.id).then((resumed) => {
             if (resumed) return;
             triggerAiFlowSelector(conversationId).catch((err) => console.error("Flow selector trigger error:", err));
             triggerAutoReply(conversationId).catch((err) => console.error("Auto-reply trigger error:", err));
