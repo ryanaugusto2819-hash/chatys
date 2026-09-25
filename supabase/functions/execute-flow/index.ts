@@ -2060,6 +2060,110 @@ Deno.serve(async (req) => {
         console.error("[execute-flow] Message insert error:", messageInsertError);
       }
 
+      if (node.node_type === "smart_reply" && smartReplyImages.length > 0) {
+        const sentImageIds: string[] = [];
+        let imageSendError: string | null = null;
+        for (const image of smartReplyImages) {
+          try {
+            let imageResponse: Response;
+            let imageResult: Record<string, unknown> = {};
+            let imageSavedExternally = false;
+            if (useExtension) {
+              const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extension-send`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                body: JSON.stringify({ conversationId, message: image.description, mediaUrl: image.image_url, type: "image", senderLabel: "ia-resposta-inteligente" }),
+              });
+              imageResult = await response.json().catch(() => ({}));
+              imageResponse = response;
+              imageSavedExternally = response.ok && Boolean((imageResult as any)?.savedMessage?.id);
+            } else if (useUazapi) {
+              const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-send`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                body: JSON.stringify({ conversationId, message: image.description, mediaUrl: image.image_url, type: "image", senderLabel: "ia-resposta-inteligente" }),
+              });
+              imageResult = await response.json().catch(() => ({}));
+              imageResponse = response;
+              imageSavedExternally = response.ok && Boolean((imageResult as any)?.savedMessage?.id);
+            } else if (useZapi) {
+              const sent = await callProviderWithRetry("Z-API knowledge image", () => fetch(`https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-link-image`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Client-Token": zapiClientToken },
+                body: JSON.stringify({ phone, imageUrl: image.image_url, caption: image.description }),
+              }));
+              imageResponse = sent.response;
+              imageResult = sent.result;
+            } else if (useEvolution) {
+              const sent = await callProviderWithRetry("Evolution knowledge image", () => fetch(`${evoServerUrl}/message/sendMedia/${encodeURIComponent(evoInstanceName)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evoApiKey },
+                body: JSON.stringify({ number: phone, mediatype: "image", media: image.image_url, caption: image.description }),
+              }));
+              imageResponse = sent.response;
+              imageResult = sent.result;
+            } else {
+              imageResponse = await sendWhatsAppCloudMessage({
+                accessToken: accessToken || "",
+                phoneNumberId: phoneNumberId || "",
+                conversationPhone: phone,
+                nodeType: "image",
+                config: { media_url: image.image_url, caption: image.description },
+                waPayload: { messaging_product: "whatsapp", to: phone, type: "image", image: { link: image.image_url, caption: image.description || undefined } },
+              });
+              imageResult = await imageResponse.json().catch(() => ({}));
+            }
+
+            const validation = validateSendResponse(imageResponse, imageResult, useZapi || useEvolution || useUazapi, node.id);
+            if (!validation.success) throw new Error(validation.errorDetail || `Falha ao enviar imagem (HTTP ${imageResponse.status})`);
+            if (!imageSavedExternally) {
+              const imageProviderId = useZapi
+                ? ((imageResult as any)?.messageId || null)
+                : useEvolution
+                  ? ((imageResult as any)?.key?.id || (imageResult as any)?.messageId || null)
+                  : ((imageResult as any)?.messages?.[0]?.id || null);
+              const { error: imageMessageError } = await supabase.from("messages").insert({
+                conversation_id: conversationId,
+                content: image.description,
+                sender_type: "agent",
+                message_type: "image",
+                media_url: image.image_url,
+                status: imageProviderId ? "pending" : "sent",
+                provider_message_id: imageProviderId,
+                provider_status: imageProviderId ? "accepted" : null,
+                sender_label: "ia-resposta-inteligente",
+              });
+              if (imageMessageError) throw new Error(`Imagem enviada, mas o histórico falhou: ${imageMessageError.message}`);
+            }
+            sentImageIds.push(image.id);
+          } catch (error) {
+            imageSendError = error instanceof Error ? error.message : "Falha ao enviar imagem da Base de Conhecimento";
+            break;
+          }
+        }
+
+        if (smartReplyLogId) await supabase.from("ai_smart_reply_logs").update({
+          sent_image_ids: sentImageIds,
+          ...(imageSendError ? { outcome: "error", safe_error: imageSendError, completed_at: new Date().toISOString() } : {}),
+        }).eq("id", smartReplyLogId);
+
+        if (imageSendError) {
+          await supabase.from("flow_step_logs").insert({
+            execution_id: executionId,
+            node_id: node.id,
+            node_type: node.node_type,
+            node_label: node.label || "Resposta Inteligente",
+            sort_order: node.sort_order,
+            status: "failed",
+            error_message: `Texto enviado, mas uma imagem falhou: ${imageSendError}`,
+          });
+          results.push({ nodeId: node.id, status: "image_send_error" });
+          completedCount++;
+          currentNode = nextNode(node.id, "error");
+          continue;
+        }
+      }
+
       if (executionId) {
         await supabase.from("flow_step_logs").insert({
           execution_id: executionId,

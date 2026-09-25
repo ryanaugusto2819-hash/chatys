@@ -282,6 +282,10 @@
 - [x] Usar automaticamente conteúdos gerais ou compatíveis com as etiquetas do cliente
 - [x] Permitir cadastrar textos e instruções oficiais
 - [x] Validar seleção de nicho, país e formulário na tela autenticada
+- [x] Permitir anexar até cinco imagens com descrição em cada conteúdo
+- [x] Editar e remover imagens já cadastradas sem duplicar o conteúdo
+- [x] Enviar as imagens das fontes usadas pela Resposta Inteligente em todos os canais
+- [x] Registrar quais imagens foram enviadas e mostrar falhas reais no histórico
 
 # Enviar outro fluxo pelo bloco Ação
 
