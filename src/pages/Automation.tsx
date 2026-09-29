@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
 
 interface FlowRow {
   id: string;
@@ -37,6 +38,7 @@ export default function Automation() {
   const [filter, setFilter] = useState<string>('all');
   const [editingCategoryFor, setEditingCategoryFor] = useState<string | null>(null);
   const [categoryInput, setCategoryInput] = useState('');
+  const [copyingFlowId, setCopyingFlowId] = useState<string | null>(null);
   const { currentWorkspace } = useWorkspace();
 
   const fetchFlows = async () => {
@@ -167,13 +169,54 @@ export default function Automation() {
 
   const duplicateFlow = async (flowId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (copyingFlowId) return;
+    if (!currentWorkspace?.id) {
+      toast.error('Selecione um espaço de trabalho para copiar o fluxo');
+      return;
+    }
+    setCopyingFlowId(flowId);
+    let newFlowId: string | null = null;
     try {
       const { data: original, error: flowErr } = await supabase
         .from('automation_flows')
         .select('*')
         .eq('id', flowId)
+        .eq('workspace_id', currentWorkspace.id)
         .single();
-      if (flowErr || !original) throw flowErr;
+      if (flowErr || !original) throw flowErr ?? new Error('Fluxo original não encontrado.');
+
+      const [nodesResult, edgesResult] = await Promise.all([
+        supabase.from('automation_nodes').select('*').eq('flow_id', flowId).order('sort_order'),
+        supabase.from('automation_edges').select('*').eq('flow_id', flowId),
+      ]);
+      if (nodesResult.error) throw nodesResult.error;
+      if (edgesResult.error) throw edgesResult.error;
+
+      const nodeIdMap = new Map<string, string>();
+      const nodeInserts = (nodesResult.data ?? []).map((node) => {
+        const id = crypto.randomUUID();
+        nodeIdMap.set(node.id, id);
+        return {
+          id,
+          node_type: node.node_type,
+          label: node.label,
+          config: node.config,
+          position_x: node.position_x,
+          position_y: node.position_y,
+          sort_order: node.sort_order,
+        };
+      });
+      const edgeInserts = (edgesResult.data ?? []).map((edge) => {
+        const source = nodeIdMap.get(edge.source_node_id);
+        const target = nodeIdMap.get(edge.target_node_id);
+        if (!source || !target) throw new Error('O fluxo contém conexões sem blocos. Corrija o fluxo antes de copiá-lo.');
+        return {
+          id: crypto.randomUUID(),
+          source_node_id: source,
+          target_node_id: target,
+          source_handle: edge.source_handle,
+        };
+      });
 
       const { data: newFlow, error: insertErr } = await supabase
         .from('automation_flows')
@@ -183,60 +226,37 @@ export default function Automation() {
           is_active: false,
           manual_only: original.manual_only,
           niche_id: original.niche_id,
-          category: (original as any).category ?? null,
-        } as any)
+          category: original.category,
+          workspace_id: currentWorkspace.id,
+          trigger_count: original.trigger_count,
+        })
         .select('id')
         .single();
-      if (insertErr || !newFlow) throw insertErr;
+      if (insertErr || !newFlow) throw insertErr ?? new Error('Não foi possível criar a cópia.');
+      newFlowId = newFlow.id;
 
-      const { data: origNodes } = await supabase
-        .from('automation_nodes')
-        .select('*')
-        .eq('flow_id', flowId)
-        .order('sort_order');
+      const { error: saveError } = await supabase.rpc('save_automation_flow_atomic', {
+        p_flow_id: newFlow.id,
+        p_name: `${original.name} (cópia)`,
+        p_description: original.description ?? '',
+        p_manual_only: original.manual_only,
+        p_niche_id: original.niche_id,
+        p_nodes: nodeInserts,
+        p_edges: edgeInserts,
+      });
+      if (saveError) throw saveError;
 
-      const nodeIdMap: Record<string, string> = {};
-
-      if (origNodes && origNodes.length > 0) {
-        const nodeInserts = origNodes.map((n: any) => {
-          const newId = crypto.randomUUID();
-          nodeIdMap[n.id] = newId;
-          return {
-            id: newId,
-            flow_id: newFlow.id,
-            node_type: n.node_type,
-            label: n.label,
-            config: n.config,
-            position_x: n.position_x,
-            position_y: n.position_y,
-            sort_order: n.sort_order,
-          };
-        });
-        await supabase.from('automation_nodes').insert(nodeInserts);
-      }
-
-      const { data: origEdges } = await supabase
-        .from('automation_edges')
-        .select('*')
-        .eq('flow_id', flowId);
-
-      if (origEdges && origEdges.length > 0) {
-        const edgeInserts = origEdges
-          .filter((e: any) => nodeIdMap[e.source_node_id] && nodeIdMap[e.target_node_id])
-          .map((e: any) => ({
-            flow_id: newFlow.id,
-            source_node_id: nodeIdMap[e.source_node_id],
-            target_node_id: nodeIdMap[e.target_node_id],
-          }));
-        if (edgeInserts.length > 0) {
-          await supabase.from('automation_edges').insert(edgeInserts);
-        }
-      }
-
-      toast.success('Fluxo duplicado com sucesso');
+      toast.success('Fluxo copiado. A cópia está inativa até você ativá-la.');
+      await fetchFlows();
     } catch (err) {
-      console.error('Duplicate error:', err);
-      toast.error('Erro ao duplicar fluxo');
+      console.error('Erro ao copiar fluxo:', err);
+      if (newFlowId) {
+        const { error: cleanupError } = await supabase.from('automation_flows').delete().eq('id', newFlowId);
+        if (cleanupError) console.error('Erro ao remover cópia incompleta:', cleanupError);
+      }
+      toast.error(`Não foi possível copiar o fluxo: ${err instanceof Error ? err.message : 'tente novamente.'}`);
+    } finally {
+      setCopyingFlowId(null);
     }
   };
 
@@ -368,13 +388,18 @@ export default function Automation() {
                           >
                             <BarChart3 className="h-4 w-4" />
                           </button>
-                          <button
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={(e) => duplicateFlow(flow.id, e)}
-                            className="text-muted-foreground hover:text-primary transition-colors"
-                            title="Duplicar Fluxo"
+                            disabled={copyingFlowId !== null}
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            title="Copiar fluxo"
+                            aria-label={`Copiar fluxo ${flow.name}`}
                           >
-                            <Copy className="h-4 w-4" />
-                          </button>
+                            {copyingFlowId === flow.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                          </Button>
                           <button
                             onClick={(e) => deleteFlow(flow.id, e)}
                             className="text-muted-foreground hover:text-destructive transition-colors"
