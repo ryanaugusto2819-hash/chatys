@@ -1,7 +1,7 @@
 # Copiar fluxo
 
 - [x] Copiar blocos e conexões mantendo os caminhos de saída, nicho e espaço de trabalho
-- [x] Criar cópia inativa e descartar cópia incompleta em caso de falha
+- [x] Criar cópia inativa em uma única operação e impedir cópias incompletas em caso de falha
 
 # Acompanhamento visual do lead no fluxo
 

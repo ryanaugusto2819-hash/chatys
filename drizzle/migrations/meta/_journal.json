@@ -225,6 +225,13 @@
       "when": 1790295310857,
       "tag": "0031_add_knowledge_base_images",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790918096756,
+      "tag": "0032_clone_automation_flow_atomically",
+      "breakpoints": true
     }
   ]
 }

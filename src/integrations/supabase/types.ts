@@ -3514,6 +3514,10 @@ export type Database = {
           resume_node_id: string
         }[]
       }
+      clone_automation_flow: {
+        Args: { p_flow_id: string; p_workspace_id: string }
+        Returns: string
+      }
       create_workspace_for_user: {
         Args: {
           p_country?: string
