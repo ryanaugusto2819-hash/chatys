@@ -175,85 +175,17 @@ export default function Automation() {
       return;
     }
     setCopyingFlowId(flowId);
-    let newFlowId: string | null = null;
     try {
-      const { data: original, error: flowErr } = await supabase
-        .from('automation_flows')
-        .select('*')
-        .eq('id', flowId)
-        .eq('workspace_id', currentWorkspace.id)
-        .single();
-      if (flowErr || !original) throw flowErr ?? new Error('Fluxo original não encontrado.');
-
-      const [nodesResult, edgesResult] = await Promise.all([
-        supabase.from('automation_nodes').select('*').eq('flow_id', flowId).order('sort_order'),
-        supabase.from('automation_edges').select('*').eq('flow_id', flowId),
-      ]);
-      if (nodesResult.error) throw nodesResult.error;
-      if (edgesResult.error) throw edgesResult.error;
-
-      const nodeIdMap = new Map<string, string>();
-      const nodeInserts = (nodesResult.data ?? []).map((node) => {
-        const id = crypto.randomUUID();
-        nodeIdMap.set(node.id, id);
-        return {
-          id,
-          node_type: node.node_type,
-          label: node.label,
-          config: node.config,
-          position_x: node.position_x,
-          position_y: node.position_y,
-          sort_order: node.sort_order,
-        };
+      const { error } = await supabase.rpc('clone_automation_flow', {
+        p_flow_id: flowId,
+        p_workspace_id: currentWorkspace.id,
       });
-      const edgeInserts = (edgesResult.data ?? []).map((edge) => {
-        const source = nodeIdMap.get(edge.source_node_id);
-        const target = nodeIdMap.get(edge.target_node_id);
-        if (!source || !target) throw new Error('O fluxo contém conexões sem blocos. Corrija o fluxo antes de copiá-lo.');
-        return {
-          id: crypto.randomUUID(),
-          source_node_id: source,
-          target_node_id: target,
-          source_handle: edge.source_handle,
-        };
-      });
-
-      const { data: newFlow, error: insertErr } = await supabase
-        .from('automation_flows')
-        .insert({
-          name: `${original.name} (cópia)`,
-          description: original.description,
-          is_active: false,
-          manual_only: original.manual_only,
-          niche_id: original.niche_id,
-          category: original.category,
-          workspace_id: currentWorkspace.id,
-          trigger_count: original.trigger_count,
-        })
-        .select('id')
-        .single();
-      if (insertErr || !newFlow) throw insertErr ?? new Error('Não foi possível criar a cópia.');
-      newFlowId = newFlow.id;
-
-      const { error: saveError } = await supabase.rpc('save_automation_flow_atomic', {
-        p_flow_id: newFlow.id,
-        p_name: `${original.name} (cópia)`,
-        p_description: original.description ?? '',
-        p_manual_only: original.manual_only,
-        p_niche_id: original.niche_id,
-        p_nodes: nodeInserts,
-        p_edges: edgeInserts,
-      });
-      if (saveError) throw saveError;
+      if (error) throw error;
 
       toast.success('Fluxo copiado. A cópia está inativa até você ativá-la.');
       await fetchFlows();
     } catch (err) {
       console.error('Erro ao copiar fluxo:', err);
-      if (newFlowId) {
-        const { error: cleanupError } = await supabase.from('automation_flows').delete().eq('id', newFlowId);
-        if (cleanupError) console.error('Erro ao remover cópia incompleta:', cleanupError);
-      }
       toast.error(`Não foi possível copiar o fluxo: ${err instanceof Error ? err.message : 'tente novamente.'}`);
     } finally {
       setCopyingFlowId(null);
