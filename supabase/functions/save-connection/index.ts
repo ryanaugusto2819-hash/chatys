@@ -275,12 +275,20 @@ Deno.serve(async (req) => {
     } else if (connectionId === "extension") {
       status = "active";
     } else if (connectionId === "uazapigo") {
-      const serverUrl = String(Deno.env.get("UAZAPIGO_SERVER_URL") || connectionConfig.server_url || "").replace(/\/+$/, "");
+      const existingInstance = Boolean(String(connectionConfig.token || "").trim());
+      const serverUrl = String((existingInstance ? connectionConfig.server_url : "") || Deno.env.get("UAZAPIGO_SERVER_URL") || connectionConfig.server_url || "").trim().replace(/\/+$/, "");
       const adminToken = String(Deno.env.get("UAZAPIGO_ADMIN_TOKEN") || "").trim();
       const instanceName = String(connectionConfig.instance_name || normalizeLabel(label)).trim();
       let token = String(connectionConfig.token || "").trim();
-      if (!serverUrl || !adminToken) return jsonResponse({ error: "Servidor ou Admin Token da uazapiGO não configurado" }, 500);
-      if (!instanceName) return jsonResponse({ error: "Nome da instância é obrigatório" }, 400);
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(serverUrl);
+        if (parsedUrl.protocol !== "https:" || !parsedUrl.hostname || parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash || !/^443$|^$/.test(parsedUrl.port) || /^(localhost|.*\.localhost|.*\.local|.*\.internal|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(parsedUrl.hostname)) throw new Error();
+      } catch {
+        return jsonResponse({ error: "Informe uma URL HTTPS pública válida do servidor uazapiGO" }, 400);
+      }
+      if (!existingInstance && !adminToken) return jsonResponse({ error: "Admin Token da uazapiGO não configurado para criar instâncias" }, 500);
+      if (!existingInstance && !instanceName) return jsonResponse({ error: "Nome da instância é obrigatório" }, 400);
 
       if (!token) {
         const initResponse = await fetch(`${serverUrl}/instance/init`, {
@@ -298,6 +306,10 @@ Deno.serve(async (req) => {
 
       const response = await fetch(`${serverUrl}/instance/status`, { headers: { token } }).catch(() => null);
       const result = response ? await response.json().catch(() => ({})) : {};
+      if (existingInstance && (!response?.ok || result?.error)) {
+        const detail = result?.error?.message || result?.error || result?.message || (response ? `HTTP ${response.status}` : "servidor indisponível");
+        return jsonResponse({ error: `Não foi possível validar a instância uazapiGO: ${detail}`, diagnostics: { provider_status: response?.status || 0 } }, 400);
+      }
       const state = getUazapiState(result);
       const connected = Boolean(response?.ok && ["connected", "open"].includes(state));
       status = connected ? "active" : "error";
@@ -305,7 +317,7 @@ Deno.serve(async (req) => {
         ...connectionConfig,
         server_url: serverUrl,
         token,
-        instance_name: instanceName,
+        ...(existingInstance ? {} : { instance_name: instanceName }),
         webhook_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook`,
       };
       diagnostics = { state, connected };

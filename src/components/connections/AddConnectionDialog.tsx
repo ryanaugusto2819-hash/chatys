@@ -5,6 +5,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 
 const PROVIDERS = [
@@ -42,7 +43,7 @@ const PROVIDERS = [
   {
     id: 'uazapigo',
     name: 'uazapiGO (WhatsApp)',
-    description: 'Crie a instância automaticamente e conecte pelo QR Code.',
+    description: 'Crie uma instância ou conecte uma existente com URL e token.',
     fields: [
       { key: 'instance_name', label: 'Nome da instância', placeholder: 'Ex: numero-vendas', sensitive: false },
     ],
@@ -62,6 +63,7 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
   const [values, setValues] = useState<Record<string, string>>({});
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [uazapiMode, setUazapiMode] = useState<'create' | 'existing'>('create');
 
   const reset = () => {
     setStep('select');
@@ -69,6 +71,7 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
     setLabel('');
     setValues({});
     setShowSecrets({});
+    setUazapiMode('create');
   };
 
   const handleSelectProvider = (p: typeof PROVIDERS[0]) => {
@@ -78,7 +81,13 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
 
   const handleCreate = async () => {
     if (!selectedProvider) return;
-    const missing = selectedProvider.fields.filter(f => !values[f.key]?.trim());
+    const fields = selectedProvider.id === 'uazapigo' && uazapiMode === 'existing'
+      ? [
+          { key: 'server_url', label: 'URL do servidor' },
+          { key: 'token', label: 'Token da instância' },
+        ]
+      : selectedProvider.fields;
+    const missing = fields.filter(f => !values[f.key]?.trim());
     if (missing.length > 0) {
       toast.error(`Preencha: ${missing.map(f => f.label).join(', ')}`);
       return;
@@ -87,12 +96,28 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
       toast.error('Dê um nome para esta conexão.');
       return;
     }
+    if (selectedProvider.id === 'uazapigo' && uazapiMode === 'existing') {
+      try {
+        const url = new URL(values.server_url.trim());
+        if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) throw new Error();
+      } catch {
+        toast.error('Informe uma URL HTTPS válida do servidor, sem usuário, parâmetros ou fragmento.');
+        return;
+      }
+    }
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke('save-connection', {
-        body: { connectionId: selectedProvider.id, config: values, label: label.trim() },
+        body: { connectionId: selectedProvider.id, config: selectedProvider.id === 'uazapigo' && uazapiMode === 'existing'
+          ? { server_url: values.server_url.trim(), token: values.token.trim() }
+          : values, label: label.trim() },
       });
-      if (error) throw error;
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        const details = response && typeof response.json === 'function' ? await response.json().catch(() => null) : null;
+        throw new Error(details?.error || error.message);
+      }
+      if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
 
       // Assign workspace_id to the newly created connection(s) without workspace
       if (workspaceId) {
@@ -102,7 +127,9 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
           .is('workspace_id', null);
       }
 
-      if ((data as { status?: string })?.status === 'pending_setup') {
+      if (selectedProvider.id === 'uazapigo' && data?.diagnostics?.webhook_configured === false) {
+        toast.warning(`Conexão criada, mas o webhook não foi configurado: ${data.diagnostics.webhook_error || 'verifique no cartão da conexão.'}`);
+      } else if ((data as { status?: string })?.status === 'pending_setup') {
         toast.warning('Conexão criada, mas ainda pendente de webhook/app na Meta.');
       } else {
         toast.success('Conexão criada!');
@@ -120,10 +147,10 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors active:scale-[0.97]">
+        <Button className="gap-2">
           <Plus className="h-4 w-4" />
           Nova Conexão
-        </button>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -157,6 +184,12 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
           </div>
         ) : selectedProvider ? (
           <div className="space-y-4 pt-2">
+            {selectedProvider.id === 'uazapigo' && (
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1" role="group" aria-label="Forma de conexão uazapiGO">
+                <Button type="button" variant={uazapiMode === 'create' ? 'secondary' : 'ghost'} onClick={() => { setUazapiMode('create'); setValues({}); }} aria-pressed={uazapiMode === 'create'}>Criar instância</Button>
+                <Button type="button" variant={uazapiMode === 'existing' ? 'secondary' : 'ghost'} onClick={() => { setUazapiMode('existing'); setValues({}); }} aria-pressed={uazapiMode === 'existing'}>URL e token</Button>
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Nome da conexão</label>
               <input
@@ -167,7 +200,10 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
                 className="w-full rounded-xl border border-input bg-background py-2.5 px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            {selectedProvider.fields.map(field => (
+            {(selectedProvider.id === 'uazapigo' && uazapiMode === 'existing' ? [
+              { key: 'server_url', label: 'URL do servidor', placeholder: 'https://seu-servidor.uazapi.com', sensitive: false },
+              { key: 'token', label: 'Token da instância', placeholder: 'Token fornecido pela uazapiGO', sensitive: true },
+            ] : selectedProvider.fields).map(field => (
               <div key={field.key} className="space-y-1.5">
                 <label className="text-sm font-medium">{field.label}</label>
                 <div className="relative">
@@ -179,32 +215,35 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
                     className="w-full rounded-xl border border-input bg-background py-2.5 px-4 pr-10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring font-mono"
                   />
                   {field.sensitive && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={showSecrets[field.key] ? 'Ocultar token' : 'Mostrar token'}
                       onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showSecrets[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             ))}
             <div className="flex gap-2 pt-2">
-              <button
+              <Button type="button" variant="outline"
                 onClick={() => { setStep('select'); setValues({}); setLabel(''); }}
                 className="flex-1 rounded-xl border border-input px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
               >
                 Voltar
-              </button>
-              <button
+              </Button>
+              <Button type="button"
                 onClick={handleCreate}
                 disabled={saving}
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {saving ? 'Criando...' : 'Criar Conexão'}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
