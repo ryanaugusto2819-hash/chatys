@@ -1,10 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
@@ -290,17 +285,23 @@ Deno.serve(async (req) => {
       status = "active";
     } else if (connectionId === "uazapigo") {
       const existingInstance = Boolean(String(connectionConfig.token || "").trim());
-      const serverUrl = String((existingInstance ? connectionConfig.server_url : "") || Deno.env.get("UAZAPIGO_SERVER_URL") || connectionConfig.server_url || "").trim().replace(/\/+$/, "");
+       const suppliedUrl = String((existingInstance ? connectionConfig.server_url : "") || Deno.env.get("UAZAPIGO_SERVER_URL") || connectionConfig.server_url || "").trim();
       const adminToken = String(Deno.env.get("UAZAPIGO_ADMIN_TOKEN") || "").trim();
       const instanceName = String(connectionConfig.instance_name || normalizeLabel(label)).trim();
       let token = String(connectionConfig.token || "").trim();
       let parsedUrl: URL;
       try {
-        parsedUrl = new URL(serverUrl);
+         parsedUrl = new URL(suppliedUrl);
         if (parsedUrl.protocol !== "https:" || !parsedUrl.hostname || parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash || !/^443$|^$/.test(parsedUrl.port) || /^(localhost|.*\.localhost|.*\.local|.*\.internal|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(parsedUrl.hostname)) throw new Error();
       } catch {
         return jsonResponse({ error: "Informe uma URL HTTPS pública válida do servidor uazapiGO" }, 400);
       }
+       // Dashboard links include /instance/<id>, but API endpoints live at the server root.
+       // Store only the origin so status, webhook and message calls all use the same API base.
+       if (parsedUrl.pathname !== "/" && !/^\/instance\/[A-Za-z0-9_-]+\/?$/.test(parsedUrl.pathname)) {
+         return jsonResponse({ error: "Use a URL do servidor uazapiGO ou o link da instância no formato /instance/ID." }, 400);
+       }
+       const serverUrl = parsedUrl.origin;
       if (!existingInstance && !adminToken) return jsonResponse({ error: "Admin Token da uazapiGO não configurado para criar instâncias" }, 500);
       if (!existingInstance && !instanceName) return jsonResponse({ error: "Nome da instância é obrigatório" }, 400);
 
