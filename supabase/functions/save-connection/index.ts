@@ -160,12 +160,26 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, id, connectionId, config, label } = body;
+    const { action, id, connectionId, config, label, workspaceId } = body;
 
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autorizado" }, 401);
+    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    const { data: claims, error: claimsError } = await userClient.auth.getClaims(authHeader.slice(7));
+    if (claimsError || !claims?.claims) return jsonResponse({ error: "Não autorizado" }, 401);
+    const targetWorkspace = action === "delete" || action === "update"
+      ? (await serviceClient.from("connection_configs").select("workspace_id").eq("id", id || "").maybeSingle()).data?.workspace_id
+      : workspaceId;
+    if (!targetWorkspace && !action) return jsonResponse({ error: "Selecione um espaço de trabalho" }, 400);
+    const { data: allowed, error: permissionError } = targetWorkspace
+      ? await userClient.rpc("is_workspace_admin", { _workspace_id: targetWorkspace })
+      : await userClient.rpc("has_role", { _user_id: claims.claims.sub, _role: "admin" });
+    if (permissionError || !allowed) return jsonResponse({ error: "Apenas administradores deste espaço podem gerenciar conexões" }, 403);
 
     if (action === "delete") {
       if (!id) {
@@ -329,6 +343,7 @@ Deno.serve(async (req) => {
         connection_id: connectionId,
         config: connectionConfig,
         label: normalizeLabel(label),
+        workspace_id: workspaceId,
         is_connected: connectionId === "uazapigo" ? status === "active" : true,
         status,
       })

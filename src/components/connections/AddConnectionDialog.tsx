@@ -80,7 +80,10 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
   };
 
   const handleCreate = async () => {
-    if (!selectedProvider) return;
+    if (!selectedProvider || !workspaceId) {
+      toast.error('Selecione um espaço de trabalho antes de criar a conexão.');
+      return;
+    }
     const fields = selectedProvider.id === 'uazapigo' && uazapiMode === 'existing'
       ? [
           { key: 'server_url', label: 'URL do servidor' },
@@ -108,7 +111,7 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke('save-connection', {
-        body: { connectionId: selectedProvider.id, config: selectedProvider.id === 'uazapigo' && uazapiMode === 'existing'
+        body: { connectionId: selectedProvider.id, workspaceId, config: selectedProvider.id === 'uazapigo' && uazapiMode === 'existing'
           ? { server_url: values.server_url.trim(), token: values.token.trim() }
           : values, label: label.trim() },
       });
@@ -118,14 +121,6 @@ export default function AddConnectionDialog({ onCreated, workspaceId }: AddConne
         throw new Error(details?.error || error.message);
       }
       if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-
-      // Assign workspace_id to the newly created connection(s) without workspace
-      if (workspaceId) {
-        await (supabase
-          .from('connection_configs') as any)
-          .update({ workspace_id: workspaceId })
-          .is('workspace_id', null);
-      }
 
       if (selectedProvider.id === 'uazapigo' && data?.diagnostics?.webhook_configured === false) {
         toast.warning(`Conexão criada, mas o webhook não foi configurado: ${data.diagnostics.webhook_error || 'verifique no cartão da conexão.'}`);
