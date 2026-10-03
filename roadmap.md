@@ -14,6 +14,8 @@
 
 # Implementação uazapiGO
 
+- [x] Oferecer conexão de instância existente pela URL HTTPS do servidor e token, mantendo a criação automática
+- [x] Validar o token e restringir a criação ao administrador do espaço selecionado
 - [x] Criar envio dedicado de texto e mídia
 - [x] Criar webhook de mensagens e atualizações de status
 - [x] Criar gerenciamento de status, webhook e QR Code
