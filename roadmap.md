@@ -14,6 +14,8 @@
 
 # Implementação uazapiGO
 
+- [x] Adicionar webhook em modo múltiplo, sem substituir o destino de outra plataforma
+- [ ] Confirmar com uma mensagem real que ambas as plataformas voltaram a receber (requer teste do usuário)
 - [x] Oferecer conexão de instância existente pela URL HTTPS do servidor e token, mantendo a criação automática
 - [x] Validar o token e restringir a criação ao administrador do espaço selecionado
 - [x] Criar envio dedicado de texto e mídia

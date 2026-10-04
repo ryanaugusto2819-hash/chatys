@@ -28,8 +28,12 @@ Deno.serve(async (req) => {
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) return json({ error: parsed.error.flatten().fieldErrors }, 400);
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: connection } = await service.from("connection_configs").select("id, connection_id, config").eq("id", parsed.data.configId).single();
+    const { data: connection } = await service.from("connection_configs").select("id, connection_id, workspace_id, config").eq("id", parsed.data.configId).single();
     if (connection?.connection_id !== "uazapigo") return json({ error: "Conexão uazapiGO não encontrada" }, 404);
+    const { data: membership } = await service.from("workspace_members")
+      .select("role").eq("workspace_id", connection.workspace_id).eq("user_id", claims.claims.sub).maybeSingle();
+    if (!membership) return json({ error: "Você não tem acesso a esta conexão" }, 403);
+    if (parsed.data.action !== "status" && membership.role !== "admin") return json({ error: "Somente administradores podem alterar esta conexão" }, 403);
     const config = (connection.config || {}) as Record<string, unknown>;
     const serverUrl = String(config.server_url || "").replace(/\/+$/, "");
     const token = String(config.token || "");

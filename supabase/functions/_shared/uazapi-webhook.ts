@@ -11,15 +11,15 @@ export async function ensureUazapiWebhook(serverUrl: string, token: string, webh
   }
 
   const ours = current.find((entry: unknown) =>
-    typeof entry === "object" && entry !== null && "url" in entry && entry.url === webhookUrl && "enabled" in entry && entry.enabled === true
-  );
-  if (ours) return { alreadyConfigured: true };
+    typeof entry === "object" && entry !== null && "url" in entry && entry.url === webhookUrl
+  ) as { id?: string; enabled?: boolean } | undefined;
+  if (ours?.enabled) return { alreadyConfigured: true };
 
   const response = await fetch(`${serverUrl}/webhook`, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      action: "add", enabled: true, url: webhookUrl,
+      action: ours?.id ? "update" : "add", ...(ours?.id ? { id: ours.id } : {}), enabled: true, url: webhookUrl,
       events: ["connection", "messages", "messages_update"],
       addUrlEvents: false, addUrlTypesMessages: false,
     }),
