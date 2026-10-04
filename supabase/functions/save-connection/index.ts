@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { ensureUazapiWebhook } from "../_shared/uazapi-webhook.ts";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
@@ -361,24 +362,9 @@ Deno.serve(async (req) => {
       const token = String(connectionConfig.token || "");
       const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/uazapigo-webhook?configId=${encodeURIComponent(data.id)}`;
       try {
-        const webhookResponse = await fetch(`${serverUrl}/webhook`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", token },
-          body: JSON.stringify({
-            enabled: true,
-            url: webhookUrl,
-            events: ["connection", "messages", "messages_update"],
-            addUrlEvents: false,
-            addUrlTypesMessages: false,
-          }),
-        });
-        const webhookResult = await webhookResponse.json().catch(() => ({}));
-        if (!webhookResponse.ok || webhookResult?.error) {
-          diagnostics = { ...(diagnostics || {}), webhook_configured: false, webhook_error: webhookResult?.error || webhookResult?.message || `HTTP ${webhookResponse.status}` };
-        } else {
-          diagnostics = { ...(diagnostics || {}), webhook_configured: true };
-          await serviceClient.from("connection_configs").update({ config: { ...connectionConfig, webhook_url: webhookUrl } }).eq("id", data.id);
-        }
+        await ensureUazapiWebhook(serverUrl, token, webhookUrl);
+        diagnostics = { ...(diagnostics || {}), webhook_configured: true };
+        await serviceClient.from("connection_configs").update({ config: { ...connectionConfig, webhook_url: webhookUrl } }).eq("id", data.id);
       } catch (webhookError) {
         diagnostics = { ...(diagnostics || {}), webhook_configured: false, webhook_error: webhookError instanceof Error ? webhookError.message : String(webhookError) };
       }
