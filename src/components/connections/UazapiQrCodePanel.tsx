@@ -9,6 +9,7 @@ export default function UazapiQrCodePanel({ configId, onConnected }: Props) {
   const [state, setState] = useState<'checking' | 'waiting' | 'connected' | 'error'>('checking');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [restoring, setRestoring] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stop = useCallback(() => { if (timer.current) clearInterval(timer.current); timer.current = null; }, []);
@@ -36,6 +37,12 @@ export default function UazapiQrCodePanel({ configId, onConnected }: Props) {
       setState('waiting');
     } catch (e) { setState('error'); setError(e instanceof Error ? e.message : String(e)); }
   }, [invoke]);
+  const restoreWebhook = useCallback(async () => {
+    setRestoring(true); setError('');
+    try { await invoke('set_webhook'); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setRestoring(false); }
+  }, [invoke]);
 
   useEffect(() => {
     void (async () => { if (!(await check())) await connect(); })();
@@ -50,7 +57,7 @@ export default function UazapiQrCodePanel({ configId, onConnected }: Props) {
       {(state === 'waiting' || state === 'error') && <><QrCode className="h-3.5 w-3.5" /> Aguardando conexão</>}
     </div>
     {qrCode && <div className="rounded-lg border border-border bg-background p-3"><img src={qrCode} alt="QR Code uazapiGO" className="h-56 w-56 object-contain" /></div>}
-    {state === 'connected' ? <p className="text-sm text-muted-foreground">WhatsApp conectado pela uazapiGO.</p> : <div className="flex items-center gap-2 text-xs text-muted-foreground"><Smartphone className="h-4 w-4" /> Escaneie no WhatsApp em Dispositivos conectados.</div>}
+    {state === 'connected' ? <><p className="text-sm text-muted-foreground">WhatsApp conectado pela uazapiGO.</p><Button type="button" variant="outline" disabled={restoring} onClick={() => void restoreWebhook()}>{restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Ativar recebimento aqui</Button></> : <div className="flex items-center gap-2 text-xs text-muted-foreground"><Smartphone className="h-4 w-4" /> Escaneie no WhatsApp em Dispositivos conectados.</div>}
     {error && <p className="max-w-sm text-center text-xs text-destructive">{error}</p>}
     {state !== 'connected' && <Button type="button" variant="outline" onClick={() => void connect()}><RefreshCw className="h-4 w-4" /> Gerar novo QR Code</Button>}
   </div>;
