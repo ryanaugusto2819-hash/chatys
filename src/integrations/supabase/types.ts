@@ -3497,6 +3497,7 @@ export type Database = {
           status: string
         }[]
       }
+      can_read_chat_media: { Args: { _name: string }; Returns: boolean }
       check_workspace_limit: {
         Args: { p_resource: string; p_workspace_id: string }
         Returns: Json
